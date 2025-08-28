@@ -1,0 +1,6 @@
+[submodule "furiosa-env-tools"]
+	path = furiosa-env-tools
+	url = https://github.com/ai-computing/furiosa-env-tools
+[submodule "llm_inference"]
+	path = llm_inference
+	url = https://github.com/ai-computing/llm_inference
