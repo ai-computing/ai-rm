@@ -4,10 +4,10 @@ AI 가속기를 위한 자원 관리 및 모니터링 시스템입니다.
 
 ---
 
-## Submodules
+## Modules
 
-| Submodule | Description |
-|-----------|-------------|
+| Module | Description |
+|--------|-------------|
 | [rm_monitor](rm_monitor/) | LLM 추론 모니터링 스택 (vLLM + Prometheus + Grafana) |
 
 ---

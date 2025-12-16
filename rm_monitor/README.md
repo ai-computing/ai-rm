@@ -23,7 +23,7 @@ cp .env.example .env
 
 ## Traffic replay tool (Azure trace → vLLM)
 
-The repository includes a high-performance traffic replayer that streams an Azure LLM inference trace to a vLLM-compatible endpoint and renders a live terminal dashboard with per-metric visualization (QPS, TX/RX rate, latency p95/p99).
+This module includes a high-performance traffic replayer that streams an Azure LLM inference trace to a vLLM-compatible endpoint and renders a live terminal dashboard with per-metric visualization (QPS, TX/RX rate, latency p95/p99).
 
 Run example:
 ```bash
