@@ -25,15 +25,6 @@ AI 가속기를 위한 자원 관리 및 모니터링 시스템입니다.
 
 ## Getting Started
 
-```bash
-# Clone with submodules
-git clone --recursive https://github.com/ai-computing/ai-acc-rm.git
-cd ai-acc-rm
-
-# If already cloned
-git submodule update --init --recursive
-```
-
 상세 사용법은 [rm_monitor/README.md](rm_monitor/README.md)를 참조하세요.
 
 ---
