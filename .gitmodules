@@ -1,0 +1,6 @@
+[submodule "rm_monitor"]
+	path = rm_monitor
+	url = https://github.com/ai-computing/rm_monitor.git
+[submodule "rm_abstract_layer"]
+	path = rm_abstract_layer
+	url = https://github.com/ai-computing/rm_abstract_layer.git
