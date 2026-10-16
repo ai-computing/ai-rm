@@ -1,0 +1,10 @@
+# Site settings: only the example is tracked
+deploy/clusters/*
+!deploy/clusters/example/
+cluster.local.env
+*.local.env
+.env
+
+__pycache__/
+*.pyc
+.venv/
