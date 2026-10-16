@@ -1,0 +1,18 @@
+name: check-sensitive
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false   # components are private; they run the same check in their own repos
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Scan tracked files for internal IPs, tokens and keys
+        run: python3 tools/check_sensitive.py .
