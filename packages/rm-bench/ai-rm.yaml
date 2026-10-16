@@ -1,0 +1,20 @@
+name: rm-bench
+layer: l5-ops
+kind: tool
+summary: llm-d(OpenAI 호환) 엔드포인트용 trace 재생·합성 부하 생성과 TTFT/TPOT/E2E/TPS 측정
+maturity: prototype
+hardware: []
+install:
+  - python -m pip install -e .
+test:
+  - python -m py_compile loadgen/replay_vllm_azure2024.py loadgen/synthetic_load_llm.py tools/monitor_live.py
+deploy:
+  target: none
+  manifests: null
+  image: null
+config:
+  env_example: null
+interfaces:
+  provides: []
+  uses: [Metrics]
+kpi: [SLO, 전력효율]

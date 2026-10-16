@@ -18,3 +18,10 @@ uv run python loadgen/replay_vllm_azure2024.py   --csv hf-cache/AzureLLMInferenc
 ```
 
 측정 결과는 각 연구 repo의 `.research/report.py --metric ... --artifact ...`로 보고하면 research-hub가 MLflow에 기록합니다.
+
+## ai-rm
+
+[ai-rm](https://github.com/ai-computing/ai-rm)의 **L5 관측·운영** 구성요소입니다(`components/l5-ops/rm-bench`).
+llm-d Gateway 같은 OpenAI 호환 엔드포인트에 부하를 걸고 지연·처리량을 측정합니다. 결과 지표 이름은
+ai-rm `docs/interfaces.md`의 Metrics 표(`ttft_p90_ms`, `tpot_p90_ms`, `tok_s` …)를 따릅니다.
+대상 주소는 `--url`로 넘기고 코드에 두지 않습니다. k8s Job으로 돌리는 매니페스트는 아직 없습니다.
