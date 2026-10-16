@@ -1,6 +1,36 @@
-[submodule "rm_monitor"]
-	path = rm_monitor
-	url = https://github.com/ai-computing/rm_monitor.git
 [submodule "rm_abstract_layer"]
-	path = rm_abstract_layer
+	path = components/l1-accel/rm_abstract_layer
 	url = https://github.com/ai-computing/rm_abstract_layer.git
+	branch = master
+[submodule "hetero-npu-p2p"]
+	path = components/l2-memory/hetero-npu-p2p
+	url = https://github.com/ai-computing/hetero-npu-p2p.git
+	branch = main
+[submodule "npu-offload"]
+	path = components/l2-memory/npu-offload
+	url = https://github.com/ai-computing/npu-offload.git
+	branch = main
+[submodule "rngd-pd"]
+	path = components/l3-serving/rngd-pd
+	url = https://github.com/ai-computing/rngd-pd.git
+	branch = main
+[submodule "npu-lora"]
+	path = components/l3-serving/npu-lora
+	url = https://github.com/ai-computing/npu-lora.git
+	branch = main
+[submodule "llm-d-setup"]
+	path = components/l4-cluster/llm-d-setup
+	url = https://github.com/ai-computing/llm-d-setup.git
+	branch = main
+[submodule "lmd-top"]
+	path = components/l5-ops/lmd-top
+	url = https://github.com/ai-computing/lmd-top.git
+	branch = main
+[submodule "rm-bench"]
+	path = components/l5-ops/rm-bench
+	url = https://github.com/ai-computing/rm-bench.git
+	branch = main
+[submodule "duet"]
+	path = components/l2-memory/duet
+	url = https://github.com/ai-computing/duet.git
+	branch = v2
