@@ -51,7 +51,8 @@ make check           # 공개되면 안 되는 정보(내부 IP, 토큰, 키) �
 ## 문서
 
 - [docs/architecture.md](docs/architecture.md) — 계층 구조와 k8s + llm-d 위에서의 동작 흐름
-- [docs/interfaces.md](docs/interfaces.md) — 계층 간 인터페이스(계약) 초안
+- [docs/interfaces.md](docs/interfaces.md) — 계층 간 인터페이스 요약 (정의는 [rm-core](https://github.com/ai-computing/rm-core))
+- [docs/integration-guide.md](docs/integration-guide.md) — 구성요소를 연결하는 방법, [docs/components/](docs/components/) — repo별 작업 카드
 - [docs/component-contract.md](docs/component-contract.md) — 구성요소 repo가 지켜야 할 것 (`ai-rm.yaml`, README, 설정)
 - [docs/kpi-map.md](docs/kpi-map.md) — 과제 성과지표와 구성요소·근거의 대응
 - [docs/security.md](docs/security.md) — 공개 저장소 보안 규칙과 검사
