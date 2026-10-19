@@ -23,7 +23,8 @@ Spec (YAML):
         decode:  {accelerator: furiosa.RNGD, count: 1}
         workload: {trace: azure-conv}      # optimal/rebalance: mix (mix.py)
         budget: 6                          # optimal/rebalance: most cards for the pool
-        rebalance: {metrics: http://prefill-pod:8000/metrics, band: 0.2, hold: 3, cooldown_s: 300}
+        rebalance: {metrics: http://prefill-pod:8000/metrics, band: 0.2, hold: 3, cooldown_s: 300,
+                    margin: 0.2}           # a move must cut the predicted worst-role pressure by 20 %
 
 Pools are placed in order; a card given to one pool is not offered to the next. A placement that is still
 valid is kept (no churn): only a role whose card disappeared, became unhealthy or whose node became
@@ -46,6 +47,7 @@ from rm_core.errors import ContractError
 from . import apply as applying
 from . import document, kube
 from . import mix as mixes
+from . import predict as pred
 from . import profiles as prof
 from . import rebalance as rb
 from .optimal import MIXED_ROLES, OptimalPlacement
@@ -195,7 +197,7 @@ class Rebalancing:
                                          0.0 if once else float(p["rebalance"].get("cooldown_s", 300)))
                      for name, p in self.pools.items()}
         self.overrides: Dict[str, Tuple[int, int]] = {}
-        self.scrapes: Dict[Tuple[str, str], list] = {}
+        self.scrapes: Dict[Tuple[str, str], Tuple[list, float]] = {}
 
     def _observe(self, pool: str, cfg: dict, notes: Optional[List[str]] = None) -> Optional[rb.Observation]:
         src = cfg.get("metrics")
@@ -212,10 +214,11 @@ class Rebalancing:
                 if notes is not None:
                     notes.append(f"{pool}: metrics {s} unreadable ({e}); split held")
                 continue
-            samples = rb.parse_prometheus(text)
-            o = rb.observe(samples, role_label=cfg.get("role_label"), role=role,
-                           previous=self.scrapes.get((pool, str(s))))
-            self.scrapes[(pool, str(s))] = samples
+            samples, now = rb.parse_prometheus(text), time.monotonic()
+            before, then = self.scrapes.get((pool, str(s)), (None, None))
+            o = rb.observe(samples, role_label=cfg.get("role_label"), role=role, previous=before,
+                           elapsed_s=None if then is None else now - then)
+            self.scrapes[(pool, str(s))] = (samples, now)
             obs = rb.merge(obs, o)
         return obs
 
@@ -238,11 +241,18 @@ class Rebalancing:
             obs = self._observe(name, cfg, notes)
             if obs is not None:
                 qref = float(cfg.get("queue_ref", 2))
-                want = rb.target(current, budget, groups, obs=obs, slo=slo, queue_ref=qref)
+                model, rate, src = None, None, "trace"
+                if kinds[0] in self.perf.devices and kinds[1] in self.perf.devices:
+                    m, rate, src = rb.observed_mix(obs, mixes.from_spec(cfg.get("workload") or p.get("workload")))
+                    model = pred.Model.build(self.perf, kinds[0], kinds[1], p["kv_transport"], m, slo)
+                dec = rb.decide(current, budget, groups, obs, slo, model, known_rate=rate, known_source=src,
+                                queue_ref=qref, margin=float(cfg.get("margin", 0.2)))
+                want = dec.want
                 pp, pd = rb.pressures(obs, current, slo, qref)
                 fmt = lambda v: "-" if v is None else f"{v:.0f}"  # noqa: E731
                 notes.append(f"{name}: TTFT p90 {fmt(obs.ttft_p90_ms)} ms, TPOT p90 {fmt(obs.tpot_p90_ms)} ms, "
-                             f"pressure P {pp:.2f} D {pd:.2f}, target {want[0]}:{want[1]} at {current[0]}:{current[1]}")
+                             f"pressure P {pp:.2f} D {pd:.2f}, target {want[0]}:{want[1]} at {current[0]}:{current[1]}"
+                             f" ({dec.why})")
             else:
                 m = mixes.from_spec(cfg.get("workload") or p.get("workload"))
                 if not (kinds[0] in self.perf.devices and kinds[1] in self.perf.devices):
