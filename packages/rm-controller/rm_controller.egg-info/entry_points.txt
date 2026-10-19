@@ -1,5 +1,0 @@
-[airm.placements]
-topology = rm_controller.policy:TopologyPlacement
-
-[console_scripts]
-rm-controller = rm_controller.controller:main
