@@ -1,5 +1,7 @@
 # npu-offload — L2 카드
 
+> **Optimus Prime 전환 안내:** 전문가 offload는 Optimus Prime 모듈로 통합하는 방향입니다. KVTransport가 아닌 workload·메모리 계층 경계를 유지합니다. 구현 완료를 뜻하지 않습니다. [통합 설계](../ko/engine-integration.md) · [English design](../engine-integration.md) · [계획 설정](../../config/engine-integration.yaml)
+
 전문가 오프로딩은 KV가 아니라 가중치·activation을 계층 사이로 나누는 기술이라, v0.1에서는 `KVTransport`를
 구현하지 않습니다. 대신 **실행 단위(workload runner)와 메모리 계층 선언, 지표**로 연결합니다.
 
