@@ -22,8 +22,9 @@
 | L3 | rngd-pd | Source for engine PD/NPU-backend modules | [Korean card](rngd-pd.md) |
 | L3 / workload | npu-lora | Training workload and future engine adapter as needed | [Korean card](npu-lora.md) |
 | L4 | llm-d-setup | Keep cluster/routing/storage/monitoring; accept reviewed planner proposals | [Korean card](llm-d-setup.md) |
+| L4 (in-tree) | rm-controller | Topology-aware placement written to `airm-placement`; first version | [Korean card](rm-controller.md) |
 | L5 | lmd-top | Keep observation/operations; display engine and plan provenance | [Korean card](lmd-top.md) |
-| L5 | rm-bench | Keep load/measurement; compare actual execution with planner estimates | [Korean card](rm-bench.md) |
+| L5 (in-tree) | rm-bench | Load/measurement and real-trace replay; compare actual execution with planner estimates | [Korean card](rm-bench.md) |
 
 Use the [integration guide](../integration-guide.md), [interfaces](../interfaces.md), [status](../status.md) and [declarative ownership plan](../../config/engine-integration.yaml). Do not remove a source submodule or declare its module migrated solely because the plan names a destination.
 
