@@ -198,6 +198,22 @@ Details: [interfaces](docs/interfaces.md) · [integration guide](docs/integratio
 - [ ] Umbrella chart, simulated cluster and power / MFU evidence from every run
 - [ ] Protocol v0.2: bind live buffers (`MemoryRegion`) to KV transfers
 
+### Closing the gaps
+
+Compared with llm-d, Dynamo, vLLM + NIXL/LMCache, Mooncake and HexGen-2/Helix, ai-rm is the only stack serving prefill/decode
+across NPUs from different vendors. Seven gaps remain; engine-side parts are feature requests on
+[aicomp](https://github.com/ai-computing/aicomp/issues), the rest is done here. Full plan: [roadmap](docs/roadmap.md).
+
+| | Gap | Plan |
+|:-:|---|---|
+| W1 | Serving surface | Streaming, chat API, sampling, cancel ([#41](https://github.com/ai-computing/aicomp/issues/41)–[#43](https://github.com/ai-computing/aicomp/issues/43)); GuideLLM and MLPerf on the PD path |
+| W2 | Scale and maturity | Batched decode ([#44](https://github.com/ai-computing/aicomp/issues/44)), S≥2048, node image + umbrella chart, sim cluster in CI, multi-node pools |
+| W3 | KV transport standards | NIXL backend for RNGD↔ATOM, vLLM KV connector, layer-wise and GB-scale transfer ([#47](https://github.com/ai-computing/aicomp/issues/47), [#48](https://github.com/ai-computing/aicomp/issues/48)) |
+| W4 | Cache reuse | KV block events and prefix reuse ([#46](https://github.com/ai-computing/aicomp/issues/46)), EPP prefix-cache routing, host-DRAM KV tier |
+| W5 | Control loop | Placements enforced, P:D rebalancing, re-placement on failure, KEDA on `/metrics` ([#45](https://github.com/ai-computing/aicomp/issues/45), [#49](https://github.com/ai-computing/aicomp/issues/49)) |
+| W6 | Formal scheduling | `optimal` placement over card types and KV link cost; FASOP inference cost model ([#50](https://github.com/ai-computing/aicomp/issues/50)) |
+| W7 | Evidence | Same-budget baselines, tok/J in every run, paper drafts |
+
 ## 📚 Documentation
 
 | Goal | Guides |
@@ -205,7 +221,7 @@ Details: [interfaces](docs/interfaces.md) · [integration guide](docs/integratio
 | 🧭 **Understand the project** | [Overview](docs/project-overview.md) · [Architecture](docs/architecture.md) · [Research scenarios](docs/research-scenarios.md) · [Glossary](docs/glossary.md) |
 | 🔧 **Connect an implementation** | [Engine plan](docs/engine-integration.md) · [Interfaces](docs/interfaces.md) · [Integration guide](docs/integration-guide.md) |
 | 📊 **Run and evaluate** | [Getting started](docs/getting-started.md) · [Deployment](deploy/README.md) · [KPI and evidence](docs/kpi-map.md) |
-| 📍 **Check progress** | [Status](docs/status.md) · [Planning configuration](config/engine-integration.yaml) |
+| 📍 **Check progress** | [Status](docs/status.md) · [Roadmap](docs/roadmap.md) · [Planning configuration](config/engine-integration.yaml) |
 
 [All documentation](docs/README.md) · [한국어 문서](docs/ko/README.md)
 
