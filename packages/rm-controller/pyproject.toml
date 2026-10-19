@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rm-controller"
+version = "0.1.0"
+description = "ai-rm L4 placement controller: topology-aware placement written to the airm-placement ConfigMap"
+requires-python = ">=3.9"
+license = {text = "BSD-3-Clause"}
+dependencies = [
+    "rm-core @ git+https://github.com/ai-computing/rm-core@v0.1.1",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+k8s = ["kubernetes>=24.2.0"]
+test = ["pytest"]
+
+[project.scripts]
+rm-controller = "rm_controller.controller:main"
+
+[project.entry-points."airm.placements"]
+topology = "rm_controller.policy:TopologyPlacement"
+
+[tool.setuptools]
+packages = ["rm_controller"]
