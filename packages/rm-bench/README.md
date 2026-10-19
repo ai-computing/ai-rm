@@ -158,6 +158,7 @@ rm-bench traces stats trace-azure-conv                   # requests, mean/peak r
 rm-bench traces stats trace-azure-conv --max-total-tokens 512 --no-filter   # share that fits a target
 rm-bench e2e --scenario trace-azure-conv --gateway URL --speedup 0.25 --max-total-tokens 512 --duration 300
 python3 tools/trace_atlas.py                             # full characterization as JSON
+python3 tools/kv_tier_curve.py --format md               # Mooncake prefix hits vs HBM/DRAM KV tier size
 ```
 
 - Scenarios: `trace-azure-conv`, `trace-azure-code`, `trace-burstgpt`, `trace-mooncake-conversation`; keys at the top of
@@ -228,6 +229,7 @@ Measured runs with these tools: ai-rm [end-to-end run](../../docs/e2e.md).
 | `loadgen/replay_vllm_azure2024.py` | Azure LLM inference trace replayer (QPS, latency, live terminal dashboard) |
 | `loadgen/synthetic_load_llm.py` | synthetic load generator |
 | `tools/trace_atlas.py` | characterization of fetched traces |
+| `tools/kv_tier_curve.py` | Mooncake prefix-cache hit rate by cache size and HBM + DRAM tier ([KV tier evaluation](../../docs/kv-tier-evaluation.md)) |
 | `tools/monitor_live.py` | live endpoint metrics (Prometheus view only, no `--out`) |
 | `tools/send_test_traffic.sh` | a few test requests |
 

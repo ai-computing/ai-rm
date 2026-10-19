@@ -12,7 +12,7 @@ AI-RM connects heterogeneous resource research, cluster integration and reproduc
 | **Try the current components** | [Getting started](getting-started.md) | [Deployment](../deploy/README.md) · [Status and access](status.md) · [Roadmap](roadmap.md) |
 | **Build the unified engine** | [Optimus Prime + FASOP plan](engine-integration.md) | [Engine card](components/optimus-prime.md) · [FASOP card](components/fasop.md) |
 | **Integrate an implementation** | [Integration guide](integration-guide.md) | [Interfaces](interfaces.md) · [Component contract](component-contract.md) |
-| **Evaluate results** | [KPI map and evidence](kpi-map.md) | [End-to-end run](e2e.md) · [Workload traces](workload-traces.md) · [Measurement definitions](interfaces.md) |
+| **Evaluate results** | [KPI map and evidence](kpi-map.md) | [End-to-end run](e2e.md) · [Workload traces](workload-traces.md) · [KV tier evaluation](kv-tier-evaluation.md) · [Measurement definitions](interfaces.md) |
 | **Contribute** | [Contributing](../CONTRIBUTING.md) | [Security](security.md) · [Visual assets](assets/README.md) |
 
 ## Reference
