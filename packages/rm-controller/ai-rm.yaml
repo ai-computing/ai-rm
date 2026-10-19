@@ -1,18 +1,21 @@
 name: rm-controller
 layer: l4-cluster
 kind: service
-summary: 토폴로지 인지 배치 — AcceleratorProfile과 노드 상태로 PD 풀을 배치하고 airm-placement ConfigMap에 기록
+summary: 토폴로지 인지·최적 PD 배치 — AcceleratorProfile, 노드·카드 상태, 처리량 프로파일로 PD 풀을 배치하고 airm-placement ConfigMap에 기록(선택적으로 Deployment에 적용, P:D 재조정)
 maturity: prototype
 protocol: "0.1"
 hardware: []
 install:
+  - python -m pip install "rm-core @ git+https://github.com/ai-computing/rm-core@v0.1.2"
   - python -m pip install -e .
 test:
   - python -m pytest -q tests
-  - python -m rm_core.conformance airm.placements topology
+  - python -m rm_core.conformance airm.placements topology optimal
 adapters:
   - group: airm.placements
     name: topology
+  - group: airm.placements
+    name: optimal
 deploy:
   target: k8s
   chart: charts/ai-rm            # umbrella chart (repository root)

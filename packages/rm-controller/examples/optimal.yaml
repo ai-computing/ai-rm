@@ -1,0 +1,14 @@
+# `optimal` placement: types, counts, nodes and KV link chosen from the throughput profiles (profiles.yaml,
+# partly estimates) for a workload mix, within a card budget. Try: rm-controller --spec examples/optimal.yaml --dry-run
+namespace: llm-serving
+placement: optimal
+objective: per_card                        # or goodput: the most SLO-feasible goodput within the budget
+pools:
+  - pool: llama8b-pd-pool
+    model: meta-llama/Llama-3.1-8B-Instruct
+    kv_transport: auto                     # shm, p2p, ... chosen per candidate; only implemented transports
+    slo: {ttft_p90_ms: 2000, tpot_p90_ms: 100}
+    prefill: {}                            # any profiled type; {accelerator: furiosa.RNGD} restricts it
+    decode: {}
+    workload: {trace: azure-conv}          # or {mean_input_tokens, mean_output_tokens, rate_rps, peak_ratio}
+    budget: 6

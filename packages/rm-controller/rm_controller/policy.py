@@ -5,7 +5,8 @@ together, which the per-workload contract cannot express:
 
 - prefill and decode on one node when the KV path is host-local (`shm`, `p2p`), on distinct cards
   unless the transport is `loopback`;
-- nodes that are cordoned or not Ready are skipped;
+- nodes that are cordoned, not Ready or under pressure are skipped, and so are cards whose
+  AcceleratorProfile reports them unhealthy (`healthy()`);
 - prefill takes the highest peak (for the workload's precision when the profile states it), decode the
   most memory; ties go to the lowest card index, so the choice is stable across runs;
 - cards already given to an earlier pool are not reused;
@@ -24,6 +25,14 @@ from rm_core import Accelerator, PlacementDecision, Workload
 
 ACCEL_LABEL = "airm.ai-computing.io/accelerator"
 HOST_LOCAL = ("shm", "p2p", "loopback")
+HEALTH_KEY = "health"                       # Accelerator.extra key; kube.py also folds profile status into it
+UNHEALTHY = ("unhealthy", "failed", "error", "false", "lost")
+
+
+def healthy(a: Accelerator) -> bool:
+    """False when the card's AcceleratorProfile says it is unhealthy (extra `health`/`healthy`)."""
+    return (str(a.extra.get(HEALTH_KEY, "")).lower() not in UNHEALTHY
+            and str(a.extra.get("healthy", "")).lower() not in ("false", "0", "no"))
 
 
 def kind_of(a: Accelerator) -> str:
@@ -63,13 +72,16 @@ class TopologyPlacement:
     def __init__(self, unschedulable_nodes: Iterable[str] = ()):
         self.unschedulable = frozenset(unschedulable_nodes)
 
+    def usable(self, a: Accelerator) -> bool:
+        return a.node not in self.unschedulable and healthy(a)
+
     # -- rm-core Placement contract: one workload ---------------------------------------------------
 
     def place(self, workload: Workload, pool: Sequence[Accelerator],
               metrics: Optional[Dict[str, float]] = None) -> PlacementDecision:
         workload.validate()
         want = workload.labels.get(ACCEL_LABEL)
-        cands = [a for a in pool if a.node not in self.unschedulable and (not want or kind_of(a) == want)]
+        cands = [a for a in pool if self.usable(a) and (not want or kind_of(a) == want)]
         if not cands:
             return PlacementDecision([], reason=self._why_empty(pool, want, 1))
         role = "prefill" if workload.kind == "prefill" else "decode"
@@ -85,7 +97,7 @@ class TopologyPlacement:
         prefill.validate()
         decode.validate()
         taken = set(used)
-        free = [a for a in pool if a.id not in taken and a.node not in self.unschedulable]
+        free = [a for a in pool if a.id not in taken and self.usable(a)]
         same_node = kv_transport in HOST_LOCAL
         share_card = kv_transport == "loopback"
 
@@ -129,6 +141,9 @@ class TopologyPlacement:
         parts = [f"no schedulable {want or 'accelerator'} x{count}"]
         if skipped:
             parts.append("skipped unschedulable " + ", ".join(skipped))
+        sick = sorted(a.id for a in pool if not healthy(a))
+        if sick:
+            parts.append("skipped unhealthy " + ", ".join(sick))
         return "; ".join(parts)
 
     def _why_empty_pd(self, pool, taken, kv_transport, ps: RoleSpec, ds: RoleSpec) -> str:
@@ -140,6 +155,9 @@ class TopologyPlacement:
         skipped = sorted({a.node for a in pool if a.node in self.unschedulable})
         if skipped:
             parts.append("skipped unschedulable " + ", ".join(skipped))
+        sick = sorted(a.id for a in pool if not healthy(a))
+        if sick:
+            parts.append("skipped unhealthy " + ", ".join(sick))
         if taken:
             parts.append(f"{len(taken)} card(s) already placed")
         return "; ".join(parts)

@@ -91,11 +91,26 @@ def test_document_generation_moves_only_on_change():
     e = [document.decision_entry("pool", P, TopologyPlacement().place(P, POOL))]
     t = datetime(2026, 10, 19, tzinfo=timezone.utc)
     doc1, ch1 = document.build(e, document.parse(None), "topology", now=t)
-    assert ch1 and doc1["generation"] == 1 and doc1["updatedAt"] == "2026-10-19T00:00:00Z"
+    assert ch1 and doc1.generation == 1 and doc1.updated_at == "2026-10-19T00:00:00Z"
     doc2, ch2 = document.build(e, doc1, "topology")
     assert not ch2 and doc2 is doc1
     cm = document.configmap(doc1, "llm-serving")
     assert document.parse(cm) == doc1 and cm["metadata"]["name"] == "airm-placement"
+    assert cm["metadata"]["labels"]["app.kubernetes.io/managed-by"] == "rm-controller"
+
+
+def test_document_bytes_match_rm_controller_0_1():
+    # What 0.1 wrote (json.dumps(indent=2) of its own dict): a ConfigMap written before this change must
+    # parse to equal decisions, so the live generation does not move, and rewriting gives the same bytes.
+    old = {"protocol": "0.1", "generation": 4, "updatedAt": "2026-10-19T00:00:00Z", "placement": "topology",
+           "decisions": [{"pool": "pool", "workload": {"kind": "prefill", "model": M, "slo": {"tpot_p90_ms": 100},
+                                                       "labels": {ACCEL_LABEL: "furiosa.RNGD"}},
+                          "acceleratorIds": ["npu-node-1/furiosa:0"], "kvTransport": "shm", "reason": "r"}]}
+    raw = json.dumps(old, indent=2) + "\n"
+    doc = document.parse({"data": {"decisions.json": raw}})
+    same, changed = document.build(list(doc.decisions), doc, "topology")
+    assert not changed and same.generation == 4
+    assert document.configmap(doc, "llm-serving")["data"]["decisions.json"] == raw
 
 
 class FakeIO:
@@ -130,7 +145,7 @@ def test_run_once_writes_then_stays_quiet(tmp_path, capsys):
     spec = controller.load_spec(_spec(tmp_path))
     assert controller.run_once(spec, io, namespace="llm-serving", dry_run=False) == 0
     doc = document.parse(io.cm)
-    assert doc["generation"] == 1 and [x["acceleratorIds"] for x in doc["decisions"]] == [
+    assert doc.generation == 1 and [x.accelerator_ids for x in doc.decisions] == [
         ["npu-node-1/furiosa:0"], ["npu-node-1/furiosa:1"]]
     assert controller.run_once(spec, io, namespace="llm-serving", dry_run=False) == 0
     assert len(io.applied) == 1 and "unchanged" in capsys.readouterr().err
