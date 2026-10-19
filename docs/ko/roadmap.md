@@ -37,10 +37,10 @@ KV의 레이아웃·정밀도·소유권을 명시한 계약입니다. 동시에
 |:-:|---|---|
 | W1 | rm-bench 스트리밍 클라이언트(SSE로 TTFT/TPOT/ITL), GuideLLM·MLPerf 가져오기, `compare` | 엔진 #41–#43 |
 | W2 | 노드 데몬 이미지 `ghcr.io/ai-computing/rm-accel`, 통합 차트 `charts/ai-rm`, PR마다 kind 시뮬레이션 e2e, rngd-pd가 할당받은 카드 사용 | 엔진 #44, #51, 노드 간 KV 경로 |
-| W3 | 진행 중: hetero-npu-p2p의 NIXL 백엔드와 전송 시간 곡선 | 엔진 #47, #48 |
-| W4 | EPP 프로파일 `queue-kv`, `approx-prefix`, `precise-prefix` (실제 EPP에서 로드 확인) | 엔진 #46, #52 |
-| W5 | rm-controller 0.2: `--apply`, `--rebalance`, 상태 인지 재배치, KEDA ScaledObject | 엔진 #45, #49 |
-| W6 | `optimal` 배치와 시뮬레이터, 배치 문서 규범화 (rm-core v0.1.2, §5.4) | 엔진 #50 (실측 프로파일) |
-| W7 | 전력 샘플링(`--power prom`, RNGD/ATOM/GPU exporter에서 실측), 모든 실행에 tok/J | 기준선 실험 진행 중 |
+| W3 | `HETERO_NPU` NIXL 백엔드(hetero-npu-p2p #3): RNGD→ATOM DMA-BUF 0.1–4 GiB에서 약 41.5 GB/s 일정, 바이트 검증, 32 layer 분할 추가 비용 없음 | 엔진 #47, #48, rngd-pd `nixl` 전송 진행 중 |
+| W4 | A100 2장 실측(hetero-llm-d #5): `approx-prefix-gpu`로 공유 prefix TTFT p50 0.225 → 0.127 s, 수정한 이벤트 계약으로 precise prefix 동작, [KV 계층 평가](kv-tier-evaluation.md) | 엔진 #46, #52 |
+| W5 | rm-controller가 실제 PD 파드를 배치·이동(`--apply`), A100 KEDA 1→2 21초, 콜드 스타트 110–121초, rngd-pd decode가 적체를 견딤(rngd-pd #6: 1,153요청 0 실패) | 엔진 #45, #49, 실환경 `--rebalance` 진행 중 |
+| W6 | 역할 내 타입 혼합 `optimal`, 실측 보정 프로파일, 시뮬레이터의 DistServe·HexGen-2식 기준선, 배치 문서 규범화 (rm-core v0.1.2, §5.4) | 엔진 #50 |
+| W7 | [같은 예산 기준선](baselines.md): 2장에서는 복제가 카드당 goodput 최고, PD가 tok/J 최고(1.17), 3장에서는 보정된 `optimal` 1P+2D가 SLO 100 %, RNGD→ATOM은 ATOM decode graph(토큰당 108 ms)가 한계 | furiosa-llm 벤더 기준선 진행 중 |
 
 진행 상황은 허브의 Plane 프로젝트(모듈 W1–W7)에서 관리하고 [현재 상태](status.md)에 요약합니다.
