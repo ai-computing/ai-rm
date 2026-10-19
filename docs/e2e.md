@@ -94,11 +94,12 @@ rm-bench now covers what the next runs need beyond this smoke test
   with `placement: "manual"`. The reference `greedy` policy, run on the real profiles, put prefill and decode
   on the same card of a cordoned node with `loopback`. A real controller must keep P and D on one node for
   `shm`, use distinct cards, skip cordoned/NotReady nodes and pick a real transport.
-- **The placement ConfigMap format is not in rm-core.** PROTOCOL.md §5.2 defines the `Placement` API only;
-  hetero-llm-d's `decisions.json` layout is the de-facto format. It should be made normative.
-- **Card selection in rngd-pd.** `--chip -1` takes the first visible card; a privileged pod with `/dev/rngd`
-  mounted sees every card, so prefill and decode collided until the cards were pinned. It should use the
-  card the device plugin allocated.
+- ~~**The placement ConfigMap format is not in rm-core.**~~ Fixed: PROTOCOL.md §5.4 and `rm_core.placement`
+  (rm-core v0.1.2) make the `decisions.json` document normative.
+- ~~**Card selection in rngd-pd.**~~ Fixed (rngd-pd #3): `--chip -1` now reads the pod's allocation from the
+  kubelet device-plugin checkpoint, so a privileged pod that sees every card still uses the one it was given.
+  Checked on the node: with cards 0, 1 and 3 visible, a privileged pod picked its allocated card 1 while
+  another pod held card 0.
 - **Chart defaults.** rngd-pd's decode defaults to ATOM; overriding it to RNGD with a map merge kept the ATOM
   request (`rebellions.ai/ATOM: null` removes it).
 - **Not exercised:** RNGD→ATOM decode, the `p2p` transport with live buffers, GPU nodes (no `nvidia-smi` in the
