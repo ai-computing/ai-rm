@@ -29,10 +29,6 @@
 	path = components/l5-ops/lmd-top
 	url = https://github.com/ai-computing/lmd-top.git
 	branch = main
-[submodule "rm-bench"]
-	path = components/l5-ops/rm-bench
-	url = https://github.com/ai-computing/rm-bench.git
-	branch = main
 [submodule "duet"]
 	path = components/l2-memory/duet
 	url = https://github.com/ai-computing/duet.git
