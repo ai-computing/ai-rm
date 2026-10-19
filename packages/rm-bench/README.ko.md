@@ -160,6 +160,7 @@ rm-bench traces stats trace-azure-conv                   # 요청 수, 평균·�
 rm-bench traces stats trace-azure-conv --max-total-tokens 512 --no-filter   # 대상 한도에 맞는 비율
 rm-bench e2e --scenario trace-azure-conv --gateway URL --speedup 0.25 --max-total-tokens 512 --duration 300
 python3 tools/trace_atlas.py                             # 전체 특성(JSON)
+python3 tools/kv_tier_curve.py --format md               # 캐시 크기·HBM/DRAM 계층별 Mooncake prefix 적중
 ```
 
 - 시나리오: `trace-azure-conv`, `trace-azure-code`, `trace-burstgpt`, `trace-mooncake-conversation`. 설정 키는 `rm_bench/traces.py` 맨 위.
@@ -227,6 +228,7 @@ rm-core protocol v0.1의 지표 이름·태그만 쓰고, 저장 전에 항목�
 | `loadgen/replay_vllm_azure2024.py` | Azure LLM inference trace 재생기 (QPS, 지연, 실시간 터미널 대시보드) |
 | `loadgen/synthetic_load_llm.py` | 합성 부하 생성기 |
 | `tools/trace_atlas.py` | 받은 트레이스의 특성 분석 |
+| `tools/kv_tier_curve.py` | 캐시 크기와 HBM + DRAM 계층별 Mooncake prefix cache 적중률 ([KV 계층 평가](../../docs/ko/kv-tier-evaluation.md)) |
 | `tools/monitor_live.py` | 엔드포인트 지표 실시간 확인 (Prometheus 보기 전용, `--out` 없음) |
 | `tools/send_test_traffic.sh` | 간단한 시험 요청 |
 

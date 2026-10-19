@@ -4,9 +4,10 @@
     python -m rm_controller.sim --compare --format json
 
 Requests are drawn from a workload mix (mix.py: the trace atlas's length quantiles; arrivals Poisson within
-60 s windows whose rate follows an on/off burst model: with probability 1/(2 x peak) a window runs at the
-trace's 60 s peak/mean ratio, the rest at the rate that keeps the mean). Sub-minute bursts (Azure code's
-26x busiest second) are not modelled.
+60 s windows whose rate follows an on/off burst model: one window in every round(2 x peak) runs at the
+trace's 60 s peak/mean ratio, starting with the first, the rest at the rate that keeps the mean). Half the
+requests arrive in peak windows, so every run, however short, meets a burst; a run shorter than one peak
+window tests the peak rate alone. Sub-minute bursts (Azure code's 26x busiest second) are not modelled.
 
 Serving model, from the same profiles the `optimal` policy reads (profiles.yaml):
 - prefill: one request at a time per instance, FCFS from one queue, time = overhead + tokens / tok/s;
@@ -93,17 +94,18 @@ def estimate_layout(lay: Layout, m: mixes.Mix, slo: Dict[str, float], profiles: 
 def requests(m: mixes.Mix, rate: float, n: int, seed: int = 1) -> List[Tuple[float, int, int]]:
     """(arrival s, prompt tokens, output tokens); the same seed gives the same lengths and burst windows at
     every rate, so rates compare on common random numbers."""
-    r_len, r_arr, r_win = random.Random(seed), random.Random(seed + 1), random.Random(seed + 2)
+    r_len, r_arr = random.Random(seed), random.Random(seed + 1)
     peak = max(m.peak_ratio, 1.0)
-    q = 1.0 / (2.0 * peak) if peak > 1 else 0.0
-    low = (1.0 - q * peak) / (1.0 - q) if q else 1.0
-    out, t, w_end, w_rate = [], 0.0, 0.0, 0.0
+    # deterministic windows: a random draw (the first version) left short, fast runs without any peak window
+    period = max(2, round(2.0 * peak)) if peak > 1 else 1
+    low = (1.0 - peak / period) / (1.0 - 1.0 / period) if period > 1 else 1.0
+    out, t, w_end, w_rate, w = [], 0.0, 0.0, 0.0, 0
     for _ in range(n):
         e = r_arr.expovariate(1.0)
         while True:
             if t >= w_end:
-                w_rate = rate * (peak if r_win.random() < q else low)
-                w_end = t + WINDOW_S
+                w_rate = rate * (peak if w % period == 0 else low)
+                w_end, w = t + WINDOW_S, w + 1
             need = e / w_rate
             if t + need <= w_end:
                 t += need
@@ -283,12 +285,16 @@ def card(node: str, kind: str, i: int) -> Accelerator:
         return Accelerator(id=f"{node}/furiosa:{i}", node=node, vendor="furiosa", model="RNGD",
                            memory_bytes=48 * GB, memory_kind="hbm", peak_tflops={"bf16": 256.0},
                            peak_source="datasheet")
+    if kind == "nvidia.A100":
+        return Accelerator(id=f"{node}/nvidia:{i}", node=node, vendor="nvidia", model="A100", memory_bytes=80 * GB,
+                           memory_kind="hbm", peak_tflops={"bf16": 312.0}, peak_source="datasheet")
     return Accelerator(id=f"{node}/rebellions:{i}", node=node, vendor="rebellions", model="ATOM",
                        memory_bytes=16 * GB, memory_kind="gddr", peak_tflops={"fp16": 32.0}, peak_source="datasheet")
 
 
-def node_cards(node: str, rngd: int, atom: int) -> List[Accelerator]:
-    return [card(node, "furiosa.RNGD", i) for i in range(rngd)] + [card(node, "rebellions.ATOM", i) for i in range(atom)]
+def node_cards(node: str, rngd: int, atom: int, a100: int = 0) -> List[Accelerator]:
+    return ([card(node, "nvidia.A100", i) for i in range(a100)] + [card(node, "furiosa.RNGD", i) for i in range(rngd)]
+            + [card(node, "rebellions.ATOM", i) for i in range(atom)])
 
 
 CARD_SETS = {
@@ -341,11 +347,11 @@ def compare(n: int = 3000, seed: int = 1, profiles: Optional[prof.Profiles] = No
     return out
 
 
-def markdown(rows: List[dict]) -> str:
+def markdown(rows: List[dict], est_label: str = "Model est.") -> str:
     lines = []
     for set_name in dict.fromkeys(r["cards"] for r in rows):
         lines += [f"**{set_name}**", "",
-                  "| Trace (SLO TTFT/TPOT p90) | Policy | Layout | Cards | Goodput req/s | req/s per card | Model est. |",
+                  f"| Trace (SLO TTFT/TPOT p90) | Policy | Layout | Cards | Goodput req/s | req/s per card | {est_label} |",
                   "|---|---|---|--:|--:|--:|--:|"]
         for r in rows:
             if r["cards"] != set_name:
