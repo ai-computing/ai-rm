@@ -11,6 +11,7 @@ Spec (YAML):
     namespace: llm-serving                 # where airm-placement lives (llm-d's namespace)
     placement: topology                    # topology (default) | optimal
     objective: per_card                    # optimal only: per_card (default) | goodput
+    mixed_roles: true                      # optimal only: a role may mix device types (default true)
     profiles: profiles.yaml                # optimal/rebalance/apply: throughput table (default: packaged)
     pools:
       - pool: llama8b-pd-pool              # InferencePool name
@@ -47,7 +48,7 @@ from . import document, kube
 from . import mix as mixes
 from . import profiles as prof
 from . import rebalance as rb
-from .optimal import OptimalPlacement
+from .optimal import MIXED_ROLES, OptimalPlacement
 from .policy import ACCEL_LABEL, HOST_LOCAL, RoleSpec, TopologyPlacement, healthy, kind_of
 
 POLICIES = ("topology", "optimal")
@@ -60,6 +61,8 @@ def load_spec(path: str) -> dict:
         raise ValueError(f"{path}: 'pools' must be a non-empty list")
     if spec.get("placement", "topology") not in POLICIES:
         raise ValueError(f"{path}: placement must be one of {POLICIES}")
+    if not isinstance(spec.get("mixed_roles", MIXED_ROLES), bool):
+        raise ValueError(f"{path}: mixed_roles must be true or false")
     for p in spec["pools"]:
         for key in ("pool", "model", "kv_transport", "prefill", "decode"):
             if key not in p:
@@ -72,7 +75,8 @@ def load_spec(path: str) -> dict:
 
 def make_policy(spec: dict, unschedulable, perf: Optional[prof.Profiles] = None):
     if spec.get("placement", "topology") == "optimal":
-        return OptimalPlacement(unschedulable, profiles=perf, objective=spec.get("objective", "per_card"))
+        return OptimalPlacement(unschedulable, profiles=perf, objective=spec.get("objective", "per_card"),
+                                mixed_roles=spec.get("mixed_roles", MIXED_ROLES))
     return TopologyPlacement(unschedulable)
 
 
@@ -114,15 +118,15 @@ def _reuse(pool: str, fresh: Tuple[PlacementDecision, PlacementDecision], prev: 
                      for f in fresh)
     r = 0 if lost[0] else 1
     keep_role, fix = old[1 - r], old[r]
-    kind = kind_of(cards[fresh[r].accelerator_ids[0]])
-    group = _group(perf, kind)
     host_local = fix.kv_transport in HOST_LOCAL or (
         perf and fix.kv_transport in perf.links and perf.links[fix.kv_transport].scope == "host")
     survivors = [i for i in fix.accelerator_ids if i not in lost[r]]
     busy = used | set(keep_role.accelerator_ids) | set(survivors)
     out = list(survivors)
-    for gone in lost[r]:
+    for gone in lost[r]:   # a role may mix device types: replace each card with one of its own type
         node = gone.split("/", 1)[0]
+        kind = kind_of(cards[gone]) if gone in cards else kind_of(cards[fresh[r].accelerator_ids[0]])
+        group = _group(perf, kind)
         cands = sorted((a for a in cards.values() if a.id not in busy and policy.usable(a) and kind_of(a) == kind
                         and (a.node == node or not (host_local or group > 1))),
                        key=lambda a: (a.node != node, a.node, a.id))

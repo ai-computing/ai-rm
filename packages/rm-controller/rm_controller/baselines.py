@@ -42,7 +42,6 @@ from rm_core import Accelerator, Workload
 from . import mix as mixes
 from . import profiles as prof
 from . import sim
-from .optimal import OptimalPlacement
 from .policy import RoleSpec, TopologyPlacement, kind_of
 
 ATTAINMENT = 0.9            # share of prompts a decode instance's KV must fit (as in `optimal`)
@@ -291,11 +290,8 @@ def layouts_for(set_name: str, cards: List[Accelerator], m: mixes.Mix, slo: Dict
     rows = [(sim.layout(f"topology ({transport})", tp.accelerator_ids, td.accelerator_ids, transport, cards, profiles),
              None)]
     rows[0] = (rows[0][0], sim.estimate_layout(rows[0][0], m, slo, profiles) if rows[0][0].cards else None)
-    for name, objective in (("optimal, per card", "per_card"), ("optimal, max goodput", "goodput")):
-        o = OptimalPlacement(profiles=profiles, mix=m.with_rate(None), objective=objective)
-        dp, dd = o.place_pd(p, d, cards, kv_transport="auto")
-        lay = sim.layout(name, dp.accelerator_ids, dd.accelerator_ids, dp.kv_transport or "shm", cards, profiles)
-        rows.append((lay, o.last_plan.estimate.goodput_rps if o.last_plan else None))
+    rows += sim.optimal_rows(cards, m, slo, profiles, [("optimal, per card", "per_card", False),
+                                                       ("optimal, max goodput", "goodput", False)])
     rows.append(distserve(cards, m, slo, profiles))
     rows.append(hexgen2(cards, m, slo, profiles))
     return rows
