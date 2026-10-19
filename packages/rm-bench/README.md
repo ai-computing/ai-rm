@@ -94,6 +94,7 @@ rm-bench traces fetch                                   # 전부 (또는 이름 
 rm-bench traces stats trace-azure-conv                  # 요청 수, 평균·피크 rps, 길이 p50/p90/p99, prefix 재사용
 rm-bench traces stats trace-azure-conv --max-total-tokens 512 --no-filter   # 대상 한도에 맞는 비율
 rm-bench e2e --scenario trace-azure-conv --gateway URL --speedup 0.25 --max-total-tokens 512 --duration 300
+python3 tools/trace_atlas.py                             # 트레이스 특성 전체(JSON): burst, 길이 분포, prefix 재사용, LRU 적중률
 ```
 
 - 시나리오: `trace-azure-conv`, `trace-azure-code`, `trace-burstgpt`, `trace-mooncake-conversation`. 설정 키는 `rm_bench/traces.py` 맨 위.
