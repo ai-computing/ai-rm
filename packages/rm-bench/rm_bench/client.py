@@ -1,4 +1,5 @@
-"""One streaming chat-completions request against an OpenAI-compatible endpoint, timed."""
+"""One timed request against an OpenAI-compatible endpoint: streaming chat completions, or
+non-streaming completions for servers that only offer /v1/completions."""
 from __future__ import annotations
 
 import json
@@ -10,12 +11,20 @@ import requests
 from .results import RequestRecord
 
 CHAT_PATH = "/v1/chat/completions"
+COMPLETIONS_PATH = "/v1/completions"
 
 
 def chat_url(gateway: str) -> str:
     """Accept either a gateway base URL or a full chat-completions URL."""
     gateway = gateway.rstrip("/")
     return gateway if gateway.endswith(CHAT_PATH) else gateway + CHAT_PATH
+
+
+def completions_url(gateway: str) -> str:
+    """Accept either a gateway base URL or a full URL ending in /completions (e.g. behind a
+    route that rewrites its own prefix to /v1)."""
+    gateway = gateway.rstrip("/")
+    return gateway if gateway.endswith("/completions") else gateway + COMPLETIONS_PATH
 
 
 def headers() -> dict[str, str]:
@@ -26,7 +35,10 @@ def headers() -> dict[str, str]:
 
 def discover_model(gateway: str, timeout_s: float = 10.0) -> str:
     """First model id served at <gateway>/v1/models."""
-    base = chat_url(gateway)[: -len(CHAT_PATH)]
+    base = gateway.rstrip("/")
+    for suffix in (CHAT_PATH, COMPLETIONS_PATH):
+        if base.endswith(suffix):
+            base = base[: -len(suffix)]
     resp = requests.get(base + "/v1/models", headers=headers(), timeout=timeout_s)
     resp.raise_for_status()
     data = resp.json().get("data") or []
@@ -99,3 +111,42 @@ def stream_chat(url: str, model: str, prompt_tokens: int, max_tokens: int, timeo
     if ok and out_tokens > 1:
         tpot_ms = max(0.0, (e2e_ms - ttft_ms) / (out_tokens - 1))
     return RequestRecord(ok=ok, e2e_ms=e2e_ms, ttft_ms=ttft_ms, tpot_ms=tpot_ms, out_tokens=out_tokens if ok else 0)
+
+
+def complete(url: str, model: str, prompt_tokens: int, max_tokens: int, timeout_s: float,
+             scheduled_at: float | None = None) -> RequestRecord:
+    """Send one non-streaming /v1/completions request.
+
+    Without a stream the client cannot see the first token. When the response carries the
+    server's own timing (`pd.ttft_ms` and `pd.wall_ms`, as rngd-pd's gateway reports), TTFT is the
+    server's TTFT plus the time the client spent outside the server (queueing, network):
+    (e2e - wall_ms) + ttft_ms. Otherwise TTFT is e2e, an upper bound. Output tokens come from
+    `usage.completion_tokens`; TPOT = (e2e - ttft) / (out_tokens - 1).
+    """
+    payload = {"model": model, "prompt": make_prompt(prompt_tokens),
+               "max_tokens": max(1, int(max_tokens)), "stream": False}
+    t0 = time.perf_counter() if scheduled_at is None else scheduled_at
+    obj = None
+    try:
+        resp = requests.post(url, headers=headers(), json=payload, timeout=timeout_s)
+        if resp.status_code < 400:
+            obj = resp.json()
+    except Exception:  # noqa: BLE001 -- any transport/protocol error fails the request, not the run
+        obj = None
+    e2e_ms = (time.perf_counter() - t0) * 1000.0
+    choices = obj.get("choices") if isinstance(obj, dict) else None
+    ok = bool(choices) and isinstance(choices[0], dict) and isinstance(choices[0].get("text"), str)
+    if not ok:
+        return RequestRecord(ok=False, e2e_ms=e2e_ms)
+    usage = obj.get("usage") if isinstance(obj.get("usage"), dict) else {}
+    out_tokens = usage.get("completion_tokens")
+    if not isinstance(out_tokens, int):
+        out_tokens = max(1, len(choices[0]["text"].split()))
+    pd = obj.get("pd") if isinstance(obj.get("pd"), dict) else {}
+    server_ttft, server_wall = pd.get("ttft_ms"), pd.get("wall_ms")
+    if isinstance(server_ttft, (int, float)) and isinstance(server_wall, (int, float)):
+        ttft_ms = min(e2e_ms, max(0.0, e2e_ms - server_wall) + server_ttft)
+    else:
+        ttft_ms = e2e_ms
+    tpot_ms = max(0.0, (e2e_ms - ttft_ms) / (out_tokens - 1)) if out_tokens > 1 else None
+    return RequestRecord(ok=True, e2e_ms=e2e_ms, ttft_ms=ttft_ms, tpot_ms=tpot_ms, out_tokens=out_tokens)

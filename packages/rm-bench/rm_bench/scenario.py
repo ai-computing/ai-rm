@@ -15,6 +15,7 @@
     seed: 0
     max_error_pct: 0            # verdict fails above this
     slo: {ttft_p90_ms: 2000}    # keys from rm_core.workload.SLO_KEYS
+    api: chat                   # chat (streaming /v1/chat/completions) | completions (/v1/completions)
 
 Target addresses never go here; they come from --gateway / LLMD_GATEWAY_URL.
 """
@@ -32,6 +33,8 @@ import yaml
 from rm_core.errors import ContractError
 from rm_core.workload import SLO_KEYS
 
+API_KINDS = ("chat", "completions")
+
 # (offset_s from run start, prompt_tokens, max_tokens)
 Request = tuple[float, int, int]
 
@@ -48,6 +51,7 @@ class Scenario:
     model: str | None = None
     description: str = ""
     slo: dict[str, float] = field(default_factory=dict)
+    api: str = "chat"
 
     def validate(self) -> Scenario:
         if not isinstance(self.requests, dict) or not isinstance(self.slo, dict):
@@ -60,6 +64,8 @@ class Scenario:
             raise ContractError(f"scenario {self.name}: unknown SLO keys {sorted(unknown)}; allowed {SLO_KEYS}")
         if self.requests.get("source", "synthetic") not in ("synthetic", "trace"):
             raise ValueError(f"scenario {self.name}: requests.source must be synthetic or trace")
+        if self.api not in API_KINDS:
+            raise ValueError(f"scenario {self.name}: api must be one of {API_KINDS}")
         if self.concurrency < 1 or self.duration_s <= 0 or self.timeout_s <= 0:
             raise ValueError(f"scenario {self.name}: concurrency, duration_s and timeout_s must be positive")
         return self

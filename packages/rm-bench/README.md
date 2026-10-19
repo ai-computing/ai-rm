@@ -68,6 +68,9 @@ rm-bench e2e --scenario pd-smoke [--gateway URL] [--model M] [--out results/<run
   모두 만족하면 PASS. 종료 코드 0=PASS, 1=SLO 미달, 2=설정 오류.
 - `--model`이 없으면 시나리오의 `model`, 그것도 없으면 게이트웨이 `/v1/models`의 첫 모델을 씁니다.
 - 인증이 필요하면 `LLMD_API_KEY` 환경 변수를 씁니다.
+- `--api completions`(또는 시나리오 `api: completions`): 스트리밍이 없는 `/v1/completions` 서버용입니다. 첫 토큰을 볼 수 없으므로
+  응답에 서버 측 시간(`pd.ttft_ms`, `pd.wall_ms`, rngd-pd 게이트웨이가 보냄)이 있으면 TTFT = (e2e − wall_ms) + ttft_ms,
+  없으면 TTFT = e2e(상한)입니다. `--gateway`에 `/completions`로 끝나는 전체 URL을 주면 그대로 씁니다(접두사를 `/v1`로 바꾸는 route 뒤).
 - `pd-smoke`: 작은 요청 32개(poisson 8 rps, 동시성 8)로 PD 경로 전체가 응답하는지 확인합니다. 오류가 하나라도 있으면 FAIL.
 
 TPOT은 `(e2e - TTFT) / (출력 토큰 - 1)`이고 출력 토큰 수는 서버가 주는 `usage`(없으면 content chunk 수)입니다.

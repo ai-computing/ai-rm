@@ -36,7 +36,8 @@ def cmd_e2e(args) -> int:
         return 2
     scenario = load_scenario(args.scenario)
     run_id = e2e.new_run_id(scenario.name)
-    res = e2e.run(scenario, gateway, args.model, run_id=run_id, kv_transport=args.kv_transport)
+    res = e2e.run(scenario, gateway, args.model, run_id=run_id, kv_transport=args.kv_transport,
+                  api=args.api)
     out = args.out or os.path.join("results", f"{run_id}.json")
     write_measurements(out, res.measurements)
     _print_result(res, out)
@@ -52,6 +53,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--model", default=None, help="model id (default: scenario, else gateway /v1/models)")
     p.add_argument("--out", default=None, help="Measurement JSON path (default: results/<run_id>.json)")
     p.add_argument("--kv-transport", default=None, help="KV transport name under test, recorded as a tag")
+    p.add_argument("--api", choices=("chat", "completions"), default=None,
+                   help="request API (default: the scenario's api, else chat)")
     args = ap.parse_args(argv)
     try:
         return cmd_e2e(args)
