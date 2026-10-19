@@ -164,3 +164,82 @@ def test_spec_validation(tmp_path):
     bad.write_text("pools: [{pool: x}]", encoding="utf-8")
     with pytest.raises(ValueError, match="missing"):
         controller.load_spec(str(bad))
+
+
+# -- multi-model pools: a PD pool and an aggregated (`serve`) pool on one cluster ---------------------
+
+Q = "furiosa-ai/Qwen3-4B-FP8"
+
+
+def _two_pools(tmp_path, decode="rebellions.ATOM", serve_count=1, name="two.yaml"):
+    s = tmp_path / name
+    s.write_text(json.dumps({"namespace": "llm-serving", "pools": [
+        {"pool": "llama8b-pd-pool", "model": M, "kv_transport": "shm",
+         "prefill": {"accelerator": "furiosa.RNGD"}, "decode": {"accelerator": decode}},
+        {"pool": "qwen3-4b-pool", "model": Q, "serve": {"accelerator": "furiosa.RNGD", "count": serve_count}}]}),
+        encoding="utf-8")
+    return controller.load_spec(str(s))
+
+
+def _ids(io):
+    return {(d.pool, d.workload.kind): d.accelerator_ids for d in document.parse(io.cm).decisions}
+
+
+def test_serve_pool_gets_disjoint_cards():
+    p = TopologyPlacement({"npu-node-2"})
+    d = p.place_serve(Workload(kind="serve", model=Q), POOL, spec=RoleSpec("furiosa.RNGD", 2),
+                      used={"npu-node-1/furiosa:0"})
+    assert d.accelerator_ids == ["npu-node-1/furiosa:1", "npu-node-1/furiosa:3"] and "aggregated" in d.reason
+    none = p.place_serve(Workload(kind="serve", model=Q), POOL, spec=RoleSpec("furiosa.RNGD", 3),
+                         used={"npu-node-1/furiosa:0"})
+    assert none.accelerator_ids == [] and "skipped unschedulable npu-node-2" in none.reason
+
+
+def test_two_pools_no_card_shared(tmp_path):
+    io = FakeIO()
+    assert controller.run_once(_two_pools(tmp_path, decode="furiosa.RNGD"), io, namespace="llm-serving",
+                               dry_run=False) == 0
+    ids = _ids(io)
+    assert ids == {("llama8b-pd-pool", "prefill"): ["npu-node-1/furiosa:0"],
+                   ("llama8b-pd-pool", "decode"): ["npu-node-1/furiosa:1"],
+                   ("qwen3-4b-pool", "serve"): ["npu-node-1/furiosa:3"]}
+    flat = [i for v in ids.values() for i in v]
+    assert len(flat) == len(set(flat))
+
+
+def test_changed_spec_moves_only_that_pool(tmp_path):
+    io = FakeIO()
+    controller.run_once(_two_pools(tmp_path), io, namespace="llm-serving", dry_run=False)
+    before = _ids(io)
+    assert before[("llama8b-pd-pool", "decode")] == ["npu-node-1/rebellions:0"]
+    assert before[("qwen3-4b-pool", "serve")] == ["npu-node-1/furiosa:1"]
+    # decode moves ATOM -> RNGD. Placed afresh, the llama pool would take furiosa:1 (most memory, lowest
+    # index); it avoids the card the qwen pool holds, so qwen keeps it.
+    controller.run_once(_two_pools(tmp_path, decode="furiosa.RNGD", name="b.yaml"), io,
+                        namespace="llm-serving", dry_run=False)
+    after = _ids(io)
+    assert after[("qwen3-4b-pool", "serve")] == before[("qwen3-4b-pool", "serve")]
+    assert after[("llama8b-pd-pool", "prefill")] == before[("llama8b-pd-pool", "prefill")]
+    assert after[("llama8b-pd-pool", "decode")] == ["npu-node-1/furiosa:3"]
+    assert document.parse(io.cm).generation == 2
+
+
+def test_overasked_pool_takes_from_the_next(tmp_path):
+    """Avoiding another pool's cards is a preference: when the changed pool fits nowhere else, it is
+    placed as before and the later pool is re-placed (here: nothing left for it)."""
+    io = FakeIO()
+    controller.run_once(_two_pools(tmp_path, decode="furiosa.RNGD"), io, namespace="llm-serving", dry_run=False)
+    assert controller.run_once(_two_pools(tmp_path, decode="furiosa.RNGD", serve_count=2, name="c.yaml"), io,
+                               namespace="llm-serving", dry_run=False) == 1
+    assert _ids(io)[("qwen3-4b-pool", "serve")] == []
+
+
+def test_serve_spec_validation(tmp_path):
+    bad = tmp_path / "bad.yaml"
+    bad.write_text(json.dumps({"pools": [{"pool": "q", "model": Q, "serve": {}, "decode": {}}]}), encoding="utf-8")
+    with pytest.raises(ValueError, match="excludes"):
+        controller.load_spec(str(bad))
+    dup = tmp_path / "dup.yaml"
+    dup.write_text(json.dumps({"pools": [{"pool": "q", "model": Q, "serve": {}}] * 2}), encoding="utf-8")
+    with pytest.raises(ValueError, match="unique"):
+        controller.load_spec(str(dup))

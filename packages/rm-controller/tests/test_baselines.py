@@ -20,7 +20,7 @@ def test_a100_profile_and_gpu_link():
     link = raw.links["cuda-ipc"]
     assert not link.implemented and link.serves("nvidia.A100", "nvidia.A100")
     assert not link.serves("furiosa.RNGD", "furiosa.RNGD")
-    assert PERF.links["cuda-ipc"].implemented and not PERF.links["tcp"].implemented   # only GPU links flipped
+    assert PERF.links["cuda-ipc"].implemented and PERF.links["tcp"].implemented      # tcp is measured now
     assert sim.card("n", "nvidia.A100", 0).model == "A100"
 
 

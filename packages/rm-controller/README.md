@@ -119,8 +119,8 @@ card** is highest, from:
 
 `kv_transport: auto` lets it pick among implemented links; `p2p` is offered only for RNGD → ATOM, where it was verified.
 Each profile number is marked measured, derived or estimate in the file. RNGD and ATOM decode are measured on the live
-S=512 graphs ([baselines](../../docs/baselines.md)); ATOM prefill, A100 and the `p2p`, `tcp` and `cuda-ipc` links stay
-estimates until FASOP's NPU cost model ([aicomp #50](https://github.com/ai-computing/aicomp/issues/50)) or a sweep
+S=512 graphs ([baselines](../../docs/baselines.md)), and so is the cross-node `tcp` link (rngd-pd's TCP transport through a
+relay on another node, 1 GbE); ATOM prefill, A100 and the `p2p` and `cuda-ipc` links stay estimates until FASOP's NPU cost model ([aicomp #50](https://github.com/ai-computing/aicomp/issues/50)) or a sweep
 replaces them.
 
 ## 📝 Spec
@@ -151,9 +151,26 @@ pools:
     rebalance: {metrics: http://<pod>:8000/metrics, band: 0.2, hold: 3, cooldown_s: 300, margin: 0.2}
 ```
 
+**Several pools, several models (HUB-35).** A spec lists any number of pools, each its own model; they are placed in
+order and no card is given to two pools. A pool is either prefill/decode (as above) or aggregated, single-card replicas
+of an engine that runs both phases (furiosa-llm, vLLM):
+
+```yaml
+  - pool: qwen3-4b-pool
+    model: furiosa-ai/Qwen3-4B-FP8
+    serve: {accelerator: furiosa.RNGD, count: 1}   # one `serve` decision; no kv_transport, no rebalance
+```
+
+An aggregated pool takes `count` free cards of the type (the node with the most of them first) under either policy: the
+profiles describe the prefill/decode path, not another model's single-card serving. Its Deployment is annotated
+`role: serve`. When the spec of one pool changes, that pool is placed on cards no other pool held in the previous
+generation if it fits there, and every other pool keeps its decision, so a re-run moves only the changed pool
+(live: [baselines](../../docs/baselines.md#w2-two-model-pools-on-one-node-hub-35)).
+
 Examples: [`examples/spec.yaml`](examples/spec.yaml) (RNGD+RNGD over shm, with a rebalance section),
 [`examples/hetero-p2p.yaml`](examples/hetero-p2p.yaml) (RNGD prefill, ATOM ×2 decode over same-host P2P),
-[`examples/optimal.yaml`](examples/optimal.yaml) (optimal, `kv_transport: auto`, budget 6).
+[`examples/optimal.yaml`](examples/optimal.yaml) (optimal, `kv_transport: auto`, budget 6),
+[`examples/multi-pool.yaml`](examples/multi-pool.yaml) (two models: Llama-3.1-8B PD and Qwen3-4B aggregated).
 
 ## 🔁 Control loop
 
@@ -223,26 +240,29 @@ rate at which ≥ 90 % of requests meet TTFT and TPOT: the goodput. SLOs: 2 s / 
 
 **2 nodes: 2 x (2 RNGD + 4 ATOM)** — goodput req/s (req/s per card); optimal's layout below the number
 
-| Trace | topology RNGD/RNGD shm | topology RNGD/ATOM×2 p2p | optimal (per card) | optimal (max goodput) | optimal (max goodput, planned tcp) |
+| Trace | topology RNGD/RNGD shm | topology RNGD/ATOM×2 p2p | optimal (per card) | optimal (max goodput) | optimal (max goodput, `tcp` only) |
 |---|--:|--:|--:|--:|--:|
-| azure-conv | 0.813 (0.406) | 0.000 (0.000) | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 2.724 (0.681)<br>P 1x RNGD / D 3x RNGD, tcp, 2 nodes |
-| azure-code | 0.943 (0.472) | 0.000 (0.000) | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 2.270 (0.567)<br>P 3x RNGD / D 1x RNGD, tcp, 2 nodes |
-| burstgpt | 0.025 (0.013) | 0.000 (0.000) | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.087 (0.022)<br>P 1x RNGD / D 3x RNGD, tcp, 2 nodes |
-| mooncake-conv | 0.563 (0.281) | 0.000 (0.000) | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 1.132 (0.283)<br>P 2x RNGD / D 2x RNGD, tcp, 2 nodes |
-| mooncake-tool | 0.950 (0.475) | 0.000 (0.000) | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 1.948 (0.487)<br>P 2x RNGD / D 2x RNGD, tcp, 2 nodes |
+| azure-conv | 0.813 (0.406) | 0.000 (0.000) | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, tcp |
+| azure-code | 0.943 (0.472) | 0.000 (0.000) | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, tcp |
+| burstgpt | 0.025 (0.013) | 0.000 (0.000) | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, tcp |
+| mooncake-conv | 0.563 (0.281) | 0.000 (0.000) | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, tcp |
+| mooncake-tool | 0.950 (0.475) | 0.000 (0.000) | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, tcp |
 
 What it shows, with these profiles:
 
 - **The profiles are now mostly measured** on the S=512 graphs of the live baselines
   ([baselines](../../docs/baselines.md)): RNGD prefill 66 ms + 12 K tok/s, RNGD decode 30 ms per token at any batch up to 8
   (the continuous B=8 graph is fixed-width), ATOM decode 108 ms per token up to batch 4 on one card, `shm` 1.6 GB/s.
-  ATOM prefill and the `p2p` and `tcp` links are still estimates.
+  `tcp` 0.08 GB/s + 14 ms, measured across nodes on the NPU node's 1 GbE link. ATOM prefill and `p2p` are still estimates.
 - **On one node optimal is the RNGD/RNGD pool.** ATOM decode misses the 100 ms TPOT SLO at every batch, so any pool that
   decodes on ATOM has no goodput; the live RNGD → ATOM baseline met the SLO for 0 % of requests.
-- **Across two nodes it gains only with a cross-node KV transport**, which does not exist yet (`tcp` in the table is a
-  planned link at an estimated 0.5 GB/s): 2.0–3.5× the goodput and up to 1.7× per card. Decode is now the bottleneck for
-  chat (optimal adds decode instances for Azure conversation and BurstGPT) and prefill for Azure code. Mixed roles no
-  longer add ATOM decode there (it cannot meet the TPOT SLO), so no "one type per role" variant differs.
+- **Across two nodes nothing is gained over the measured `tcp` link.** It moves 67 MB per request in ~0.85 s (the full
+  S=512 buffer, on 1 GbE) and the trace prompts' KV in seconds, so no two-node plan meets the TTFT SLO: optimal stays on one
+  node over `shm`, and the best `tcp` plan (last column; nothing SLO-feasible, so topology's 1P+1D) has no goodput. With the
+  old estimate (0.5 GB/s, then a planned link) the same column read 0.087–2.724 req/s, 2.0–3.5× one node. Sweeping the
+  bandwidth: the two-node layouts come back between 0.15 and 0.25 GB/s (2.5 GbE and up), and at 0.8 GB/s give 2.73 req/s
+  for Azure conversation (P 1 / D 3 RNGD) and 2.39 for Azure code (P 3 / D 1), as the estimate did. NPU-to-NPU across two
+  nodes is not measured: the second NPU node was cordoned, so the link was measured RNGD → CPU relay node → RNGD.
 - The Mooncake rows are extrapolations: the S=512 graphs cannot serve those prompts at all, and the prefill rate is
   extended linearly past 512 tokens (attention's quadratic term ignored), so they are optimistic.
 - Capacity is sized for each trace's 60 s peak (BurstGPT: 69×), which keeps the absolute rates low.
@@ -327,7 +347,7 @@ What it shows, with these profiles (RNGD, ATOM and `shm` measured, A100 partly e
 
 ## ✅ Verified
 
-- 84 tests (topology, optimal and mixed roles, rebalancer and its predictor, health and re-placement, apply, simulator and episode replay, baselines, document bytes identical to 0.1's);
+- 90 tests (topology, optimal and mixed roles, aggregated `serve` pools beside PD pools, rebalancer and its predictor, health and re-placement, apply, simulator and episode replay, baselines, document bytes identical to 0.1's);
   `rm_core.conformance airm.placements topology optimal` PASS with rm-core v0.1.2; CI runs both.
 - Read-only dry run on the live cluster (2026-10-19, topology): the shm pool went to `npu-node-1/furiosa:0` + `furiosa:1`, the
   placement the end-to-end run had pinned by hand, with the cordoned node skipped; the p2p pool went to RNGD 0 + ATOM 0, 1.
