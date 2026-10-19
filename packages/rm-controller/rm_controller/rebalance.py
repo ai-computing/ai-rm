@@ -253,7 +253,9 @@ def decide(current: Tuple[int, int], budget_cards: int, groups: Tuple[int, int],
     now, best = p.current, p.best
     at = f"at {p.arrivals:.2f} req/s ({p.source})"
     if best.split == now.split:
-        return Decision(current, f"hold: no split predicted better {at}; now {now.describe()}", p)
+        others = sorted((c for c in p.candidates if c.split != now.split), key=lambda c: c.key())
+        alt = f"; best other {others[0].describe()}" if others else ""
+        return Decision(current, f"hold: no split predicted better than now {now.describe()}{alt} {at}", p)
     if math.isinf(now.worst) and math.isinf(best.worst):
         better = best.util < now.util * (1.0 - margin)
     else:
