@@ -188,7 +188,7 @@ Details: [interfaces](docs/interfaces.md) · [integration guide](docs/integratio
 
 - [x] Five-layer layout, pinned submodules and setup tooling (`list` · `doctor` · `setup` · `test` · `deploy` · `check`)
 - [x] rm-core v0.1 contracts, reference implementations, conformance checks and `AcceleratorProfile` CRD
-- [ ] Component adapters for protocol v0.1 (in review)
+- [x] Component adapters for protocol v0.1, verified together ([status](docs/status.md#protocol-v01-integration--verified-2026-10-19))
 - [ ] Optimus Prime integration branch: PD, KV-transport and expert-offload modules from the migration sources
 - [ ] FASOP inference planning and a reviewed llm-d placement adapter
 - [ ] Umbrella chart, simulated cluster and end-to-end scenario with TTFT / TPOT / power / MFU evidence
