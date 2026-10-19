@@ -197,7 +197,7 @@ def cmd_e2e(args):
         nodes = ["sim-node-a", "sim-node-b"]
         accs = [a for n in nodes for a in SimAcceleratorProvider(n).discover()]
         entries, unplaced = controller.plan({"namespace": NAMESPACE, "pools": pools}, accs, set())
-        doc, _ = document.build(entries, document.parse(None), "topology")
+        doc = document.build(entries, document.parse(None), "topology")[0].to_dict()
         devices = {a.id: (a.node, f"{a.vendor}.{a.model}") for a in accs}
         print(f"rm-controller (in-process): {len(accs)} sim accelerators on {len(nodes)} nodes, "
               f"{len(entries)} decisions" + (f"; not placed: {', '.join(unplaced)}" if unplaced else ""))
