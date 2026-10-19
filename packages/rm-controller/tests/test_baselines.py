@@ -26,7 +26,8 @@ def test_a100_profile_and_gpu_link():
 
 def test_instances_follow_groups():
     insts = baselines.instances(MIXED, PERF)
-    assert insts.count(("nvidia.A100", "node-m")) == 2 and insts.count(("rebellions.ATOM", "node-m")) == 2
+    # measured: one ATOM card per decode instance (the fp16 artifact fits one card)
+    assert insts.count(("nvidia.A100", "node-m")) == 2 and insts.count(("rebellions.ATOM", "node-m")) == 4
 
 
 def test_max_flow():
@@ -67,7 +68,8 @@ def test_hexgen2_drops_instances_without_flow_and_reports_infeasible():
     lay, _ = baselines.hexgen2(GPU, CONV, SLO, PERF)
     assert lay.cards <= 4 and lay.prefill and lay.decode
     moon = mix.from_trace("mooncake-conv")
-    empty, est = baselines.hexgen2(NPU, moon, mix.trace_slo("mooncake-conv"), PERF)
+    tight = {"ttft_p90_ms": 1000, "tpot_p90_ms": 100}   # p90 prompt 27 K tokens cannot prefill within 1 s on RNGD
+    empty, est = baselines.hexgen2(NPU, moon, tight, PERF)
     assert est == 0 and empty.cards == 0 and sim.max_rate(empty, moon, {}, PERF) == 0
 
 

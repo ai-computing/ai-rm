@@ -117,8 +117,10 @@ card** is highest, from:
 | Fallback | no profile for any free type, `loopback`, an unknown transport, or nothing SLO-feasible → `topology` with the spec's counts, and the reason says so; a pool that leaves one choice gets topology's choice |
 
 `kv_transport: auto` lets it pick among implemented links; `p2p` is offered only for RNGD → ATOM, where it was verified.
-**The profile numbers are partly estimates**, each marked measured, derived or estimate in the file, until FASOP's NPU
-cost model ([aicomp #50](https://github.com/ai-computing/aicomp/issues/50)) or a measured sweep replaces them.
+Each profile number is marked measured, derived or estimate in the file. RNGD and ATOM decode are measured on the live
+S=512 graphs ([baselines](../../docs/baselines.md)); ATOM prefill, A100 and the `p2p`, `tcp` and `cuda-ipc` links stay
+estimates until FASOP's NPU cost model ([aicomp #50](https://github.com/ai-computing/aicomp/issues/50)) or a sweep
+replaces them.
 
 ## 📝 Spec
 
@@ -198,38 +200,40 @@ rate at which ≥ 90 % of requests meet TTFT and TPOT: the goodput. SLOs: 2 s / 
 
 | Trace | topology RNGD/RNGD shm | topology RNGD/ATOM×2 p2p | optimal (per card) | optimal (max goodput) |
 |---|--:|--:|--:|--:|
-| azure-conv | 0.336 (0.168) | 0.046 (0.015) | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm |
-| azure-code | 0.133 (0.067) | 0.000 (0.000) | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm |
-| burstgpt | 0.026 (0.013) | 0.004 (0.001) | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm |
-| mooncake-conv | 0.000 (0.000) | 0.000 (0.000) | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm |
-| mooncake-tool | 0.037 (0.018) | 0.000 (0.000) | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm |
+| azure-conv | 0.813 (0.406) | 0.000 (0.000) | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm |
+| azure-code | 0.943 (0.472) | 0.000 (0.000) | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm |
+| burstgpt | 0.025 (0.013) | 0.000 (0.000) | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm |
+| mooncake-conv | 0.563 (0.281) | 0.000 (0.000) | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm |
+| mooncake-tool | 0.950 (0.475) | 0.000 (0.000) | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm |
 
 **2 nodes: 2 x (2 RNGD + 4 ATOM)** — goodput req/s (req/s per card); optimal's layout below the number
 
 | Trace | topology RNGD/RNGD shm | topology RNGD/ATOM×2 p2p | optimal (per card) | optimal (max goodput) | optimal (max goodput, planned tcp) |
 |---|--:|--:|--:|--:|--:|
-| azure-conv | 0.336 (0.168) | 0.046 (0.015) | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.844 (0.070)<br>P 3x RNGD / D 1x RNGD+4x ATOM, tcp, 2 nodes<br>_one type per role: 0.730 (0.182), P 3x RNGD / D 1x RNGD_ |
-| azure-code | 0.133 (0.067) | 0.000 (0.000) | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm | 0.613 (0.153)<br>P 3x RNGD / D 1x RNGD, tcp, 2 nodes |
-| burstgpt | 0.026 (0.013) | 0.004 (0.001) | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.059 (0.006)<br>P 2x RNGD / D 2x RNGD+3x ATOM, tcp, 2 nodes<br>_one type per role: 0.061 (0.015), P 2x RNGD / D 2x RNGD_ |
-| mooncake-conv | 0.000 (0.000) | 0.000 (0.000) | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm |
-| mooncake-tool | 0.037 (0.018) | 0.000 (0.000) | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm | 0.379 (0.095)<br>P 3x RNGD / D 1x RNGD, tcp, 2 nodes |
+| azure-conv | 0.813 (0.406) | 0.000 (0.000) | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 2.724 (0.681)<br>P 1x RNGD / D 3x RNGD, tcp, 2 nodes |
+| azure-code | 0.943 (0.472) | 0.000 (0.000) | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 2.270 (0.567)<br>P 3x RNGD / D 1x RNGD, tcp, 2 nodes |
+| burstgpt | 0.025 (0.013) | 0.000 (0.000) | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.087 (0.022)<br>P 1x RNGD / D 3x RNGD, tcp, 2 nodes |
+| mooncake-conv | 0.563 (0.281) | 0.000 (0.000) | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 1.132 (0.283)<br>P 2x RNGD / D 2x RNGD, tcp, 2 nodes |
+| mooncake-tool | 0.950 (0.475) | 0.000 (0.000) | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 1.948 (0.487)<br>P 2x RNGD / D 2x RNGD, tcp, 2 nodes |
 
 What it shows, with these profiles:
 
-- **On one node optimal is the RNGD/RNGD pool**, with about 10× the goodput per card of the hetero RNGD/ATOM×2 pool on Azure
-  conversation and BurstGPT. ATOM decode is held back by its KV room (~4 K tokens beside the weights: batch 2 for chat,
-  no room for most Azure code or Mooncake prompts), and ATOM prefill is too slow for the TTFT SLO.
+- **The profiles are now mostly measured** on the S=512 graphs of the live baselines
+  ([baselines](../../docs/baselines.md)): RNGD prefill 66 ms + 12 K tok/s, RNGD decode 30 ms per token at any batch up to 8
+  (the continuous B=8 graph is fixed-width), ATOM decode 108 ms per token up to batch 4 on one card, `shm` 1.6 GB/s.
+  ATOM prefill and the `p2p` and `tcp` links are still estimates.
+- **On one node optimal is the RNGD/RNGD pool.** ATOM decode misses the 100 ms TPOT SLO at every batch, so any pool that
+  decodes on ATOM has no goodput; the live RNGD → ATOM baseline met the SLO for 0 % of requests.
 - **Across two nodes it gains only with a cross-node KV transport**, which does not exist yet (`tcp` in the table is a
-  planned link at an estimated 0.5 GB/s): then 2.2× (Azure conversation) to 10× (Mooncake tool-agent) the goodput and up to
-  5× per card, mostly from more prefill servers for long, variable prompts. With mixed roles it adds ATOM decode instances
-  there: +16 % goodput on Azure conversation (0.730 → 0.844 req/s on 12 cards instead of 4) but −3 % on BurstGPT (0.061 →
-  0.059), where the model over-credits ATOM's KV-bound decode. Per card nothing changes (in italics: `mixed_roles: false`).
-- Mooncake conversation is infeasible everywhere (p90 prompt 27 K tokens ≈ 11 s of prefill); optimal falls back to topology.
-- Absolute rates are low because the measured `shm` path moves 0.6 GB/s (a 1 K-token prompt's KV takes ~0.3 s) and capacity
-  is sized for each trace's 60 s peak (BurstGPT: 69×).
-- The analytical model in `optimal` gives 0.41–1.31× the simulated goodput (1.31× on the row that mixes in ATOM decode), conservative in most cases (column "Model
-  est." in [the component card](../../docs/components/rm-controller.md)). Both read the same profiles, so the simulation checks
-  queueing, bursts, KV fit and routing, **not the profile numbers, which are partly estimates**.
+  planned link at an estimated 0.5 GB/s): 2.0–3.5× the goodput and up to 1.7× per card. Decode is now the bottleneck for
+  chat (optimal adds decode instances for Azure conversation and BurstGPT) and prefill for Azure code. Mixed roles no
+  longer add ATOM decode there (it cannot meet the TPOT SLO), so no "one type per role" variant differs.
+- The Mooncake rows are extrapolations: the S=512 graphs cannot serve those prompts at all, and the prefill rate is
+  extended linearly past 512 tokens (attention's quadratic term ignored), so they are optimistic.
+- Capacity is sized for each trace's 60 s peak (BurstGPT: 69×), which keeps the absolute rates low.
+- The analytical model in `optimal` gives 0.68–0.93× the simulated goodput, conservative everywhere (column "Model est."
+  in [the component card](../../docs/components/rm-controller.md)). Both read the same profiles; the live runs check the
+  profiles themselves ([baselines](../../docs/baselines.md#calibration-w6)).
 
 ## ⚖️ Baselines: DistServe- and HexGen-2-style placement
 
@@ -263,43 +267,41 @@ policy here, although ai-rm has no transport plugin for it. 4,000 requests per r
 
 | Trace | topology (shm) | optimal, per card | optimal, max goodput | distserve | hexgen2 |
 |---|--:|--:|--:|--:|--:|
-| azure-conv | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.243 (0.061)<br>P 1x RNGD / D 1x RNGD+1x ATOM, shm |
-| azure-code | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm |
-| burstgpt | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.026 (0.004)<br>P 1x RNGD / D 1x RNGD+2x ATOM, shm |
-| mooncake-conv | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>none feasible | 0.000 (0.000)<br>none feasible |
-| mooncake-tool | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm |
+| azure-conv | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm |
+| azure-code | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm |
+| burstgpt | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm |
+| mooncake-conv | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm |
+| mooncake-tool | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm |
 
 **Mixed: 1 node, 2 A100 + 2 RNGD + 4 ATOM** — goodput req/s (req/s per card); layout below the number
 
 | Trace | topology (shm) | optimal, per card | optimal, max goodput | distserve | hexgen2 |
 |---|--:|--:|--:|--:|--:|
-| azure-conv | 4.168 (2.084)<br>P 1x A100 / D 1x A100, shm | 4.218 (2.109)<br>P 1x A100 / D 1x A100, cuda-ipc | **5.410 (1.353)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 4.218 (2.109), P 1x A100 / D 1x A100, cuda-ipc_ | 4.218 (2.109)<br>P 1x A100 / D 1x A100, cuda-ipc | 6.244 (0.780)<br>P 2x RNGD+1x A100 / D 1x A100+2x ATOM, shm |
-| azure-code | 1.034 (0.517)<br>P 1x A100 / D 1x A100, shm | 2.114 (0.705)<br>P 2x A100 / D 1x RNGD, shm | 2.149 (0.537)<br>P 1x RNGD+2x A100 / D 1x RNGD, shm<br>_one type per role: 2.145 (0.536), P 2x A100 / D 2x RNGD_ | 1.040 (0.520)<br>P 1x A100 / D 1x A100, cuda-ipc | 2.145 (0.536)<br>P 2x A100 / D 2x RNGD, shm |
-| burstgpt | 0.162 (0.081)<br>P 1x A100 / D 1x A100, shm | 0.163 (0.082)<br>P 1x A100 / D 1x A100, cuda-ipc | **0.230 (0.058)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 0.163 (0.082), P 1x A100 / D 1x A100, cuda-ipc_ | 0.163 (0.082)<br>P 1x A100 / D 1x A100, cuda-ipc | 0.258 (0.032)<br>P 2x RNGD+1x A100 / D 1x A100+2x ATOM, shm |
-| mooncake-conv | 0.389 (0.195)<br>P 1x A100 / D 1x A100, shm | 1.126 (0.282)<br>P 2x A100 / D 2x RNGD, shm | 1.126 (0.282)<br>P 2x A100 / D 2x RNGD, shm | 0.536 (0.268)<br>P 1x A100 / D 1x A100, cuda-ipc | 1.126 (0.282)<br>P 2x A100 / D 2x RNGD, shm |
-| mooncake-tool | 0.763 (0.382)<br>P 1x A100 / D 1x A100, shm | 1.692 (0.564)<br>P 2x A100 / D 1x RNGD, shm | 1.703 (0.426)<br>P 2x A100 / D 2x RNGD, shm | 0.814 (0.407)<br>P 1x A100 / D 1x A100, cuda-ipc | 1.703 (0.426)<br>P 2x A100 / D 2x RNGD, shm |
+| azure-conv | 4.202 (2.101)<br>P 1x A100 / D 1x A100, shm | **11.780 (2.945)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 7.525 (2.508), P 2x RNGD / D 1x A100_ | **11.780 (2.945)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 7.525 (2.508), P 2x RNGD / D 1x A100_ | 4.218 (2.109)<br>P 1x A100 / D 1x A100, cuda-ipc | 11.935 (2.984)<br>P 2x RNGD+1x A100 / D 1x A100, shm |
+| azure-code | 1.038 (0.519)<br>P 1x A100 / D 1x A100, shm | **3.019 (0.755)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 2.087 (0.696), P 2x RNGD / D 1x A100_ | **3.019 (0.755)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 2.160 (0.540), P 2x A100 / D 2x RNGD_ | 1.040 (0.520)<br>P 1x A100 / D 1x A100, cuda-ipc | 3.070 (0.767)<br>P 2x RNGD+1x A100 / D 1x A100, shm |
+| burstgpt | 0.163 (0.081)<br>P 1x A100 / D 1x A100, shm | **0.289 (0.097)**<br>P 1x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 0.163 (0.082), P 1x A100 / D 1x A100, cuda-ipc_ | **0.362 (0.091)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 0.243 (0.081), P 2x RNGD / D 1x A100_ | 0.163 (0.082)<br>P 1x A100 / D 1x A100, cuda-ipc | 0.363 (0.091)<br>P 2x RNGD+1x A100 / D 1x A100, shm |
+| mooncake-conv | 0.505 (0.253)<br>P 1x A100 / D 1x A100, shm | **1.930 (0.482)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 1.488 (0.496), P 2x RNGD / D 1x A100_ | **1.930 (0.482)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 1.488 (0.496), P 2x RNGD / D 1x A100_ | 0.536 (0.268)<br>P 1x A100 / D 1x A100, cuda-ipc | 2.196 (0.549)<br>P 2x RNGD+1x A100 / D 1x A100, shm |
+| mooncake-tool | 0.802 (0.401)<br>P 1x A100 / D 1x A100, shm | **2.921 (0.730)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 2.102 (0.701), P 2x RNGD / D 1x A100_ | **2.921 (0.730)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 2.102 (0.701), P 2x RNGD / D 1x A100_ | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 3.151 (0.788)<br>P 2x RNGD+1x A100 / D 1x A100, shm |
 
-What it shows, with these profiles:
+What it shows, with these profiles (RNGD, ATOM and `shm` measured, A100 partly estimated):
 
-- **GPU only**: `optimal` (per card) and `distserve` pick the same layouts on every trace; `optimal` (max goodput) and
-  `hexgen2` agree too. Homogeneous GPUs leave little for the search beyond the P:D split, which both get right; topology's
-  fixed 1:1 split loses 1.4–1.8× per card and 2–3.6× in goodput.
-- **NPU only**: every policy lands on RNGD/RNGD except `hexgen2` on Azure conversation and BurstGPT, which adds ATOM decode instances because they add flow
-  capacity; the simulator shows them lowering goodput (the max-flow objective ignores TTFT queueing and ATOM's slow,
-  KV-bound decode). Its own estimate is 1.8–6× the simulated value on this node.
-- **Mixed**: `optimal` beats `distserve` by 2.0–2.1× (Azure code, Mooncake) by pairing A100 prefill with RNGD decode,
-  which a homogeneous search cannot. `hexgen2` gets the most total goodput on Azure conversation and BurstGPT (6.24 and
-  0.258 req/s on 8 cards) by mixing types within a role. With **mixed roles** `optimal` (max goodput) now does that too:
-  A100 + 2 RNGD prefill with A100 decode, 4.22 → **5.41** and 0.163 → **0.230** req/s (in italics: before), 87 % and 89 % of
-  `hexgen2` on half the cards. RNGD prefill gets weight 0.19 / 0.29: with ~1.75 s of p90 prefill + `shm` KV it has little
-  TTFT slack. It matches `hexgen2` on Azure code (2.149 vs 2.145) and both Mooncake traces, and matches or beats it per card
-  on every trace. The rest of the gap is routing, not the type mix: the same 4 cards served from one shared prefill queue
-  (fastest free first, how the simulator serves `hexgen2`) reach 6.34 and 0.257 req/s, i.e. `hexgen2`'s goodput on half its
-  cards; a fixed weighted split cannot borrow idle capacity across types, and the per-type p90 rule is conservative
-  (RNGD weight 0.30 by hand: 6.02). Per-card choices are unchanged on every card set, which is why `mixed_roles` is on by default.
-- W6's "optimal beats topology per card against a GPU-only baseline" holds in simulation: on 4 A100 it matches or beats the
-  DistServe-style search and beats topology on every trace. All rows share one profile table, so they compare placement
-  logic, not hardware.
+- **GPU only**: unchanged by the calibration. `optimal` (per card) and `distserve` pick the same layouts on every trace;
+  `optimal` (max goodput) and `hexgen2` agree too; topology's fixed 1:1 split loses 1.4–1.8× per card.
+- **NPU only**: every policy, `hexgen2` included, picks RNGD/RNGD. With the measured ATOM decode (108 ms per token) no ATOM
+  decode instance meets the TPOT SLO, so the max-flow search no longer adds them. Goodput is 2.4–26× the uncalibrated table
+  (Azure conversation 0.336 → 0.813 req/s; BurstGPT unchanged at 0.025), from the measured RNGD prefill and `shm` load; the Mooncake rows are
+  extrapolations past S=512.
+- **Mixed**: the measured RNGD prefill (12 K tok/s, against the A100's estimated 10 K) changes the picks. `optimal` now
+  pairs 2 RNGD + 1 A100 prefill with A100 decode on Azure conversation, Azure code and both Mooncake traces, for per card
+  as well as max goodput (11.78 req/s on Azure conversation, 2.8× `distserve`'s homogeneous A100 pair); one type per role
+  it would take 2 RNGD prefill + 1 A100 decode (7.53). `hexgen2` reaches the same 4-card layout without ATOM decode and is
+  within 1–14 % of `optimal` (11.94 vs 11.78 req/s; Mooncake conversation 2.20 vs 1.93): the gap left is the shared
+  prefill queue against `optimal`'s fixed weighted split. **Per-card choices now change with mixed roles on the mixed
+  node** (before calibration they did not); everywhere else they are unchanged.
+- The mixed rows assume RNGD → A100 KV over `shm`, which no ai-rm transport provides yet, and A100 numbers are partly
+  estimates; they compare placement logic under one table, not hardware.
+- W6's "optimal beats topology per card against a GPU-only baseline" holds in simulation: on 4 A100 it matches or beats
+  the DistServe-style search and beats topology on every trace.
 
 ## ✅ Verified
 
@@ -307,8 +309,13 @@ What it shows, with these profiles:
   `rm_core.conformance airm.placements topology optimal` PASS with rm-core v0.1.2; CI runs both.
 - Read-only dry run on the live cluster (2026-10-19, topology): the shm pool went to `npu-node-1/furiosa:0` + `furiosa:1`, the
   placement the end-to-end run had pinned by hand, with the cordoned node skipped; the p2p pool went to RNGD 0 + ATOM 0, 1.
-- Not yet run on the cluster: `optimal`, `--rebalance` (needs the vLLM metrics of aicomp #45 or the gateway's `airm_*`) and
-  `--apply` (needs annotated Deployments). They are verified with fake cluster IO and the simulator only.
+- Live on the RNGD+ATOM node (2026-10-19, [baselines](../../docs/baselines.md)): `optimal` (`examples/optimal.yaml`,
+  budget 6) wrote generation 2 (prefill 2× RNGD, decode 1× RNGD, `shm`) and `--apply` patched the annotated rngd-pd
+  Deployments (replicas 2 and 1, node affinity, `accelerator-ids`); the pods landed on the decided node with the decided
+  number of cards, and the PD path passed `pd-smoke` through the llm-d gateway. Which cards a pod gets is still the
+  device plugin's choice. With the calibrated profiles it chose prefill 1× / decode 2× RNGD (generation 3), `--apply`
+  moved the Deployments to it, and that layout met the SLO for every request on both traces.
+- Not yet run on the cluster: `--rebalance` (needs the vLLM metrics of aicomp #45 or the gateway's `airm_*`).
 
 ## 🗺 Roadmap
 
@@ -316,11 +323,13 @@ What it shows, with these profiles:
 - [x] Serving Deployments that follow the decisions (`--apply`); charts still have to pin cards from `accelerator-ids`
 - [x] The `airm-placement` format made normative in rm-core's protocol (§5.4, v0.1.2)
 - [x] An image (`ghcr.io/ai-computing/rm-controller`, [`Dockerfile`](Dockerfile)) and a Deployment in the umbrella chart [`charts/ai-rm`](../../charts/ai-rm)
-- [ ] Measured profiles (FASOP NPU cost model, aicomp #50) in place of the estimates (A100 added for the GPU baselines, partly estimated)
+- [x] Measured RNGD and ATOM-decode profiles from the live baselines
+- [ ] ATOM prefill, `p2p` and A100 measured, FASOP NPU cost model (aicomp #50)
 - [x] Device types mixed within a role (`mixed_roles`), routed by per-type weights
 - [ ] Pooled (work-conserving) prefill routing across types in the model and the gateway; a KV link per type pair
 - [ ] A cross-node KV transport, so that `optimal` can span nodes
-- [ ] Run `optimal`, `--rebalance` and `--apply` on the live cluster
+- [x] Run `optimal` and `--apply` on the live cluster
+- [ ] Run `--rebalance` on the live cluster
 
 ## 📄 License
 

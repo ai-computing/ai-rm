@@ -12,7 +12,7 @@ AI-RM은 이종 자원 연구, 클러스터 통합, 재현 가능한 평가를 �
 | **현재 구성요소 실행** | [시작하기](getting-started.md) | [배포](../../deploy/README.ko.md) · [현재 상태·접근 권한](status.md) · [로드맵](roadmap.md) |
 | **통합 엔진 구현** | [Optimus Prime + FASOP 설계](engine-integration.md) | [엔진 카드](../components/optimus-prime.md) · [FASOP 카드](../components/fasop.md) |
 | **구현 연결** | [통합 가이드](integration-guide.md) | [인터페이스](interfaces.md) · [구성요소 계약](component-contract.md) |
-| **결과 평가** | [성과지표·증빙](kpi-map.md) | [end-to-end 실행](e2e.md) · [워크로드 트레이스](workload-traces.md) · [KV 계층 평가](kv-tier-evaluation.md) · [측정 정의](interfaces.md) |
+| **결과 평가** | [성과지표·증빙](kpi-map.md) | [end-to-end 실행](e2e.md) · [기준선](baselines.md) · [워크로드 트레이스](workload-traces.md) · [KV 계층 평가](kv-tier-evaluation.md) · [측정 정의](interfaces.md) |
 | **기여** | [기여 안내](../../CONTRIBUTING.md) | [보안](security.md) · [시각 자료](../assets/README.md) |
 
 ## 참조

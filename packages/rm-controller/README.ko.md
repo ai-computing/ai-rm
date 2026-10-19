@@ -114,8 +114,9 @@ condition)와 Disk/Memory/PID pressure 노드도 cordon 노드처럼 제외합�
 | 대체 | 빈 카드 종류에 프로파일이 없거나, `loopback`, 모르는 전송, SLO를 지키는 후보 없음 → spec의 개수로 `topology`, 이유에 기록. 선택지가 하나뿐인 풀은 topology와 같은 결과 |
 
 `kv_transport: auto`는 구현된 링크 중에서 고릅니다. `p2p`는 검증된 RNGD → ATOM에만 제시합니다.
-**프로파일 수치는 일부 추정치입니다.** 파일에 측정(measured)·유도(derived)·추정(estimate)을 표시했으며, FASOP NPU 비용 모델
-([aicomp #50](https://github.com/ai-computing/aicomp/issues/50))이나 측정 sweep으로 바꿀 예정입니다.
+프로파일 수치마다 파일에 측정(measured)·유도(derived)·추정(estimate)을 표시했습니다. RNGD와 ATOM decode는 실제 S=512 그래프에서
+측정했고([기준선](../../docs/ko/baselines.md)), ATOM prefill, A100과 `p2p`·`tcp`·`cuda-ipc` 링크는 FASOP NPU 비용 모델
+([aicomp #50](https://github.com/ai-computing/aicomp/issues/50))이나 sweep으로 바꿀 때까지 추정치입니다.
 
 ## 📝 Spec
 
@@ -189,37 +190,38 @@ BurstGPT 2초/100 ms, Azure 코드 4초/100 ms, Mooncake 15초/100 ms(긴 프롬
 
 | 트레이스 | topology RNGD/RNGD shm | topology RNGD/ATOM×2 p2p | optimal (per card) | optimal (max goodput) |
 |---|--:|--:|--:|--:|
-| azure-conv | 0.336 (0.168) | 0.046 (0.015) | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm |
-| azure-code | 0.133 (0.067) | 0.000 (0.000) | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm |
-| burstgpt | 0.026 (0.013) | 0.004 (0.001) | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm |
-| mooncake-conv | 0.000 (0.000) | 0.000 (0.000) | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm |
-| mooncake-tool | 0.037 (0.018) | 0.000 (0.000) | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm |
+| azure-conv | 0.813 (0.406) | 0.000 (0.000) | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm |
+| azure-code | 0.943 (0.472) | 0.000 (0.000) | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm |
+| burstgpt | 0.025 (0.013) | 0.000 (0.000) | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm |
+| mooncake-conv | 0.563 (0.281) | 0.000 (0.000) | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm |
+| mooncake-tool | 0.950 (0.475) | 0.000 (0.000) | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm |
 
 **2 nodes: 2 x (2 RNGD + 4 ATOM)** — goodput req/s (카드당 req/s), optimal은 숫자 아래에 배치
 
 | 트레이스 | topology RNGD/RNGD shm | topology RNGD/ATOM×2 p2p | optimal (per card) | optimal (max goodput) | optimal (max goodput, planned tcp) |
 |---|--:|--:|--:|--:|--:|
-| azure-conv | 0.336 (0.168) | 0.046 (0.015) | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.844 (0.070)<br>P 3x RNGD / D 1x RNGD+4x ATOM, tcp, 2 nodes<br>_one type per role: 0.730 (0.182), P 3x RNGD / D 1x RNGD_ |
-| azure-code | 0.133 (0.067) | 0.000 (0.000) | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm | 0.613 (0.153)<br>P 3x RNGD / D 1x RNGD, tcp, 2 nodes |
-| burstgpt | 0.026 (0.013) | 0.004 (0.001) | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.059 (0.006)<br>P 2x RNGD / D 2x RNGD+3x ATOM, tcp, 2 nodes<br>_one type per role: 0.061 (0.015), P 2x RNGD / D 2x RNGD_ |
-| mooncake-conv | 0.000 (0.000) | 0.000 (0.000) | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm |
-| mooncake-tool | 0.037 (0.018) | 0.000 (0.000) | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm | 0.379 (0.095)<br>P 3x RNGD / D 1x RNGD, tcp, 2 nodes |
+| azure-conv | 0.813 (0.406) | 0.000 (0.000) | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 2.724 (0.681)<br>P 1x RNGD / D 3x RNGD, tcp, 2 nodes |
+| azure-code | 0.943 (0.472) | 0.000 (0.000) | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 2.270 (0.567)<br>P 3x RNGD / D 1x RNGD, tcp, 2 nodes |
+| burstgpt | 0.025 (0.013) | 0.000 (0.000) | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.087 (0.022)<br>P 1x RNGD / D 3x RNGD, tcp, 2 nodes |
+| mooncake-conv | 0.563 (0.281) | 0.000 (0.000) | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 1.132 (0.283)<br>P 2x RNGD / D 2x RNGD, tcp, 2 nodes |
+| mooncake-tool | 0.950 (0.475) | 0.000 (0.000) | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 1.948 (0.487)<br>P 2x RNGD / D 2x RNGD, tcp, 2 nodes |
 
 이 프로파일로 보면:
 
-- **노드 하나에서는 optimal이 RNGD/RNGD 풀**이며, Azure 대화와 BurstGPT에서 이종 RNGD/ATOM×2 풀보다 카드당 goodput이 약 10배입니다.
-  ATOM decode는 KV 여유(가중치 옆 약 4K 토큰: 대화는 batch 2, Azure 코드·Mooncake 프롬프트 대부분은 들어가지 않음)에 묶이고,
-  ATOM prefill은 TTFT SLO에 비해 느립니다.
+- **프로파일은 이제 대부분 측정값**입니다. 실제 기준선 실험의 S=512 그래프에서 쟀습니다([기준선](../../docs/ko/baselines.md)):
+  RNGD prefill 66 ms + 12K tok/s, RNGD decode는 batch 8까지 토큰당 30 ms(continuous B=8 그래프는 폭이 고정), ATOM decode는 카드 한 장에서
+  batch 4까지 토큰당 108 ms, `shm` 1.6 GB/s. ATOM prefill과 `p2p`·`tcp` 링크는 아직 추정치입니다.
+- **노드 하나에서는 optimal이 RNGD/RNGD 풀**입니다. ATOM decode는 어떤 batch에서도 TPOT SLO 100 ms를 넘으므로 ATOM으로 decode하는
+  풀은 goodput이 0입니다. 실제 RNGD → ATOM 기준선도 SLO를 지킨 요청이 0 %였습니다.
 - **노드 둘에서는 노드 간 KV 전송이 있어야만 이득**이 납니다. 아직 없습니다(표의 `tcp`는 0.5 GB/s로 추정한 계획 링크). 있으면
-  goodput이 2.2배(Azure 대화)에서 10배(Mooncake tool-agent), 카드당 최대 5배이며, 대부분 길고 들쭉날쭉한 프롬프트를 위한 prefill
-  서버 추가에서 옵니다. 역할 내 혼합을 켜면 여기에 ATOM decode를 더해 Azure 대화는 goodput +16 %(0.730 → 0.844 req/s, 카드 4 → 12),
-  BurstGPT는 −3 %(0.061 → 0.059)입니다. 모델이 KV에 묶인 ATOM decode를 과대평가하는 곳입니다. 카드당 결과는 그대로(기울임: `mixed_roles: false`).
-- Mooncake 대화는 어디서도 불가능합니다(p90 프롬프트 27K 토큰 ≈ prefill 11초). optimal은 topology로 대체합니다.
-- 절대값이 낮은 이유: 측정된 `shm` 경로가 0.6 GB/s(1K 토큰 프롬프트의 KV에 약 0.3초)이고, 용량을 트레이스별 60초 peak(BurstGPT
-  69배)에 맞춰 잡기 때문입니다.
-- `optimal`의 분석 모델은 시뮬레이션 goodput의 0.41–1.31배로 대부분 보수적입니다(1.31배는 ATOM decode를 섞은 행)([컴포넌트 카드](../../docs/components/rm-controller.md)의
-  "Model est." 열). 둘 다 같은 프로파일을 읽으므로 시뮬레이션은 대기열·burst·KV 적합·라우팅을 검증할 뿐, **일부 추정치인 프로파일
-  수치 자체는 검증하지 않습니다**.
+  goodput 2.0–3.5배, 카드당 최대 1.7배입니다. 이제 대화형은 decode가 병목이고(Azure 대화와 BurstGPT에서 optimal이 decode를 늘림)
+  Azure 코드는 prefill이 병목입니다. 역할 내 혼합은 여기에 더 이상 ATOM decode를 더하지 않으므로(TPOT SLO를 못 지킴) "one type per
+  role" 행이 따로 없습니다.
+- Mooncake 행은 외삽입니다. S=512 그래프는 그 프롬프트를 아예 처리하지 못하고, prefill 속도를 512 토큰 너머로 선형 연장했으므로
+  (attention의 제곱 항 무시) 낙관적입니다.
+- 용량을 트레이스별 60초 peak(BurstGPT 69배)에 맞추므로 절대값이 낮습니다.
+- `optimal`의 분석 모델은 시뮬레이션 goodput의 0.68–0.93배로 모든 행에서 보수적입니다([컴포넌트 카드](../../docs/components/rm-controller.md)의
+  "Model est." 열). 둘 다 같은 프로파일을 읽으며, 프로파일 자체는 실제 실행으로 확인합니다([기준선](../../docs/ko/baselines.md#보정-w6)).
 
 ## ⚖️ 기준선: DistServe·HexGen-2 방식 배치
 
@@ -253,41 +255,38 @@ A100 수치는 일부 추정입니다(prefill 속도와 batch 1 TPOT는 데이�
 
 | 트레이스 | topology (shm) | optimal, per card | optimal, max goodput | distserve | hexgen2 |
 |---|--:|--:|--:|--:|--:|
-| azure-conv | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.243 (0.061)<br>P 1x RNGD / D 1x RNGD+1x ATOM, shm |
-| azure-code | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm |
-| burstgpt | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.026 (0.004)<br>P 1x RNGD / D 1x RNGD+2x ATOM, shm |
-| mooncake-conv | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>none feasible | 0.000 (0.000)<br>none feasible |
-| mooncake-tool | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm |
+| azure-conv | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm |
+| azure-code | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm |
+| burstgpt | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm |
+| mooncake-conv | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm |
+| mooncake-tool | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm |
 
 **Mixed: 1 node, 2 A100 + 2 RNGD + 4 ATOM** — goodput req/s (카드당 req/s), 숫자 아래에 배치
 
 | 트레이스 | topology (shm) | optimal, per card | optimal, max goodput | distserve | hexgen2 |
 |---|--:|--:|--:|--:|--:|
-| azure-conv | 4.168 (2.084)<br>P 1x A100 / D 1x A100, shm | 4.218 (2.109)<br>P 1x A100 / D 1x A100, cuda-ipc | **5.410 (1.353)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 4.218 (2.109), P 1x A100 / D 1x A100, cuda-ipc_ | 4.218 (2.109)<br>P 1x A100 / D 1x A100, cuda-ipc | 6.244 (0.780)<br>P 2x RNGD+1x A100 / D 1x A100+2x ATOM, shm |
-| azure-code | 1.034 (0.517)<br>P 1x A100 / D 1x A100, shm | 2.114 (0.705)<br>P 2x A100 / D 1x RNGD, shm | 2.149 (0.537)<br>P 1x RNGD+2x A100 / D 1x RNGD, shm<br>_one type per role: 2.145 (0.536), P 2x A100 / D 2x RNGD_ | 1.040 (0.520)<br>P 1x A100 / D 1x A100, cuda-ipc | 2.145 (0.536)<br>P 2x A100 / D 2x RNGD, shm |
-| burstgpt | 0.162 (0.081)<br>P 1x A100 / D 1x A100, shm | 0.163 (0.082)<br>P 1x A100 / D 1x A100, cuda-ipc | **0.230 (0.058)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 0.163 (0.082), P 1x A100 / D 1x A100, cuda-ipc_ | 0.163 (0.082)<br>P 1x A100 / D 1x A100, cuda-ipc | 0.258 (0.032)<br>P 2x RNGD+1x A100 / D 1x A100+2x ATOM, shm |
-| mooncake-conv | 0.389 (0.195)<br>P 1x A100 / D 1x A100, shm | 1.126 (0.282)<br>P 2x A100 / D 2x RNGD, shm | 1.126 (0.282)<br>P 2x A100 / D 2x RNGD, shm | 0.536 (0.268)<br>P 1x A100 / D 1x A100, cuda-ipc | 1.126 (0.282)<br>P 2x A100 / D 2x RNGD, shm |
-| mooncake-tool | 0.763 (0.382)<br>P 1x A100 / D 1x A100, shm | 1.692 (0.564)<br>P 2x A100 / D 1x RNGD, shm | 1.703 (0.426)<br>P 2x A100 / D 2x RNGD, shm | 0.814 (0.407)<br>P 1x A100 / D 1x A100, cuda-ipc | 1.703 (0.426)<br>P 2x A100 / D 2x RNGD, shm |
+| azure-conv | 4.202 (2.101)<br>P 1x A100 / D 1x A100, shm | **11.780 (2.945)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 7.525 (2.508), P 2x RNGD / D 1x A100_ | **11.780 (2.945)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 7.525 (2.508), P 2x RNGD / D 1x A100_ | 4.218 (2.109)<br>P 1x A100 / D 1x A100, cuda-ipc | 11.935 (2.984)<br>P 2x RNGD+1x A100 / D 1x A100, shm |
+| azure-code | 1.038 (0.519)<br>P 1x A100 / D 1x A100, shm | **3.019 (0.755)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 2.087 (0.696), P 2x RNGD / D 1x A100_ | **3.019 (0.755)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 2.160 (0.540), P 2x A100 / D 2x RNGD_ | 1.040 (0.520)<br>P 1x A100 / D 1x A100, cuda-ipc | 3.070 (0.767)<br>P 2x RNGD+1x A100 / D 1x A100, shm |
+| burstgpt | 0.163 (0.081)<br>P 1x A100 / D 1x A100, shm | **0.289 (0.097)**<br>P 1x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 0.163 (0.082), P 1x A100 / D 1x A100, cuda-ipc_ | **0.362 (0.091)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 0.243 (0.081), P 2x RNGD / D 1x A100_ | 0.163 (0.082)<br>P 1x A100 / D 1x A100, cuda-ipc | 0.363 (0.091)<br>P 2x RNGD+1x A100 / D 1x A100, shm |
+| mooncake-conv | 0.505 (0.253)<br>P 1x A100 / D 1x A100, shm | **1.930 (0.482)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 1.488 (0.496), P 2x RNGD / D 1x A100_ | **1.930 (0.482)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 1.488 (0.496), P 2x RNGD / D 1x A100_ | 0.536 (0.268)<br>P 1x A100 / D 1x A100, cuda-ipc | 2.196 (0.549)<br>P 2x RNGD+1x A100 / D 1x A100, shm |
+| mooncake-tool | 0.802 (0.401)<br>P 1x A100 / D 1x A100, shm | **2.921 (0.730)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 2.102 (0.701), P 2x RNGD / D 1x A100_ | **2.921 (0.730)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 2.102 (0.701), P 2x RNGD / D 1x A100_ | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 3.151 (0.788)<br>P 2x RNGD+1x A100 / D 1x A100, shm |
 
-이 프로파일로 보면:
+이 프로파일로 보면(RNGD·ATOM·`shm`은 측정, A100은 일부 추정):
 
-- **GPU 전용**: `optimal`(per card)과 `distserve`는 모든 트레이스에서 같은 배치를, `optimal`(max goodput)과 `hexgen2`도 같은 배치를
-  고릅니다. 동종 GPU에서는 P:D 분할 말고는 탐색할 것이 거의 없고 둘 다 이를 맞힙니다. topology의 고정 1:1 분할은 카드당 1.4–1.8배,
-  전체 goodput 2–3.6배 뒤처집니다.
-- **NPU 전용**: 모든 정책이 RNGD/RNGD를 고르고, `hexgen2`만 Azure 대화와 BurstGPT에서 흐름 용량을 늘린다는 이유로 ATOM decode를
-  더합니다. 시뮬레이션에서는 이것이 goodput을 낮춥니다(max-flow 목적은 TTFT 대기와 느리고 KV에 묶인 ATOM decode를 보지 않음).
-  이 노드에서 자체 추정은 시뮬레이션 값의 1.8–6배입니다.
-- **혼합**: `optimal`은 A100 prefill과 RNGD decode를 짝지어 `distserve`보다 2.0–2.1배(Azure 코드, Mooncake) 높습니다. 동종 탐색으로는
-  만들 수 없는 배치입니다. `hexgen2`는 역할 안에 종류를 섞어 Azure 대화와 BurstGPT에서 전체 goodput이 가장 높습니다(카드 8장에 6.24,
-  0.258 req/s). **역할 내 혼합**으로 `optimal`(max goodput)도 이제 A100 + RNGD 2장 prefill, A100 decode를 골라 4.22 → **5.41**,
-  0.163 → **0.230** req/s(기울임: 이전)로 카드 절반에서 `hexgen2`의 87 %·89 %입니다. RNGD prefill 가중치는 0.19 / 0.29로 작습니다
-  (p90 prefill + `shm` KV ≈ 1.75초라 TTFT 여유가 적음). Azure 코드(2.149 대 2.145)와 Mooncake 둘에서는 `hexgen2`와 같고, 카드당은
-  모든 트레이스에서 같거나 높습니다. 남은 차이는 종류 조합이 아니라 라우팅입니다. 같은 카드 4장을 공유 prefill 큐(빈 인스턴스 중
-  가장 빠른 것 먼저, 시뮬레이터가 `hexgen2`를 돌리는 방식)로 돌리면 6.34, 0.257 req/s로 카드 절반에 `hexgen2`만큼 나옵니다. 고정
-  가중 분할은 종류 사이의 남는 용량을 빌릴 수 없고, 종류별 p90 규칙은 보수적입니다(RNGD 가중치를 손으로 0.30: 6.02). 카드당 선택은
-  모든 카드 집합에서 바뀌지 않아 `mixed_roles`를 기본으로 켭니다.
+- **GPU 전용**: 보정으로 바뀐 것이 없습니다. `optimal`(per card)과 `distserve`, `optimal`(max goodput)과 `hexgen2`가 모든 트레이스에서
+  같은 배치를 고르고, topology의 고정 1:1 분할은 카드당 1.4–1.8배 뒤처집니다.
+- **NPU 전용**: `hexgen2`를 포함해 모든 정책이 RNGD/RNGD를 고릅니다. 측정한 ATOM decode(토큰당 108 ms)로는 어떤 ATOM decode 인스턴스도
+  TPOT SLO를 못 지키므로 max-flow 탐색도 더 이상 ATOM을 더하지 않습니다. goodput은 보정 전 표의 2.4–26배(Azure 대화 0.336 → 0.813 req/s, BurstGPT는 0.025로 그대로)이며,
+  측정한 RNGD prefill과 `shm` 적재 덕분입니다. Mooncake 행은 S=512 너머의 외삽입니다.
+- **혼합**: 측정한 RNGD prefill(12K tok/s, A100 추정 10K)이 선택을 바꿉니다. `optimal`은 이제 Azure 대화·코드와 Mooncake 둘에서 카드당과
+  max goodput 모두 RNGD 2장 + A100 1장 prefill, A100 decode를 고릅니다(Azure 대화 11.78 req/s, 동종 A100 쌍인 `distserve`의 2.8배). 역할당
+  한 종류로는 RNGD 2장 prefill + A100 1장 decode(7.53)입니다. `hexgen2`는 ATOM decode 없이 같은 4카드 배치에 이르고 `optimal`과 1–14 %
+  차이입니다(11.94 대 11.78 req/s, Mooncake 대화 2.20 대 1.93). 남은 차이는 공유 prefill 큐와 `optimal`의 고정 가중 분할의 차이입니다.
+  **혼합 노드에서는 이제 역할 내 혼합이 카드당 선택도 바꿉니다**(보정 전에는 그대로였음). 다른 카드 집합은 그대로입니다.
+- 혼합 행은 RNGD → A100 KV를 `shm`으로 가정하는데 이를 제공하는 ai-rm 전송은 아직 없고, A100 수치는 일부 추정입니다. 한 프로파일 표
+  아래의 배치 논리 비교이지 하드웨어 비교가 아닙니다.
 - W6의 "GPU 전용 기준선 대비 optimal이 topology보다 카드당 우수"는 시뮬레이션에서 성립합니다. A100 4장에서 DistServe 방식 탐색과
-  같거나 낫고, 모든 트레이스에서 topology보다 낫습니다. 모든 행이 한 프로파일 표를 쓰므로 하드웨어가 아니라 배치 논리를 비교합니다.
+  같거나 낫고, 모든 트레이스에서 topology보다 낫습니다.
 
 ## ✅ 검증
 
@@ -295,8 +294,12 @@ A100 수치는 일부 추정입니다(prefill 속도와 batch 1 TPOT는 데이�
   `rm_core.conformance airm.placements topology optimal` PASS, CI에서 둘 다 실행.
 - 실제 클러스터 읽기 전용 dry-run(2026-10-19, topology): shm 풀은 `npu-node-1/furiosa:0` + `furiosa:1`(end-to-end 실행에서 손으로 고정했던 배치와
   같음, cordon된 노드는 제외), p2p 풀은 RNGD 0 + ATOM 0, 1.
-- 아직 클러스터에서 돌리지 않음: `optimal`, `--rebalance`(aicomp #45의 vLLM 지표나 게이트웨이 `airm_*` 필요), `--apply`(annotation된
-  Deployment 필요). 가짜 클러스터 IO와 시뮬레이터로만 검증했습니다.
+- RNGD+ATOM 노드에서 실제 실행(2026-10-19, [기준선](../../docs/ko/baselines.md)): `optimal`(`examples/optimal.yaml`, budget 6)이
+  generation 2(prefill RNGD 2장, decode RNGD 1장, `shm`)를 쓰고, `--apply`가 annotation된 rngd-pd Deployment를 patch했습니다(replicas
+  2와 1, node affinity, `accelerator-ids`). 파드는 결정한 노드에 결정한 카드 수로 올라왔고, PD 경로는 llm-d 게이트웨이를 거쳐
+  `pd-smoke`를 통과했습니다. 어느 카드를 받는지는 여전히 device plugin이 정합니다. 보정한 프로파일로는 prefill 1장 / decode 2장을
+  골랐고(generation 3), `--apply`가 Deployment를 그에 맞췄으며, 이 배치는 두 트레이스 모두 모든 요청에서 SLO를 지켰습니다.
+- 아직 클러스터에서 돌리지 않음: `--rebalance`(aicomp #45의 vLLM 지표나 게이트웨이 `airm_*` 필요).
 
 ## 🗺 로드맵
 
@@ -304,11 +307,13 @@ A100 수치는 일부 추정입니다(prefill 속도와 batch 1 TPOT는 데이�
 - [x] 결정을 따르는 서빙 Deployment (`--apply`). chart가 `accelerator-ids`로 카드를 고정하는 일은 남음
 - [x] `airm-placement` 형식을 rm-core 프로토콜에 규범화 (§5.4, v0.1.2)
 - [x] 이미지(`ghcr.io/ai-computing/rm-controller`, [`Dockerfile`](Dockerfile))와 umbrella chart [`charts/ai-rm`](../../charts/ai-rm)의 Deployment
-- [ ] 추정치 대신 측정 프로파일 (FASOP NPU 비용 모델, aicomp #50), (GPU 기준선용 A100 추가, 일부 추정)
+- [x] 실제 기준선에서 측정한 RNGD·ATOM decode 프로파일
+- [ ] ATOM prefill·`p2p`·A100 측정, FASOP NPU 비용 모델(aicomp #50)
 - [x] 역할 안에 장치 종류 혼합(`mixed_roles`), 종류별 가중치로 라우팅
 - [ ] 종류를 넘는 공유(작업 보존) prefill 라우팅을 모델과 게이트웨이에, 종류 쌍마다 KV 링크
 - [ ] `optimal`이 노드를 넘을 수 있도록 노드 간 KV 전송
-- [ ] `optimal`, `--rebalance`, `--apply`를 실제 클러스터에서 실행
+- [x] `optimal`, `--apply`를 실제 클러스터에서 실행
+- [ ] `--rebalance`를 실제 클러스터에서 실행
 
 ## 📄 라이선스
 
