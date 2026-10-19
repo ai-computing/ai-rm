@@ -229,7 +229,12 @@ class Rebalancing:
             slo = dict(p.get("slo") or {})
             obs = self._observe(name, cfg)
             if obs is not None:
-                want = rb.target(current, budget, groups, obs=obs, slo=slo, queue_ref=float(cfg.get("queue_ref", 2)))
+                qref = float(cfg.get("queue_ref", 2))
+                want = rb.target(current, budget, groups, obs=obs, slo=slo, queue_ref=qref)
+                pp, pd = rb.pressures(obs, current, slo, qref)
+                fmt = lambda v: "-" if v is None else f"{v:.0f}"  # noqa: E731
+                notes.append(f"{name}: TTFT p90 {fmt(obs.ttft_p90_ms)} ms, TPOT p90 {fmt(obs.tpot_p90_ms)} ms, "
+                             f"pressure P {pp:.2f} D {pd:.2f}, target {want[0]}:{want[1]} at {current[0]}:{current[1]}")
             else:
                 m = mixes.from_spec(cfg.get("workload") or p.get("workload"))
                 if not (kinds[0] in self.perf.devices and kinds[1] in self.perf.devices):

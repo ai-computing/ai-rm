@@ -1,0 +1,18 @@
+# P:D rebalancing from the rngd-pd gateway's airm_* gauges (the TTFT/TPOT p90 fallback when no vLLM histograms
+# exist). Run as in docs/baselines.md: rm-controller --spec examples/rebalance-gateway.yaml --rebalance --apply
+# The serving Deployments carry airm.ai-computing.io/pool: llama8b-pd-pool and /role: prefill|decode.
+namespace: llm-serving
+placement: topology                        # the split sets the role counts; topology picks the cards
+pools:
+  - pool: llama8b-pd-pool
+    model: meta-llama/Llama-3.1-8B-Instruct
+    kv_transport: shm
+    slo: {ttft_p90_ms: 2000, tpot_p90_ms: 100}
+    prefill: {accelerator: furiosa.RNGD, count: 1}     # starting split (the current decision wins if one exists)
+    decode:  {accelerator: furiosa.RNGD, count: 2}
+    budget: 3
+    rebalance:
+      metrics: http://<rngd-pd gateway>:9400/metrics  # airm_ttft_p90_ms, airm_tpot_p90_ms (last 512 requests)
+      band: 0.2
+      hold: 3
+      cooldown_s: 300
