@@ -1,20 +1,30 @@
 name: rm-bench
 layer: l5-ops
 kind: tool
-summary: llm-d(OpenAI 호환) 엔드포인트용 trace 재생·합성 부하 생성과 TTFT/TPOT/E2E/TPS 측정
+summary: llm-d(OpenAI 호환) 엔드포인트용 e2e 시나리오 실행·SLO 판정, trace 재생·합성 부하 생성과 TTFT/TPOT/E2E/TPS 측정
 maturity: prototype
+protocol: "0.1"
 hardware: []
 install:
   - python -m pip install -e .
 test:
+  - python -m pytest -q tests
   - python -m py_compile loadgen/replay_vllm_azure2024.py loadgen/synthetic_load_llm.py tools/monitor_live.py
+  - python -m rm_core.conformance
+adapters:
+  - group: airm.workloads
+    name: rm-bench
 deploy:
   target: none
+  chart: null
   manifests: null
   image: null
 config:
   env_example: null
+  env: [LLMD_GATEWAY_URL, LLMD_API_KEY]
 interfaces:
-  provides: []
-  uses: [Metrics]
+  provides: [WorkloadRunner]
+  uses: [Workload, Metrics]
+# rm-bench e2e 결과(Measurement JSON). loadgen/ 도구의 --out은 여기에 tpot/ttft p50·p99, e2e_p90_ms, req_s를 더 낸다.
+metrics: [slo_attainment_pct, tok_s, ttft_p90_ms, tpot_p90_ms]
 kpi: [SLO, 전력효율]
