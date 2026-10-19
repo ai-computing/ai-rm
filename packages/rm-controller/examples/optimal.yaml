@@ -3,6 +3,7 @@
 namespace: llm-serving
 placement: optimal
 objective: per_card                        # or goodput: the most SLO-feasible goodput within the budget
+mixed_roles: true                          # a role may mix device types (default); false = one type per role
 pools:
   - pool: llama8b-pd-pool
     model: meta-llama/Llama-3.1-8B-Instruct

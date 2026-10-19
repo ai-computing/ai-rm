@@ -115,6 +115,16 @@ rm-bench import mlperf mlperf_log_summary.txt --model meta-llama/Llama-3.1-8B-In
 rm-bench compare results/*.json [LABEL=results/x.json ...] --out compare.md
 ```
 
+기준 클러스터의 exporter에서 동작을 확인한 전력 쿼리입니다(실행에 쓰는 카드만 합산).
+
+| 가속기 | Exporter | `--power-query` |
+|---|---|---|
+| FuriosaAI RNGD | furiosa-metrics-exporter | `sum(furiosa_npu_hw_power{hostname="<node>",label="rms",device=~"npu0\|npu1"})` |
+| Rebellions ATOM | rbln-metrics-exporter | `sum(RBLN_DEVICE_STATUS:CARD_POWER{node="<node>",name=~"rbln0"})` |
+| NVIDIA GPU | DCGM exporter | `sum(DCGM_FI_DEV_POWER_USAGE{Hostname="<node>"})` |
+
+세 쿼리 모두 `--power prom`으로 실제 샘플링해 읽기 오류가 없음을 확인했습니다.
+
 - **전력** (`--power prom|cmd|none`, 기본 `none`): 요청이 도는 동안 `--power-interval`초(기본 1)마다 샘플링합니다. `prom`은 instant
   query 결과 벡터의 합(기본 `sum(DCGM_FI_DEV_POWER_USAGE)`, `--power-url` 또는 `$PROMETHEUS_URL`, NPU는 쓰는 exporter의 query를
   지정)입니다. `cmd`는 와트를 출력하는 아무 CLI나 실행해 `--power-regex`(첫 그룹)에 맞는 값을 모두 더합니다. 상한(cap) 열이 아니라
@@ -150,6 +160,7 @@ rm-bench traces stats trace-azure-conv                   # 요청 수, 평균·�
 rm-bench traces stats trace-azure-conv --max-total-tokens 512 --no-filter   # 대상 한도에 맞는 비율
 rm-bench e2e --scenario trace-azure-conv --gateway URL --speedup 0.25 --max-total-tokens 512 --duration 300
 python3 tools/trace_atlas.py                             # 전체 특성(JSON)
+python3 tools/kv_tier_curve.py --format md               # 캐시 크기·HBM/DRAM 계층별 Mooncake prefix 적중
 ```
 
 - 시나리오: `trace-azure-conv`, `trace-azure-code`, `trace-burstgpt`, `trace-mooncake-conversation`. 설정 키는 `rm_bench/traces.py` 맨 위.
@@ -217,6 +228,7 @@ rm-core protocol v0.1의 지표 이름·태그만 쓰고, 저장 전에 항목�
 | `loadgen/replay_vllm_azure2024.py` | Azure LLM inference trace 재생기 (QPS, 지연, 실시간 터미널 대시보드) |
 | `loadgen/synthetic_load_llm.py` | 합성 부하 생성기 |
 | `tools/trace_atlas.py` | 받은 트레이스의 특성 분석 |
+| `tools/kv_tier_curve.py` | 캐시 크기와 HBM + DRAM 계층별 Mooncake prefix cache 적중률 ([KV 계층 평가](../../docs/ko/kv-tier-evaluation.md)) |
 | `tools/monitor_live.py` | 엔드포인트 지표 실시간 확인 (Prometheus 보기 전용, `--out` 없음) |
 | `tools/send_test_traffic.sh` | 간단한 시험 요청 |
 

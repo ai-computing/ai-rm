@@ -4,13 +4,18 @@
     python -m rm_controller.sim --compare --format json
 
 Requests are drawn from a workload mix (mix.py: the trace atlas's length quantiles; arrivals Poisson within
-60 s windows whose rate follows an on/off burst model: with probability 1/(2 x peak) a window runs at the
-trace's 60 s peak/mean ratio, the rest at the rate that keeps the mean). Sub-minute bursts (Azure code's
-26x busiest second) are not modelled.
+60 s windows whose rate follows an on/off burst model: one window in every round(2 x peak) runs at the
+trace's 60 s peak/mean ratio, starting with the first, the rest at the rate that keeps the mean). Half the
+requests arrive in peak windows, so every run, however short, meets a burst; a run shorter than one peak
+window tests the peak rate alone. Sub-minute bursts (Azure code's 26x busiest second) are not modelled.
 
 Serving model, from the same profiles the `optimal` policy reads (profiles.yaml):
 - prefill: one request at a time per instance, FCFS from one queue, time = overhead + tokens / tok/s;
 - KV handoff: the link's cost for the prompt's KV; decode instance = least loaded one the request fits;
+- a role that mixes device types with routing weights (`optimal` with mixed roles) has one group per type:
+  arrivals go to a prefill group by smooth weighted round-robin and queue FCFS within it, and a prefill
+  output goes to a decode group the same way (among groups with an instance it fits), then to the least
+  loaded instance of that group. Layouts without weights (topology, the baselines) keep the rules above;
 - decode: continuous batching up to the TPOT-SLO batch (and KV capacity), every active request advances
   one token per TPOT(current batch).
 A request meets the SLO when its TTFT (arrival to its first decode step) and its mean TPOT are within the
@@ -47,6 +52,8 @@ class Layout:
     decode: Tuple[Tuple[str, str], ...]
     transport: str
     cards: int
+    prefill_weights: Tuple[Tuple[str, float], ...] = ()    # routing weight per device type (mixed roles)
+    decode_weights: Tuple[Tuple[str, float], ...] = ()
 
     def describe(self) -> str:
         def role(insts):
@@ -59,7 +66,7 @@ class Layout:
 
 
 def layout(name: str, prefill_ids: Sequence[str], decode_ids: Sequence[str], transport: str,
-           cards: Sequence[Accelerator], profiles: prof.Profiles) -> Layout:
+           cards: Sequence[Accelerator], profiles: prof.Profiles, plan=None) -> Layout:
     """Instances from a decision's card ids: consecutive cards of one type and node, `group` at a time."""
     by_id = {a.id: a for a in cards}
 
@@ -75,8 +82,33 @@ def layout(name: str, prefill_ids: Sequence[str], decode_ids: Sequence[str], tra
                 pending[(k, a.node)] = []
         return tuple(out)
 
+    e = plan.estimate if plan is not None else None
     return Layout(name, instances(prefill_ids), instances(decode_ids), transport,
-                  len(set(prefill_ids) | set(decode_ids)))
+                  len(set(prefill_ids) | set(decode_ids)), e.prefill_weights if e else (), e.decode_weights if e else ())
+
+
+class _WRR:
+    """Smooth weighted round-robin (nginx): deterministic, each group's share follows its weight."""
+
+    def __init__(self, weights: Sequence[float]):
+        self.w, self.cur = list(weights), [0.0] * len(weights)
+
+    def pick(self, eligible: Sequence[int]) -> int:
+        live = [g for g in eligible if self.w[g] > 0] or list(eligible)
+        for g in live:
+            self.cur[g] += self.w[g]
+        best = max(live, key=lambda g: (self.cur[g], -g))
+        self.cur[best] -= sum(self.w[g] for g in live)
+        return best
+
+
+def _groups(insts, weights) -> Tuple[List[int], List[float]]:
+    """Group index per instance and weight per group: one group per weighted type, or a single group."""
+    w = dict(weights)
+    if len(w) < 2:
+        return [0] * len(insts), [1.0]
+    kinds = sorted(w)
+    return [kinds.index(k) for k, _ in insts], [w[k] for k in kinds]
 
 
 def estimate_layout(lay: Layout, m: mixes.Mix, slo: Dict[str, float], profiles: prof.Profiles) -> Optional[float]:
@@ -93,17 +125,18 @@ def estimate_layout(lay: Layout, m: mixes.Mix, slo: Dict[str, float], profiles: 
 def requests(m: mixes.Mix, rate: float, n: int, seed: int = 1) -> List[Tuple[float, int, int]]:
     """(arrival s, prompt tokens, output tokens); the same seed gives the same lengths and burst windows at
     every rate, so rates compare on common random numbers."""
-    r_len, r_arr, r_win = random.Random(seed), random.Random(seed + 1), random.Random(seed + 2)
+    r_len, r_arr = random.Random(seed), random.Random(seed + 1)
     peak = max(m.peak_ratio, 1.0)
-    q = 1.0 / (2.0 * peak) if peak > 1 else 0.0
-    low = (1.0 - q * peak) / (1.0 - q) if q else 1.0
-    out, t, w_end, w_rate = [], 0.0, 0.0, 0.0
+    # deterministic windows: a random draw (the first version) left short, fast runs without any peak window
+    period = max(2, round(2.0 * peak)) if peak > 1 else 1
+    low = (1.0 - peak / period) / (1.0 - 1.0 / period) if period > 1 else 1.0
+    out, t, w_end, w_rate, w = [], 0.0, 0.0, 0.0, 0
     for _ in range(n):
         e = r_arr.expovariate(1.0)
         while True:
             if t >= w_end:
-                w_rate = rate * (peak if r_win.random() < q else low)
-                w_end = t + WINDOW_S
+                w_rate = rate * (peak if w % period == 0 else low)
+                w_end, w = t + WINDOW_S, w + 1
             need = e / w_rate
             if t + need <= w_end:
                 t += need
@@ -159,8 +192,11 @@ def simulate(lay: Layout, m: mixes.Mix, slo: Dict[str, float], rate: float, prof
     link = profiles.links[lay.transport]
     tpot_slo, ttft_slo = slo.get("tpot_p90_ms"), slo.get("ttft_p90_ms")
     reqs = [_Req(*r) for r in requests(m, rate, n, seed)]
-    pre_free = list(range(len(lay.prefill)))
-    pre_q: deque = deque()
+    p_of, p_w = _groups(lay.prefill, lay.prefill_weights)
+    d_of, d_w = _groups(lay.decode, lay.decode_weights)
+    pre_free = [[j for j in range(len(lay.prefill)) if p_of[j] == g] for g in range(len(p_w))]
+    pre_q = [deque() for _ in p_w]
+    p_rr, d_rr = _WRR(p_w), _WRR(d_w)
     decs = [_Decode(devices[k], node, max(1, devices[k].batch_for(tpot_slo))) for k, node in lay.decode]
     ev: list = []
     seq = 0
@@ -173,9 +209,9 @@ def simulate(lay: Layout, m: mixes.Mix, slo: Dict[str, float], rate: float, prof
     for i, r in enumerate(reqs):
         push(r.arrival, "arrive", i)
 
-    def start_prefill(t):
-        while pre_q and pre_free:
-            i, j = pre_q.popleft(), pre_free.pop(0)
+    def start_prefill(t, g):
+        while pre_q[g] and pre_free[g]:
+            i, j = pre_q[g].popleft(), pre_free[g].pop(0)
             push(t + devices[lay.prefill[j][0]].prefill_ms(reqs[i].prompt) / 1000.0, "pdone", i, j)
 
     def advance(d: _Decode, t):
@@ -209,16 +245,21 @@ def simulate(lay: Layout, m: mixes.Mix, slo: Dict[str, float], rate: float, prof
     while ev:
         t, _, kind, a, b = heapq.heappop(ev)
         if kind == "arrive":
-            pre_q.append(a)
-            start_prefill(t)
+            g = p_rr.pick(range(len(p_w))) if len(p_w) > 1 else 0
+            pre_q[g].append(a)
+            start_prefill(t, g)
         elif kind == "pdone":
-            pre_free.append(b)
-            pre_free.sort()
-            start_prefill(t)
+            g = p_of[b]
+            pre_free[g].append(b)
+            pre_free[g].sort()
+            start_prefill(t, g)
             r = reqs[a]
             node = lay.prefill[b][1]
             fits = [k for k, d in enumerate(decs) if d.prof.kv_tokens >= r.prompt + r.output
                     and (link.scope == "cluster" or d.node == node)]
+            if fits and len(d_w) > 1:
+                g = d_rr.pick(sorted({d_of[k] for k in fits}))
+                fits = [k for k in fits if d_of[k] == g]
             if fits:   # else the request is never served and counts as a miss
                 k = min(fits, key=lambda k: ((len(decs[k].active) + len(decs[k].queue)) / decs[k].cap, k))
                 push(t + profiles.kv_ms(link, r.prompt) / 1000.0, "darrive", a, k)
@@ -283,12 +324,16 @@ def card(node: str, kind: str, i: int) -> Accelerator:
         return Accelerator(id=f"{node}/furiosa:{i}", node=node, vendor="furiosa", model="RNGD",
                            memory_bytes=48 * GB, memory_kind="hbm", peak_tflops={"bf16": 256.0},
                            peak_source="datasheet")
+    if kind == "nvidia.A100":
+        return Accelerator(id=f"{node}/nvidia:{i}", node=node, vendor="nvidia", model="A100", memory_bytes=80 * GB,
+                           memory_kind="hbm", peak_tflops={"bf16": 312.0}, peak_source="datasheet")
     return Accelerator(id=f"{node}/rebellions:{i}", node=node, vendor="rebellions", model="ATOM",
                        memory_bytes=16 * GB, memory_kind="gddr", peak_tflops={"fp16": 32.0}, peak_source="datasheet")
 
 
-def node_cards(node: str, rngd: int, atom: int) -> List[Accelerator]:
-    return [card(node, "furiosa.RNGD", i) for i in range(rngd)] + [card(node, "rebellions.ATOM", i) for i in range(atom)]
+def node_cards(node: str, rngd: int, atom: int, a100: int = 0) -> List[Accelerator]:
+    return ([card(node, "nvidia.A100", i) for i in range(a100)] + [card(node, "furiosa.RNGD", i) for i in range(rngd)]
+            + [card(node, "rebellions.ATOM", i) for i in range(atom)])
 
 
 CARD_SETS = {
@@ -315,12 +360,27 @@ def layouts_for(cards: List[Accelerator], m: mixes.Mix, slo: Dict[str, float],
     variants = [("optimal, per card", "per_card", False), ("optimal, max goodput", "goodput", False)]
     if multi:
         variants.append(("optimal, max goodput + planned tcp", "goodput", True))
+    return rows + optimal_rows(cards, m, slo, profiles, variants)
+
+
+def optimal_rows(cards: List[Accelerator], m: mixes.Mix, slo: Dict[str, float], profiles: prof.Profiles,
+                 variants: Sequence[Tuple[str, str, bool]]) -> List[Tuple[Layout, Optional[float]]]:
+    """`optimal` rows (mixed roles on, the default), each followed by a "one type per role" row (mixed roles
+    off, the policy before mixed roles) when that chooses a different layout."""
+    p, d = Workload(kind="prefill", model="m", slo=slo), Workload(kind="decode", model="m", slo=slo)
+    rows = []
     for name, objective, planned in variants:
-        o = OptimalPlacement(profiles=profiles, mix=m.with_rate(None), objective=objective,
-                             allow_planned_links=planned)
-        dp, dd = o.place_pd(p, d, cards, kv_transport="auto")
-        lay = layout(name, dp.accelerator_ids, dd.accelerator_ids, dp.kv_transport or "shm", cards, profiles)
-        rows.append((lay, o.last_plan.estimate.goodput_rps if o.last_plan else None))
+        got = []
+        for mixed in (True, False):
+            o = OptimalPlacement(profiles=profiles, mix=m.with_rate(None), objective=objective,
+                                 allow_planned_links=planned, mixed_roles=mixed)
+            dp, dd = o.place_pd(p, d, cards, kv_transport="auto")
+            lay = layout(name if mixed else f"{name}, one type per role", dp.accelerator_ids, dd.accelerator_ids,
+                         dp.kv_transport or "shm", cards, profiles, o.last_plan)
+            got.append((lay, o.last_plan.estimate.goodput_rps if o.last_plan else None))
+        rows.append(got[0])
+        if got[1][0].describe() != got[0][0].describe():
+            rows.append(got[1])
     return rows
 
 
@@ -341,11 +401,11 @@ def compare(n: int = 3000, seed: int = 1, profiles: Optional[prof.Profiles] = No
     return out
 
 
-def markdown(rows: List[dict]) -> str:
+def markdown(rows: List[dict], est_label: str = "Model est.") -> str:
     lines = []
     for set_name in dict.fromkeys(r["cards"] for r in rows):
         lines += [f"**{set_name}**", "",
-                  "| Trace (SLO TTFT/TPOT p90) | Policy | Layout | Cards | Goodput req/s | req/s per card | Model est. |",
+                  f"| Trace (SLO TTFT/TPOT p90) | Policy | Layout | Cards | Goodput req/s | req/s per card | {est_label} |",
                   "|---|---|---|--:|--:|--:|--:|"]
         for r in rows:
             if r["cards"] != set_name:

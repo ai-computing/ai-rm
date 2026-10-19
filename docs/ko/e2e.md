@@ -91,10 +91,11 @@ rm-bench는 이 스모크 테스트 이후 실행에 필요한 측정을 갖췄�
 - **배치는 수동입니다.** `airm-placement`를 쓰는 컨트롤러가 없어 이번에는 실제 배치를 `placement: "manual"`로 기록했습니다.
   참조 `greedy` 정책을 실제 프로파일에 돌리면 prefill과 decode를 cordon된 노드의 같은 카드에 `loopback`으로 둡니다. 실제
   컨트롤러는 `shm`일 때 P·D를 같은 노드에, 서로 다른 카드에 두고, cordon/NotReady 노드를 피하며 실제 전송을 골라야 합니다.
-- **배치 ConfigMap 형식이 rm-core에 없습니다.** PROTOCOL.md §5.2는 `Placement` API만 정의합니다. hetero-llm-d의 `decisions.json`
-  형식이 사실상 표준이므로 규범으로 올려야 합니다.
-- **rngd-pd 카드 선택.** `--chip -1`은 처음 보이는 카드를 쓰는데, `/dev/rngd`를 마운트한 privileged 파드는 모든 카드를 보므로
-  카드를 고정하기 전까지 prefill과 decode가 충돌했습니다. device plugin이 할당한 카드를 써야 합니다.
+- ~~**배치 ConfigMap 형식이 rm-core에 없습니다.**~~ 해결: PROTOCOL.md §5.4와 `rm_core.placement`(rm-core v0.1.2)가
+  `decisions.json` 문서를 규범으로 정했습니다.
+- ~~**rngd-pd 카드 선택.**~~ 해결(rngd-pd #3): `--chip -1`이 kubelet device-plugin 체크포인트에서 파드의 할당을 읽으므로,
+  모든 카드를 보는 privileged 파드도 할당받은 카드를 씁니다. 노드에서 확인: 카드 0·1·3이 보이는 상태에서 다른 파드가
+  0번을 쓰는 동안 privileged 파드가 할당받은 1번을 골랐습니다.
 - **chart 기본값.** rngd-pd decode 기본은 ATOM이며, map 병합으로 RNGD로 덮어쓰면 ATOM 요청이 남습니다(`rebellions.ai/ATOM: null`로 제거).
 - **확인하지 않은 것:** RNGD→ATOM decode, 실제 버퍼 `p2p` 전송, GPU 노드(데몬 이미지에 `nvidia-smi` 없음), 배치 처리. 실행 중
   일부 노드는 NotReady, cordon 또는 디스크 부족 상태였습니다.
