@@ -25,10 +25,16 @@ Spec (YAML):
         budget: 6                          # optimal/rebalance: most cards for the pool
         rebalance: {metrics: http://prefill-pod:8000/metrics, band: 0.2, hold: 3, cooldown_s: 300,
                     margin: 0.2}           # a move must cut the predicted worst-role pressure by 20 %
+      - pool: qwen3-4b-pool                # an aggregated pool: single-card replicas of another model
+        model: furiosa-ai/Qwen3-4B-FP8
+        serve: {accelerator: furiosa.RNGD, count: 1}     # one `serve` decision; no kv_transport
 
 Pools are placed in order; a card given to one pool is not offered to the next. A placement that is still
 valid is kept (no churn): only a role whose card disappeared, became unhealthy or whose node became
-unschedulable is re-placed, and the generation moves with it.
+unschedulable is re-placed, and the generation moves with it. A pool whose spec changed is re-placed
+on cards no other pool held in the previous generation when it fits there, so the change moves that
+pool only. Aggregated pools are placed by count under either policy (the profiles describe the
+prefill/decode path) and are not rebalanced.
 Exit status: 0 written or unchanged, 1 a pool could not be placed (the document still records why),
 2 usage or cluster errors.
 """
@@ -65,7 +71,18 @@ def load_spec(path: str) -> dict:
         raise ValueError(f"{path}: placement must be one of {POLICIES}")
     if not isinstance(spec.get("mixed_roles", MIXED_ROLES), bool):
         raise ValueError(f"{path}: mixed_roles must be true or false")
+    names = [p.get("pool") for p in spec["pools"]]
+    if len(set(names)) != len(names):
+        raise ValueError(f"{path}: pool names must be unique")
     for p in spec["pools"]:
+        if "serve" in p:
+            for key in ("pool", "model"):
+                if key not in p:
+                    raise ValueError(f"{path}: pool {p.get('pool', '?')} is missing '{key}'")
+            if "prefill" in p or "decode" in p or p.get("rebalance"):
+                raise ValueError(f"{path}: pool {p['pool']}: `serve` (aggregated) excludes prefill, decode "
+                                 "and rebalance")
+            continue
         for key in ("pool", "model", "kv_transport", "prefill", "decode"):
             if key not in p:
                 raise ValueError(f"{path}: pool {p.get('pool', '?')} is missing '{key}'")
@@ -146,6 +163,24 @@ def _reuse(pool: str, fresh: Tuple[PlacementDecision, PlacementDecision], prev: 
     return (fixed, keep_role.decision) if r == 0 else (keep_role.decision, fixed)
 
 
+def _by_pool(previous) -> Dict[str, list]:
+    out: Dict[str, list] = {}
+    for d in previous.decisions:
+        out.setdefault(d.pool, []).append(d)
+    return out
+
+
+def _reuse_serve(old, fresh: PlacementDecision, cards: Dict[str, Accelerator], policy, used: set) -> PlacementDecision:
+    """Keep an aggregated pool's previous cards while the spec asks for the same shape and they are usable."""
+    if old is None or not old.accelerator_ids or not fresh.accelerator_ids:
+        return fresh
+    if _shape(old.accelerator_ids) != _shape(fresh.accelerator_ids):
+        return fresh
+    if all(i in cards and policy.usable(cards[i]) and i not in used for i in old.accelerator_ids):
+        return old.decision
+    return fresh
+
+
 def plan(spec: dict, profiles, unschedulable, previous=None, *, perf: Optional[prof.Profiles] = None,
          overrides: Optional[Dict[str, Tuple[int, int]]] = None) -> Tuple[List, List[str]]:
     """Decision entries for every pool, and the pools that could not be placed.
@@ -158,10 +193,28 @@ def plan(spec: dict, profiles, unschedulable, previous=None, *, perf: Optional[p
     prev = ({(d.pool, d.workload.kind): d for d in previous.decisions}
             if previous is not None and previous.placement == policy.name else {})
     used: set = set()
+    # Cards each pool held last generation: a pool placed afresh avoids the others' when it can.
+    held = {name: {i for d in prev_d for i in d.accelerator_ids}
+            for name, prev_d in _by_pool(previous).items()} if prev else {}
     entries, unplaced = [], []
     for p in spec["pools"]:
         slo = dict(p.get("slo") or {})
         precision = p.get("precision", "bf16")
+        others = set().union(*(v for k, v in held.items() if k != p["pool"])) - used
+        if "serve" in p:
+            r = p["serve"] or {}
+            labels = {ACCEL_LABEL: r["accelerator"]} if r.get("accelerator") else {}
+            wl = Workload(kind="serve", model=p["model"], slo=slo, precision=precision, labels=labels)
+            rs = RoleSpec(r.get("accelerator"), int(r.get("count", 1)))
+            fresh = policy.place_serve(wl, profiles, spec=rs, used=used | others)
+            if not fresh.accelerator_ids:
+                fresh = policy.place_serve(wl, profiles, spec=rs, used=used)
+            d = _reuse_serve(prev.get((p["pool"], "serve")), fresh, cards, policy, used)
+            if not d.accelerator_ids:
+                unplaced.append(p["pool"])
+            used.update(d.accelerator_ids)
+            entries.append(document.decision_entry(p["pool"], wl, d))
+            continue
         counts = (overrides or {}).get(p["pool"])
         roles = {}
         for i, role in enumerate(("prefill", "decode")):
@@ -176,7 +229,9 @@ def plan(spec: dict, profiles, unschedulable, previous=None, *, perf: Optional[p
                   used=used)
         if isinstance(policy, OptimalPlacement):
             kw.update(mix=mixes.from_spec(p.get("workload")), budget=p.get("budget"), counts=counts)
-        fresh = policy.place_pd(roles["prefill"][0], roles["decode"][0], profiles, **kw)
+        fresh = policy.place_pd(roles["prefill"][0], roles["decode"][0], profiles, **dict(kw, used=used | others))
+        if not fresh[0].accelerator_ids:
+            fresh = policy.place_pd(roles["prefill"][0], roles["decode"][0], profiles, **kw)
         dp, dd = _reuse(p["pool"], fresh, prev, cards, policy, used, perf)
         if not dp.accelerator_ids:
             unplaced.append(p["pool"])
@@ -191,7 +246,7 @@ class Rebalancing:
 
     def __init__(self, spec: dict, perf: prof.Profiles, *, once: bool):
         self.spec, self.perf = spec, perf
-        self.pools = {p["pool"]: p for p in spec["pools"] if p.get("rebalance")}
+        self.pools = {p["pool"]: p for p in spec["pools"] if p.get("rebalance") and "serve" not in p}
         self.hyst = {name: rb.Rebalancer(float(p["rebalance"].get("band", 0.2)),
                                          1 if once else int(p["rebalance"].get("hold", 3)),
                                          0.0 if once else float(p["rebalance"].get("cooldown_s", 300)))

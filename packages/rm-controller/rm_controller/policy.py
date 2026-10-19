@@ -132,6 +132,29 @@ class TopologyPlacement:
         return (PlacementDecision([a.id for a in p], kv_transport, pr),
                 PlacementDecision([a.id for a in d], kv_transport, dr))
 
+    # -- aggregated pool: `count` single-card replicas, prefill and decode on the same card ----------
+
+    def place_serve(self, workload: Workload, pool: Sequence[Accelerator], *, spec: RoleSpec = ANY,
+                    used: Iterable[str] = ()) -> PlacementDecision:
+        """`spec.count` free cards of `spec.accelerator` for an aggregated (`serve`) pool. Replicas need
+        no KV path between them, so they may span nodes; the node with the most matching free cards
+        goes first (fewer nodes per pool), then most memory, then the lowest card index."""
+        workload.validate()
+        taken = set(used)
+        cands = [a for a in pool if a.id not in taken and self.usable(a)
+                 and (not spec.accelerator or kind_of(a) == spec.accelerator)]
+        if len(cands) < spec.count:
+            why = self._why_empty(pool, spec.accelerator, spec.count)
+            if taken:
+                why += f"; {len(taken)} card(s) already placed"
+            return PlacementDecision([], "", why)
+        per_node = {n: sum(1 for a in cands if a.node == n) for n in {a.node for a in cands}}
+        best = sorted(cands, key=lambda a: (-per_node[a.node], a.node, -a.memory_bytes, _index(a)))[: spec.count]
+        nodes = sorted({a.node for a in best})
+        return PlacementDecision([a.id for a in best], "",
+                                 f"topology: serve {', '.join(a.id for a in best)} ({kind_of(best[0])}, "
+                                 f"{spec.count} replica(s), aggregated) on {', '.join(nodes)}")
+
     # -- reasons for an empty decision -----------------------------------------------------------
 
     def _why_empty(self, pool: Sequence[Accelerator], want: Optional[str], count: int) -> str:
