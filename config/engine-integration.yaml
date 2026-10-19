@@ -27,6 +27,9 @@ engine:
     source_directory: opt_prime
     observed_features: [pp-tp-inference, explicit-prefill-decode, kv-cache-management]
     planned_modules: [npu-backends, pd-serving, kv-transport, expert-offload]
+    # 2026-10-19 decision: NPU vendor backends (RNGD/ATOM graphs, kernels, compile caches) live in aicomp with
+    # Optimus Prime rather than in a separate repository.
+    npu_backends_location: aicomp
   planner:
     id: fasop
     source_directory: fasop

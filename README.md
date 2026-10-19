@@ -153,7 +153,7 @@ See [deployment](deploy/README.md).
 | 🟣 | **Resource discovery** | [rm_abstract_layer](https://github.com/ai-computing/rm_abstract_layer) |
 | 🔵 | **Engine migration sources** | [rngd-pd](https://github.com/ai-computing/rngd-pd) · [hetero-npu-p2p](https://github.com/ai-computing/hetero-npu-p2p) · [npu-offload](https://github.com/ai-computing/npu-offload) |
 | 🟡 | **Cluster integration** | [llm-d-setup](https://github.com/ai-computing/llm-d-setup) · [rm-core contracts](https://github.com/ai-computing/rm-core) |
-| 🟠 | **Operations & measurement** | [lmd-top](https://github.com/ai-computing/lmd-top) · [rm-bench](https://github.com/ai-computing/rm-bench) |
+| 🟠 | **Operations & measurement** | [lmd-top](https://github.com/ai-computing/lmd-top) · [rm-bench](packages/rm-bench) · [rm-controller](packages/rm-controller) |
 | 🟢 | **Training & search workloads** | [npu-lora](https://github.com/ai-computing/npu-lora) · **duet** *(private, optional)* |
 
 Responsibilities, source roles and integration tasks: [component directory](docs/components/README.md).

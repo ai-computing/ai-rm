@@ -1,0 +1,9 @@
+# Pools rm-controller places on this cluster's llm-d (see README). Placed in order; no card is shared.
+namespace: llm-serving
+pools:
+  - pool: llama8b-pd-pool                  # the end-to-end run: RNGD prefill + RNGD decode over shm
+    model: meta-llama/Llama-3.1-8B-Instruct
+    kv_transport: shm
+    slo: {tpot_p90_ms: 100}
+    prefill: {accelerator: furiosa.RNGD, count: 1}
+    decode:  {accelerator: furiosa.RNGD, count: 1}

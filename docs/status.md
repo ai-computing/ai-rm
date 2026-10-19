@@ -23,7 +23,7 @@ FASOP currently models training costs on heterogeneous GPUs. Inference-specific 
 | rngd-pd | Public |
 | npu-lora | Public |
 | llm-d-setup | Public |
-| rm-bench | Public |
+| rm-bench, rm-controller | In-tree under `packages/` (rm-bench moved here 2026-10-19; its old repository is archived) |
 | lmd-top | Public; sanitized history export, see below |
 | duet | **Private; optional**, access required |
 

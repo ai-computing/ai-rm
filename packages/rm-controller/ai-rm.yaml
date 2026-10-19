@@ -1,0 +1,27 @@
+name: rm-controller
+layer: l4-cluster
+kind: service
+summary: 토폴로지 인지 배치 — AcceleratorProfile과 노드 상태로 PD 풀을 배치하고 airm-placement ConfigMap에 기록
+maturity: prototype
+protocol: "0.1"
+hardware: []
+install:
+  - python -m pip install -e .
+test:
+  - python -m pytest -q tests
+  - python -m rm_core.conformance airm.placements topology
+adapters:
+  - group: airm.placements
+    name: topology
+deploy:
+  target: none
+  chart: null
+  manifests: null
+  image: null
+config:
+  env_example: null
+interfaces:
+  provides: [Placement]
+  uses: [Accelerator, Workload]
+metrics: []
+kpi: [이종자원수]

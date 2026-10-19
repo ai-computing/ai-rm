@@ -41,6 +41,11 @@ L1은 능력 모델을 제공하며 모든 요청이 거치는 네트워크 hop�
 
 기존 소스는 이전 중 고정합니다. 엔진 기술은 `aicomp/opt_prime`, 계획 요소는 `aicomp/fasop`으로 통합하는 방향이며 공개 자원·클러스터·워크로드 경계는 유지합니다. [책임 대응표](engine-integration.md)를 참고하세요.
 
+어떤 구성요소도 맡지 않는 통합 코드는 ai-rm의 `packages/`에 둡니다. `rm-bench`(측정, 트레이스 재생)와 `rm-controller`(L4 배치)는
+ai-rm의 profile·시나리오와 함께 바뀌므로 같은 커밋으로 관리합니다. `rm-core`는 모든 구성요소가 고정하는 계약이라 별도 저장소로 둡니다
+(umbrella 안에 두면 구성요소가 ai-rm에 의존하게 됩니다). NPU 벤더 backend(RNGD/ATOM 그래프·커널·컴파일 캐시)는 별도 저장소가 아니라
+`aicomp`의 Optimus Prime으로 통합합니다.
+
 규범 계약은 [rm-core](https://github.com/ai-computing/rm-core)에 있습니다. 서브모듈 포인터가 조합을 고정하지만 그 자체로 전체 검증 증빙은 아닙니다. 실제 구성요소의 `ai-rm.yaml`이 설치·테스트·배포를 선언하고 계획 registry는 실행되지 않습니다. 사이트 값은 추적되지 않는 `cluster.local.env`에 둡니다.
 
 [현재 상태](status.md), [인터페이스](interfaces.md), [구성요소 작업 카드](../components/README.md)를 함께 확인하세요.
