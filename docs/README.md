@@ -1,30 +1,25 @@
-# AI-RM documentation
+# Documentation
 
-[English home](../README.md) · [한국어 문서](ko/README.md)
+[AI-RM home](../README.md) · [한국어](ko/README.md)
 
-**A guide to the AI Semiconductor Integrated Resource Management research and integration project.** This directory is the versioned, wiki-style knowledge base. It is readable directly on GitHub and travels with every checkout; it does not depend on a separately initialized GitHub Wiki.
+AI-RM connects heterogeneous resource research, cluster integration and reproducible evaluation. **New here?** Start with the [project overview](project-overview.md), then explore the [architecture](architecture.md).
 
-**Current design direction:** AI-RM coordinates resources, cluster integration and evidence; **[Optimus Prime + FASOP](engine-integration.md)** is the planned consolidated engine in `aicomp`. [Planning configuration](../config/engine-integration.yaml) records ownership and migration gates without activating a new runtime.
+## Find your path
 
-![AI-RM five-layer architecture](assets/architecture.svg)
-
-## Choose a reading path
-
-| You are… | Start with | Then explore |
+| Goal | Start here | Continue with |
 |---|---|---|
-| A project visitor or reviewer | [Project overview](project-overview.md) | [Research scenarios](research-scenarios.md) · [KPI map](kpi-map.md) |
-| A researcher | [Architecture](architecture.md) | [Interfaces](interfaces.md) · [Component directory](components/README.md) |
-| An engine implementer | [Optimus Prime consolidation](engine-integration.md) | [FASOP card](components/fasop.md) · [Engine card](components/optimus-prime.md) |
-| A developer integrating a component | [Getting started](getting-started.md) | [Integration guide](integration-guide.md) · [Component contract](component-contract.md) |
-| An operator | [Status and access](status.md) | [Deployment](../deploy/README.md) · [Security](security.md) |
-| A documentation contributor | [Contributing](../CONTRIBUTING.md) | [Visual assets and prompts](assets/README.md) · [Glossary](glossary.md) |
+| **Understand the project** | [Project overview](project-overview.md) | [Research scenarios](research-scenarios.md) · [Glossary](glossary.md) |
+| **Try the current components** | [Getting started](getting-started.md) | [Deployment](../deploy/README.md) · [Status and access](status.md) |
+| **Build the unified engine** | [Optimus Prime + FASOP plan](engine-integration.md) | [Engine card](components/optimus-prime.md) · [FASOP card](components/fasop.md) |
+| **Integrate an implementation** | [Integration guide](integration-guide.md) | [Interfaces](interfaces.md) · [Component contract](component-contract.md) |
+| **Evaluate results** | [KPI map and evidence](kpi-map.md) | [Measurement definitions](interfaces.md) |
+| **Contribute** | [Contributing](../CONTRIBUTING.md) | [Security](security.md) · [Visual assets](assets/README.md) |
 
-## Documentation map
+## Reference
 
-- **Understand:** [overview](project-overview.md), [architecture](architecture.md), [scenarios](research-scenarios.md), [glossary](glossary.md).
-- **Use:** [getting started](getting-started.md), [status](status.md), [deployment](../deploy/README.md).
-- **Connect:** [interfaces](interfaces.md), [integration guide](integration-guide.md), [component contract](component-contract.md), [component work cards](components/README.md).
-- **Evaluate:** [KPI map and evidence](kpi-map.md).
-- **Maintain:** [contributing](../CONTRIBUTING.md), [security](security.md), [asset provenance](assets/README.md).
+- [Component directory](components/README.md) — responsibilities, source repositories and integration work cards.
+- [Architecture](architecture.md) — five layers, request flow and memory paths.
+- [Planning configuration](../config/engine-integration.yaml) — engine ownership and migration acceptance; not runtime configuration.
+- [rm-core protocol](https://github.com/ai-computing/rm-core/blob/main/PROTOCOL.md) — normative interface definitions.
 
-The protocol in [rm-core](https://github.com/ai-computing/rm-core/blob/main/PROTOCOL.md) is authoritative for interface definitions. Work cards describe integration tasks, not verified completion; detailed cards are currently maintained in Korean. [Status](status.md) explains how to interpret them.
+The engine consolidation is planned. Follow [status](status.md) for current boundaries and access; component work cards describe requirements rather than proof of completion. Detailed legacy work cards are maintained in Korean.

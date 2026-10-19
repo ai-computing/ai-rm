@@ -34,6 +34,9 @@ See [research scenarios](research-scenarios.md) and the [KPI map](kpi-map.md). T
 
 ## Hardware context
 
+![Conceptual heterogeneous AI research laboratory](assets/lab-environment.png)
+*AI-generated environment illustration, not a photograph of the project's installation or deployment evidence.*
+
 ![Generic accelerator boards, a CPU motherboard and a compact compute system on a laboratory workbench](assets/hardware-workbench.png)
 *AI-generated generic hardware illustration. The objects are not product-identification references or a record of project equipment. GPU/NPU models and supported configurations must be verified against each component's documentation.*
 
