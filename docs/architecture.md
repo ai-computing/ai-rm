@@ -1,54 +1,48 @@
-# 아키텍처
+# Architecture
 
-## 목표
+[Documentation](README.md) · [한국어](ko/architecture.md)
 
-서로 다른 벤더의 가속기(GPU, FuriosaAI RNGD, Rebellions ATOM, CPU)와 통합메모리 시스템(GB10)을
-하나의 클러스터 자원으로 다루고, LLM 요청과 학습 작업을 그 위에 효율적으로 배치·실행·관측한다.
-기본 실행 환경은 Kubernetes + llm-d이며, 각 기술은 llm-d가 이미 정해 둔 확장 지점에 붙는다.
+AI-RM's logical architecture separates resource description, data movement, workload execution, cluster integration and observation. The default target environment is Kubernetes + llm-d. **The diagram describes intended integration responsibilities; component deployment and conformance must be checked separately.**
 
-## 계층
+**Engine ownership:** [Optimus Prime](engine-integration.md) in `aicomp` is the planned unified inference engine, with `opt_prime` as runtime and `fasop` as the product's planner/search element. FASOP connects logically at L4; runtime execution stays at L3, and memory modules at L2. The layered view describes responsibility, not separate source repositories for every box.
 
-| 계층 | 책임 | 구성요소 | llm-d / k8s 안의 자리 |
+![Five-layer AI-RM architecture and shared rm-core contracts](assets/architecture.svg)
+
+## Layer responsibilities
+
+| Layer | Responsibility | Components | Cluster integration point |
 |---|---|---|---|
-| L1 가속기 추상화 | 장치 탐지, 장치 능력 모델(메모리·대역폭·정밀도·전력), 엔진 플러그인 | rm_abstract_layer | 노드 레이블·장치 플러그인 정보의 출처, 모델 서버의 실행 엔진 선택 |
-| L2 메모리·전송 | 메모리 계층(HBM, 호스트 DRAM, 통합메모리)과 그 사이 데이터 이동 | hetero-npu-p2p, npu-offload, duet | vLLM `KVConnector`, llm-d KV stage, 모델 서버 내부 오프로딩 |
-| L3 실행·서빙 | 이종 가속기 위에서 prefill/decode/학습 실행 | rngd-pd, npu-lora | llm-d 모델 서버 pod(ModelService), 학습은 k8s Job |
-| L4 클러스터 | 클러스터 구성, 라우팅·배치 정책, 모델 스토어, 모니터링 스택 | llm-d-setup | Gateway, InferencePool, EPP, 공유 모델 스토어, Prometheus/Grafana |
-| L5 관측·운영 | 지표·에너지 수집, KPI 측정, 운영 콘솔 | lmd-top, rm-bench | Prometheus/k8s API를 읽는 콘솔, 엔드포인트 부하 생성 |
+| L1 · Accelerator abstraction | Discover devices; describe memory, precision, peak provenance, power and interconnects | rm_abstract_layer | Device information, AcceleratorProfile and node labels; engine selection |
+| L2 · Memory and transport | Represent tiers and move workload data | Planned Optimus Prime KV/offload modules; current hetero-npu-p2p/npu-offload sources; private duet workload | Explicit transport and offload boundaries; unified-memory search remains an external workload |
+| L3 · Unified engine and workloads | Execute inference under one runtime owner; connect training workloads | Optimus Prime target; rngd-pd migration source; npu-lora workload | Planned engine serving adapter; current component pods/Jobs remain until cutover |
+| L4 · Cluster and planning | Routing, reviewed planning proposals, storage and monitoring | llm-d-setup; FASOP adapter planned inside Optimus Prime | Gateway, InferencePool, EPP; no automatic FASOP live reconfiguration |
+| L5 · Observation and operations | Inspect cluster behavior and generate measurement evidence | lmd-top, rm-bench | Kubernetes / Prometheus readers, endpoint load generation |
 
-## 요청 흐름 (PD 분리 서빙 예)
+## Example request path
 
-```
-client ──► Gateway ──► InferencePool / EPP ─── 배치 정책 (L4)
-                              │  어느 가속기에 prefill/decode를 둘지
-                 ┌────────────┴────────────┐
-           prefill pod (RNGD)         decode pod (ATOM)        ← L3 rngd-pd
-                 │   KV cache                ▲
-                 └──── KVTransport (L2) ─────┘                  ← hetero-npu-p2p (P2P) 또는 host staging
-                              │
-                       지표: TTFT, TPOT, tok/s, W  ──► Prometheus ──► lmd-top / rm-bench (L5)
-```
+![Conceptual prefill/decode serving request and KV transport path](assets/request-flow.svg)
 
-- L1은 각 pod가 쓰는 장치의 능력(메모리, 정밀도, peak 연산, 전력)을 제공하고, L4 배치 정책은 이 정보로 결정한다.
-- L2는 계층 사이 데이터 이동을 맡는다. 같은 계약(`KVTransport`/`MemoryTier`) 아래에
-  NPU↔NPU P2P(hetero-npu-p2p), NPU↔Host 오프로딩(npu-offload), CPU↔GPU 통합메모리(duet)가 들어간다.
-- 모든 계층은 같은 이름·단위의 지표(`Metrics`)를 내보내고, L5와 연구 기록(MLflow)이 그것을 모은다.
+1. A client request reaches the Gateway and the llm-d routing/placement integration points.
+2. The target serving configuration connects Optimus Prime prefill/decode workers. Existing RNGD prefill + ATOM decode is a migration source; NPU backends and the engine serving adapter require implementation and validation.
+3. KV state moves over a named transport. `p2p` requires compatible same-host devices and ABI; `shm` is host staging. Availability is explicit, and transport failure must not silently select another path.
+4. Common measurements connect the workload to monitoring and benchmark tools. FASOP's planned adapter produces reviewed proposals; its current training estimates must not be reported as inference SLO measurements. A complete automated placement controller is not established by this diagram.
 
-## 저장소 구성 원칙
+L1 provides the capability model used by integration logic; it is not a network hop traversed by every request. L5 observes behavior across the stack rather than forwarding inference traffic.
 
-- **라이브러리와 연구 코드를 나눈다.** 다른 구성요소가 가져다 쓰는 것은 버전 태그·테스트·문서를 갖춘 라이브러리
-  repo로, 실험 스크립트와 기록은 연구 repo에 둔다. 검증된 부분만 라이브러리로 올린다.
-- **계약으로 묶는다.** 구성요소를 한 repo로 합치지 않는다. [interfaces.md](interfaces.md)의 계약을 구현하고,
-  [component-contract.md](component-contract.md)의 `ai-rm.yaml`로 자신을 선언한다.
-- **버전 조합은 ai-rm이 고정한다.** 서브모듈 커밋이 "이 시점의 통합 버전"이다. 릴리스할 때 ai-rm에 태그를 붙인다.
-- **사이트 값은 코드 밖에 둔다.** 주소·자격 증명은 추적되지 않는 `cluster.local.env`에서 읽는다.
+## Memory paths are distinct
 
-## 현재 상태와 다음 단계
+![KV transfer, expert offload and unified-memory search](assets/memory-paths.svg)
 
-| 항목 | 상태 |
-|---|---|
-| 계층 구조, 서브모듈, 셋업 도구(`make setup/test/check`) | 이번 개편에서 도입 |
-| 구성요소별 `ai-rm.yaml` | 각 repo에 추가 중 |
-| k8s 배포 매니페스트 | llm-d-setup, rngd-pd 보유. 나머지는 추가 필요 |
-| 계층 간 인터페이스 | 초안(문서). 다음 단계에서 `rm-core` 패키지로 코드화 |
-| `rm_abstract_layer`의 NPU/GB10 장치 모델 확장 | 다음 단계 |
+- **hetero-npu-p2p:** KV transfer between compatible NPUs on one host, with completion fencing.
+- **npu-offload:** partition MoE expert execution across NPU HBM and host CPU/DRAM. Its v0.1 integration uses workload and memory-tier contracts rather than implementing `KVTransport`.
+- **duet:** CPU graph traversal and GPU distance calculation share GB10 unified memory for vector search. This component is private and optional.
+
+## Repository and contract boundaries
+
+- Existing implementations remain pinned migration sources. Engine-facing technology is planned to consolidate into `aicomp/opt_prime`, with `aicomp/fasop` as a planner element. Public resource/workload/cluster boundaries remain explicit; see the [ownership map](engine-integration.md).
+- [rm-core](https://github.com/ai-computing/rm-core) owns normative protocol definitions and conformance checks. See [interfaces](interfaces.md).
+- Submodule commits pin the component combination. A pinned combination alone is not evidence of end-to-end validation.
+- `ai-rm.yaml` declares each component's install/test/deploy metadata. See the [component contract](component-contract.md).
+- Site settings remain in untracked `cluster.local.env` files. See [deployment](../deploy/README.md) and [security](security.md).
+
+See [status](status.md) for current integration boundaries and [component cards](components/README.md) for component-specific work.

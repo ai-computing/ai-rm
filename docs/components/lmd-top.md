@@ -1,5 +1,7 @@
 # lmd-top — L5 카드
 
+> **Optimus Prime 전환 안내:** 관측·운영 책임은 유지하며 후속 작업에서 Optimus Prime 엔진·FASOP 계획 출처를 함께 표시합니다. 구현 완료를 뜻하지 않습니다. [통합 설계](../ko/engine-integration.md) · [English design](../engine-integration.md) · [계획 설정](../../config/engine-integration.yaml)
+
 lmd-top은 Rust라 rm-core를 import하지 않고, rm-core가 정한 **형식**을 읽습니다.
 
 ## 이번에 할 일

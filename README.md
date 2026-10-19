@@ -1,68 +1,158 @@
-# ai-rm — AI 반도체 통합 자원관리
+<p align="center"><img src="docs/assets/hero.svg" alt="AI-RM — unified resource management for GPU, NPU, CPU and unified-memory systems" width="100%"></p>
 
-GPU, NPU(FuriosaAI RNGD, Rebellions ATOM), CPU, 통합메모리 시스템(GB10)이 섞인 클러스터에서
-LLM 추론·학습 자원을 함께 관리하기 위한 소프트웨어 모음입니다. 기본 대상 환경은 **Kubernetes + llm-d**입니다.
+<p align="center">
+  <strong>English</strong> · <a href="README.ko.md">한국어</a><br>
+  <a href="docs/README.md">Documentation</a> · <a href="docs/engine-integration.md">Optimus Prime</a> · <a href="docs/architecture.md">Architecture</a> · <a href="docs/getting-started.md">Getting started</a>
+</p>
 
-이 저장소는 최상위 통합 repo입니다. 기술별 구현은 각자의 repo에 있고, 여기서는 계층별로 서브모듈로 묶어
-아키텍처, 계층 간 인터페이스, 버전 조합, 셋업과 배포를 한곳에서 관리합니다.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSD--3--Clause-55d6be" alt="License: BSD-3-Clause"></a>
+  <a href="docs/architecture.md"><img src="https://img.shields.io/badge/platform-Kubernetes%20%2B%20llm--d-65b9ff" alt="Target: Kubernetes plus llm-d"></a>
+  <a href="docs/status.md"><img src="https://img.shields.io/badge/status-research%20%26%20integration-f4c46b" alt="Status: research and integration"></a>
+  <a href="https://github.com/ai-computing/ai-rm/actions/workflows/check-sensitive.yml"><img src="https://github.com/ai-computing/ai-rm/actions/workflows/check-sensitive.yml/badge.svg" alt="Sensitive-data check"></a>
+</p>
 
-```
- L5 관측·운영      lmd-top · rm-bench                         지표·에너지·KPI 측정, 운영 콘솔
- L4 클러스터       llm-d-setup                                k8s + llm-d, EPP/InferencePool, 모델 스토어, 모니터링 스택
- L3 실행·서빙      rngd-pd · npu-lora                         이종 가속기 PD 분리 서빙, NPU 학습
- L2 메모리·전송    hetero-npu-p2p · npu-offload · duet        NPU↔NPU KV 전송, NPU↔Host 오프로딩, CPU↔GPU 통합메모리
- L1 가속기 추상화  rm_abstract_layer                          장치 모델·탐지·플러그인 (GPU/NPU/CPU)
-```
+# AI-RM · Unified Resource Management for AI Accelerators
 
-## 구성요소
+**One resource integration hub. One unified inference-engine direction: Optimus Prime.**
 
-| 계층 | 구성요소 | 종류 | 역할 |
+AI-RM is the integration hub for the **AI Semiconductor Integrated Resource Management Technology Development** project (AI 반도체 통합 자원관리 기술 개발). It connects research on **GPUs, FuriosaAI RNGD, Rebellions ATOM, CPUs and GB10 unified-memory systems**, targeting **Kubernetes + llm-d** clusters. Inference-engine technology is planned to consolidate into **[Optimus Prime in `aicomp`](https://github.com/ai-computing/aicomp)**, including **FASOP** as its planning/search element.
+
+This repository owns resource/cluster integration, shared interface guides, pinned source revisions and operations/evidence tooling. **The consolidation is a documented plan, not an implemented migration.** Existing component repositories remain pinned sources until the unified engine is implemented and accepted. The proposed `aicomp` branch is `optimus-prime`; it is not created or activated by this update. See the [engine plan](docs/engine-integration.md) and [status](docs/status.md).
+
+![Conceptual AI research laboratory with accelerator servers and a compact compute system](docs/assets/lab-environment.png)
+*AI-generated environment illustration; not a photograph of the project's installation or deployment evidence.*
+
+## What does AI-RM connect?
+
+| | Research area | Purpose |
+|---|---|---|
+| <img src="docs/assets/icon-chip.svg" width="40" alt="Device icon"> | **Discover heterogeneous devices** | Express device discovery and capabilities through a common abstraction. |
+| <img src="docs/assets/icon-memory.svg" width="40" alt="Memory icon"> | **Use memory across tiers** | Study NPU KV transfer, MoE expert offload and CPU–GPU cooperation on unified memory. |
+| <img src="docs/assets/icon-serve.svg" width="40" alt="Serving icon"> | **Execute inference and training** | Connect prefill/decode disaggregation and NPU training workloads. |
+| <img src="docs/assets/icon-cluster.svg" width="40" alt="Cluster icon"> | **Integrate the cluster** | Connect Kubernetes + llm-d routing, device profiles, model storage and monitoring. |
+| <img src="docs/assets/icon-observe.svg" width="40" alt="Observation icon"> | **Measure reproducibly** | Align latency, throughput, power and SLO metrics with experiment context and KPI evidence. |
+
+## Five layers, one integration architecture
+
+![L1 accelerator abstraction, L2 memory and transport, L3 execution and serving, L4 cluster orchestration, L5 observability and operations, with shared rm-core contracts](docs/assets/architecture.svg)
+
+[`rm-core`](https://github.com/ai-computing/rm-core) defines shared contracts. Components connect through adapters, named entry points and common measurement formats. The submodule commits in AI-RM pin an integration revision.
+
+## Optimus Prime: the engine consolidation target
+
+![AI-RM coordinates resource and cluster integration; Optimus Prime in aicomp contains the opt_prime runtime and fasop planner, with existing repositories as migration sources](docs/assets/engine-consolidation.svg)
+
+| Part | Intended owner | Current boundary |
+|---|---|---|
+| **Inference runtime** | Optimus Prime · `aicomp/opt_prime` | Existing PP/TP inference and KV APIs; NPU/PD/transport/offload consolidation is planned. |
+| **Planning and search** | FASOP · `aicomp/fasop`, within Optimus Prime | Current heterogeneous-GPU **training** cost search; inference-specific calibration and adapters are planned. |
+| **Resources, cluster and operations** | AI-RM + rm-core + llm-d-setup + lmd-top/rm-bench | Keep resource contracts, Gateway/EPP, observation and reproducible evidence at the hub boundary. |
+| **External workloads** | npu-lora; private optional duet | Training and search workloads connect through explicit adapters; private code stays private. |
+
+The [declarative plan](config/engine-integration.yaml) records ownership, source roles, the proposed branch and cutover criteria. It is **not runtime configuration** and is not consumed by the current CLI. [Read the consolidation design](docs/engine-integration.md).
+
+## Current source components
+
+The following repositories remain the executable sources during transition. Engine-facing parts of `rm_abstract_layer`, PD serving, KV transport and expert offload are planned Optimus Prime modules; the L1 resource-discovery responsibility remains separate.
+
+| Layer | Component | Role | Details |
 |---|---|---|---|
-| L1 | [rm_abstract_layer](components/l1-accel/) | library | 이종 가속기 통합 추상화 (장치 탐지, 엔진·자원 플러그인) |
-| L2 | [hetero-npu-p2p](components/l2-memory/) | library | 같은 호스트의 이종 NPU 간 KV 전송 (completion-fenced P2P, llm-d stage 연동) |
-| L2 | [npu-offload](components/l2-memory/) | service | MoE 전문가 오프로딩: hot expert는 NPU HBM, cold expert는 호스트 CPU |
-| L2 | [duet](components/l2-memory/) | library | GB10 통합메모리에서 CPU 그래프 순회 + GPU 거리 계산 협업 벡터 검색 |
-| L3 | [rngd-pd](components/l3-serving/) | service | RNGD prefill + ATOM decode PD 분리 서빙 (llm-d pod) |
-| L3 | [npu-lora](components/l3-serving/) | workload | 추론 전용 NPU에서의 LoRA·full fine-tuning |
-| L4 | [llm-d-setup](components/l4-cluster/) | cluster | 이종 가속기 k8s + llm-d 클러스터 구성, 모니터링 스택 |
-| L5 | [lmd-top](components/l5-ops/) | tool | llm-d 클러스터 관측·운영 콘솔 (TUI) |
-| L5 | [rm-bench](components/l5-ops/) | tool | trace 재생·합성 부하, TTFT/TPOT/E2E 측정 |
+| **L1 · Accelerator** | [rm_abstract_layer](https://github.com/ai-computing/rm_abstract_layer) | Device discovery, capability models and plugins | [Card](docs/components/rm_abstract_layer.md) |
+| **L2 · Memory** | [hetero-npu-p2p](https://github.com/ai-computing/hetero-npu-p2p) | Completion-fenced KV transfer between compatible same-host NPUs | [Card](docs/components/hetero-npu-p2p.md) |
+| **L2 · Memory** | [npu-offload](https://github.com/ai-computing/npu-offload) | Hot experts on NPU HBM; cold expert execution on the host CPU | [Card](docs/components/npu-offload.md) |
+| **L2 · Memory** | **duet** · private / optional | GB10 vector search: CPU graph traversal + GPU distance computation | [Card](docs/components/duet.md) |
+| **L3 · Execution** | [rngd-pd](https://github.com/ai-computing/rngd-pd) | RNGD prefill + ATOM decode disaggregated serving | [Card](docs/components/rngd-pd.md) |
+| **L3 · Execution** | [npu-lora](https://github.com/ai-computing/npu-lora) | LoRA and full fine-tuning research on inference-oriented NPUs | [Card](docs/components/npu-lora.md) |
+| **L4 · Cluster** | [llm-d-setup](https://github.com/ai-computing/llm-d-setup) | Kubernetes + llm-d, routing, model storage and monitoring | [Card](docs/components/llm-d-setup.md) |
+| **L5 · Operations** | [lmd-top](https://github.com/ai-computing/lmd-top) | Terminal console for cluster observation and operations | [Card](docs/components/lmd-top.md) |
+| **L5 · Operations** | [rm-bench](https://github.com/ai-computing/rm-bench) | Trace replay, synthetic load and latency measurements | [Card](docs/components/rm-bench.md) |
 
-구성요소 repo는 비공개입니다. 서브모듈은 ai-computing 조직 멤버만 받을 수 있습니다.
-각 구성요소는 루트에 [`ai-rm.yaml`](docs/component-contract.md)을 두고, 그 파일로 설치·테스트·배포 방법을 선언합니다.
+`duet` stays private. It is optional for documentation and public-component exploration. See [access and readiness](docs/status.md) before initializing submodules.
 
-## 빠른 시작
+## Follow the workload and the data
+
+**Disaggregated LLM serving.** The target routes requests to Optimus Prime prefill/decode workers. Existing RNGD/ATOM PD technology is a migration source. KV state uses an explicitly selected transport; P2P requires compatible same-host hardware and ABI, and host staging is a separate path. The new engine/backend and llm-d adapters are planned.
+
+![Target flow from client and Gateway/EPP to Optimus Prime prefill/decode workers and an explicit KV transport, with metrics](docs/assets/request-flow.svg)
+
+**Memory research beyond KV.** Expert offload and unified-memory vector search move different data and execute different parts of the workload.
+
+![Three distinct memory paths: NPU KV transfer, MoE expert offload and private optional GB10 unified-memory search](docs/assets/memory-paths.svg)
+
+Read the [architecture](docs/architecture.md), [interfaces](docs/interfaces.md) and [research scenarios](docs/research-scenarios.md) for each path's responsibilities and limits.
+
+## Start here
+
+### Explore without accelerator hardware
 
 ```bash
-git clone --recursive https://github.com/ai-computing/ai-rm.git   # 조직 멤버
+git clone https://github.com/ai-computing/ai-rm.git
 cd ai-rm
-make doctor          # git, python, kubectl, helm 등 사전 조건 확인
-make list            # 구성요소, 계층, 버전, 배포 가능 여부
-make setup           # 모든 구성요소 설치 (계층별: make setup LAYER=l2-memory)
-make test            # 가속기 없이 도는 빠른 테스트
-cp deploy/clusters/example/cluster.example.env deploy/clusters/local/cluster.local.env   # 사이트 값 입력
-make deploy CLUSTER=local DRY_RUN=1   # k8s 배포 계획 확인 → DRY_RUN 빼고 실제 배포
-make check           # 공개되면 안 되는 정보(내부 IP, 토큰, 키) 검사
+python3 tools/airm.py list
+python3 tools/check_sensitive.py .
 ```
 
-사이트별 값(노드 주소, 게이트웨이 주소, 자격 증명)은 추적되지 않는 `cluster.local.env`에만 둡니다.
-자세한 내용은 [deploy/README.md](deploy/README.md)와 [docs/security.md](docs/security.md)를 보세요.
+The top-level clone includes documentation and integration tools. A cluster and `duet` access are not required to read them. Uninitialized components appear as **not fetched** in `list`.
 
-## 문서
+### Fetch public components
 
-- [docs/architecture.md](docs/architecture.md) — 계층 구조와 k8s + llm-d 위에서의 동작 흐름
-- [docs/interfaces.md](docs/interfaces.md) — 계층 간 인터페이스 요약 (정의는 [rm-core](https://github.com/ai-computing/rm-core))
-- [docs/integration-guide.md](docs/integration-guide.md) — 구성요소를 연결하는 방법, [docs/components/](docs/components/) — repo별 작업 카드
-- [docs/component-contract.md](docs/component-contract.md) — 구성요소 repo가 지켜야 할 것 (`ai-rm.yaml`, README, 설정)
-- [docs/kpi-map.md](docs/kpi-map.md) — 과제 성과지표와 구성요소·근거의 대응
-- [docs/security.md](docs/security.md) — 공개 저장소 보안 규칙과 검사
+Avoid `--recursive` unless you also have access to private `duet`. Initialize the public components explicitly:
 
-## 이전 구조에서 바뀐 점 (2026-10)
+```bash
+git submodule update --init -- \
+  components/l1-accel/rm_abstract_layer \
+  components/l2-memory/hetero-npu-p2p \
+  components/l2-memory/npu-offload \
+  components/l3-serving/rngd-pd \
+  components/l3-serving/npu-lora \
+  components/l4-cluster/llm-d-setup \
+  components/l5-ops/rm-bench \
+  components/l5-ops/lmd-top
+```
 
-- `rm_monitor`는 역할별로 나뉘었습니다. 모니터링 스택과 Grafana 대시보드는 `llm-d-setup/monitoring/`,
-  trace 재생·부하 도구는 `rm-bench`, 운영 콘솔은 `lmd-top`이 맡습니다. `rm_monitor` 저장소는 보관(archive) 상태입니다.
-- `rm_abstract_layer`는 `components/l1-accel/`로 옮겨졌습니다.
+All listed paths are public, including the sanitized `lmd-top` export. See [getting started](docs/getting-started.md) for prerequisites and selected-component installation. `make setup` invokes `make init` and attempts to fetch **all** submodules, including `duet`; use the Python CLI for a public-only checkout. This installs current sources, not the planned consolidated engine.
 
-## License
+### Prepare an authorized cluster
 
-BSD-3-Clause (각 구성요소의 라이선스는 해당 repo를 따릅니다).
+In a configured Linux environment with Python 3.8+, Git and component-specific prerequisites:
+
+```bash
+python3 -m pip install PyYAML
+python3 tools/airm.py doctor
+python3 tools/airm.py setup --layer l3-serving
+python3 tools/airm.py test --layer l3-serving
+mkdir -p deploy/clusters/local
+cp deploy/clusters/example/cluster.example.env deploy/clusters/local/cluster.local.env
+# Edit the untracked cluster.local.env with your site settings.
+python3 tools/airm.py deploy --cluster local --dry-run --layer l3-serving
+```
+
+Deployment currently applies each component's `deploy.manifests` with `kubectl`; components without manifests are skipped. Client dry run requires appropriate local Kubernetes configuration and is not proof of a successful deployment. See [deployment](deploy/README.md).
+
+## Documentation
+
+The **[documentation hub](docs/README.md)** provides wiki-style navigation in English, with **[한국어 문서](docs/ko/README.md)** alongside it.
+
+| I want to… | Read |
+|---|---|
+| Understand the project and its boundaries | [Overview](docs/project-overview.md) · [Status](docs/status.md) |
+| Understand the unified engine direction | [Optimus Prime + FASOP plan](docs/engine-integration.md) · [Planning configuration](config/engine-integration.yaml) |
+| Understand the layers and workloads | [Architecture](docs/architecture.md) · [Scenarios](docs/research-scenarios.md) |
+| Set up a checkout or prepare a cluster | [Getting started](docs/getting-started.md) · [Deployment](deploy/README.md) |
+| Integrate an implementation | [Interfaces](docs/interfaces.md) · [Integration](docs/integration-guide.md) · [Contract](docs/component-contract.md) |
+| Find a component's integration tasks | [Component directory and work cards](docs/components/README.md) |
+| Understand measurements and terms | [KPI map](docs/kpi-map.md) · [Glossary](docs/glossary.md) |
+| Contribute or maintain the visuals | [Contributing](CONTRIBUTING.md) · [Asset provenance and prompts](docs/assets/README.md) |
+
+## Research and evidence
+
+![Discover devices, connect adapters, execute workloads and record reproducible measurements](docs/assets/research-workflow.svg)
+
+Research maps to **MFU, power efficiency, heterogeneous resource coverage, SLO attainment, memory integration, scalability and application services**. Public documents describe methods and component mapping. Unreleased numerical results and project evidence remain in designated private research records; this page does not claim benchmark gains. See the [KPI map](docs/kpi-map.md).
+
+## Contributing and license
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md), the relevant component card and [rm-core's normative protocol](https://github.com/ai-computing/rm-core/blob/main/PROTOCOL.md). Keep site settings and credentials in untracked configuration; run `make check` before publishing changes.
+
+This integration repository uses [BSD-3-Clause](LICENSE). Each component retains its own license; check its repository before reuse.

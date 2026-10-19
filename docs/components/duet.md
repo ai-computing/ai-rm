@@ -1,5 +1,7 @@
 # duet — L2 카드 (보류)
 
+> **Optimus Prime 전환 안내:** 선택적인 비공개 검색 workload로 유지하며 공개 Optimus Prime에 비공개 코드를 복사하지 않습니다. 구현 완료를 뜻하지 않습니다. [통합 설계](../ko/engine-integration.md) · [English design](../engine-integration.md) · [계획 설정](../../config/engine-integration.yaml)
+
 dgx_spark 노드 네트워크가 복구되고 노드 checkout을 정리된 이력으로 옮긴 뒤(Plane DUET-30) 진행합니다.
 
 ## 그때 할 일

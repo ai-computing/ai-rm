@@ -1,15 +1,32 @@
-# 구성요소 카드 (protocol v0.1)
+# Component directory and integration cards
 
-각 repo가 v0.1 통합에서 할 일입니다. 공통 방법은 [../integration-guide.md](../integration-guide.md).
+[Documentation](../README.md) · [한국어 문서](../ko/README.md) · [Optimus Prime plan](../engine-integration.md)
 
-| 계층 | 카드 | 핵심 |
-|---|---|---|
-| L1 | [rm_abstract_layer](rm_abstract_layer.md) | `AcceleratorProvider` + 노드 데몬(AcceleratorProfile 게시) |
-| L2 | [hetero-npu-p2p](hetero-npu-p2p.md) | `KVTransport` `p2p` |
-| L2 | [npu-offload](npu-offload.md) | workload runner(serve) + 지표 + chart |
-| L2 | [duet](duet.md) | (보류) 노드 네트워크 복구 후 |
-| L3 | [rngd-pd](rngd-pd.md) | KV 경로를 이름으로 선택, 기존 /dev/shm 경로를 `KVTransport` `shm`으로, chart |
-| L3 | [npu-lora](npu-lora.md) | workload runner(train) + Job chart |
-| L4 | [llm-d-setup](llm-d-setup.md) | CRD 설치, airm 지표 수집, 배치 결정 전달 지점 |
-| L5 | [lmd-top](lmd-top.md) | AcceleratorProfile과 airm 지표 표시 |
-| L5 | [rm-bench](rm-bench.md) | 결과를 Measurement 형식으로, end-to-end 시나리오 실행기 |
+**Target product ownership:** Optimus Prime in `aicomp` owns the consolidated inference runtime and includes FASOP as its planning/search element. Existing repositories remain pinned migration sources until implementation and acceptance. Detailed legacy work cards below are maintained in Korean; they describe transition tasks, not verified completion.
+
+## Target engine elements
+
+| Element | Source / intended branch | Role | Card |
+|---|---|---|---|
+| **Optimus Prime** | `aicomp/opt_prime`; proposed branch `optimus-prime` | Unified runtime target; branch/adapters are not activated here | [Engine](optimus-prime.md) |
+| **FASOP** | `aicomp/fasop`, same repository/product | Planning/search; existing training cost model, inference adapter planned | [Planner](fasop.md) |
+
+## Current source and retained integration boundaries
+
+| Layer | Current component | Transition role | Detailed card |
+|---|---|---|---|
+| L1 | rm_abstract_layer | Retain device discovery; engine-facing backend adapters target Optimus Prime | [Korean card](rm_abstract_layer.md) |
+| L2 | hetero-npu-p2p | Source for the engine's KV-transport module | [Korean card](hetero-npu-p2p.md) |
+| L2 | npu-offload | Source for expert-offload; workload/memory-tier contract, not KVTransport | [Korean card](npu-offload.md) |
+| L2 / workload | duet | Optional private search workload; no public-code migration | [Korean card](duet.md) |
+| L3 | rngd-pd | Source for engine PD/NPU-backend modules | [Korean card](rngd-pd.md) |
+| L3 / workload | npu-lora | Training workload and future engine adapter as needed | [Korean card](npu-lora.md) |
+| L4 | llm-d-setup | Keep cluster/routing/storage/monitoring; accept reviewed planner proposals | [Korean card](llm-d-setup.md) |
+| L5 | lmd-top | Keep observation/operations; display engine and plan provenance | [Korean card](lmd-top.md) |
+| L5 | rm-bench | Keep load/measurement; compare actual execution with planner estimates | [Korean card](rm-bench.md) |
+
+Use the [integration guide](../integration-guide.md), [interfaces](../interfaces.md), [status](../status.md) and [declarative ownership plan](../../config/engine-integration.yaml). Do not remove a source submodule or declare its module migrated solely because the plan names a destination.
+
+## 한국어 안내
+
+통합 런타임은 Optimus Prime, 내부 계획·탐색 요소는 FASOP으로 정리합니다. 기존 소스 카드는 전환 중 계약과 검증 기준으로 유지하며 완료 여부는 실제 커밋·구현·검증으로 확인합니다. NPU LoRA는 학습 workload, duet은 비공개 검색 workload로 두고 상위 클러스터·관측·측정 책임은 유지합니다.
