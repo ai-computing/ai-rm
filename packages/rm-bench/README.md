@@ -120,6 +120,16 @@ rm-bench import mlperf mlperf_log_summary.txt --model meta-llama/Llama-3.1-8B-In
 rm-bench compare results/*.json [LABEL=results/x.json ...] --out compare.md
 ```
 
+Power queries that work on the reference cluster's exporters (sum over the cards the run uses):
+
+| Accelerator | Exporter | `--power-query` |
+|---|---|---|
+| FuriosaAI RNGD | furiosa-metrics-exporter | `sum(furiosa_npu_hw_power{hostname="<node>",label="rms",device=~"npu0\|npu1"})` |
+| Rebellions ATOM | rbln-metrics-exporter | `sum(RBLN_DEVICE_STATUS:CARD_POWER{node="<node>",name=~"rbln0"})` |
+| NVIDIA GPU | DCGM exporter | `sum(DCGM_FI_DEV_POWER_USAGE{Hostname="<node>"})` |
+
+All three were sampled live (no read errors) through `--power prom`.
+
 - **Power** (`--power prom|cmd|none`, default `none`): a sampler polls every `--power-interval` s (default 1) while requests
   run. `prom` sums the result vector of an instant query (default `sum(DCGM_FI_DEV_POWER_USAGE)`, `--power-url` or
   `$PROMETHEUS_URL`; for NPUs pass the query of the exporter in use). `cmd` runs any CLI that prints watts and sums every
