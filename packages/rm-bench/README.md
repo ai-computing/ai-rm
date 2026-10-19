@@ -20,6 +20,7 @@
   <a href="#-quick-start"><b>Quick start</b></a> ·
   <a href="#-end-to-end-scenarios"><b>Scenarios</b></a> ·
   <a href="#-real-traces"><b>Real traces</b></a> ·
+  <a href="#-energy-standard-benchmarks-and-baselines"><b>Energy &amp; baselines</b></a> ·
   <a href="#-ai-rm-integration"><b>ai-rm integration</b></a> ·
   <a href="#-results-format"><b>Results</b></a>
 </p>
@@ -69,6 +70,7 @@ python -m pytest -q packages/rm-bench/tests   # fake OpenAI-compatible server, n
 
 ```bash
 rm-bench e2e --scenario pd-smoke [--gateway URL] [--model M] [--out results/<run>.json] [--kv-transport NAME] [--api chat|completions]
+         [--deployment LABEL] [--cards N] [--power prom|cmd|none ...]
 ```
 
 - **Where scenarios live:** `scenarios/<name>.yaml`, a `.yaml` path, or a directory in `$RM_BENCH_SCENARIOS`. By name the
@@ -88,7 +90,12 @@ rm-bench e2e --scenario pd-smoke [--gateway URL] [--model M] [--out results/<run
 - **Open loop:** requests leave at the scenario's arrival times, and TTFT/E2E count from the **scheduled** arrival, so time
   spent waiting for the client's `concurrency` limit is part of the latency a user would see. After `duration_s` no new
   request is sent; requests still queued count as failed (unserved). `timeout_s` bounds one whole request.
-- **TPOT** is `(e2e − TTFT) / (output tokens − 1)`, output tokens from the server's `usage` (else the number of content chunks).
+- **Streaming chat** (`--api chat`, default) times the SSE chunks: TTFT is the first chunk with generated text (`content`, or a
+  reasoning model's `reasoning_content`), ITL the gaps between text chunks (p50/p90/p99 in the run record), TPOT
+  `(last token − TTFT) / (output tokens − 1)` so the `usage` chunk and `[DONE]` after the last token are not decode time.
+  Output tokens come from the last `usage` chunk (else the number of text chunks). A stream counts when it ends with
+  `[DONE]`, or with a `finish_reason` and a clean close; a server that ignores `stream` and returns one JSON body is timed
+  like `--api completions`. Close-delimited streams are read as bytes arrive, not per buffer.
 - **`--api completions`** (or scenario `api: completions`) is for servers with only non-streaming `/v1/completions`. Without a
   stream the first token is not visible: when the response carries server timing (`pd.ttft_ms`, `pd.wall_ms`, as rngd-pd's
   gateway sends), TTFT = (e2e − wall_ms) + ttft_ms; otherwise TTFT = e2e (an upper bound). A `--gateway` URL ending in
@@ -98,6 +105,40 @@ rm-bench e2e --scenario pd-smoke [--gateway URL] [--model M] [--out results/<run
 - The `loadgen/` tools keep their own definitions (TPOT per output chunk, tokens = chunks), so on servers that send several
   tokens per chunk their `tpot_*`/`tok_s` differ from `rm-bench e2e`. Use `rm-bench e2e` numbers for comparisons and KPIs.
 </details>
+
+## 🔋 Energy, standard benchmarks and baselines
+
+```bash
+# power sampled during the run -> power_w, energy_j, tok/J (W7 evidence)
+rm-bench e2e --scenario pd-smoke --deployment same-vendor-pd --cards 2 \
+  --power prom --power-url http://<prometheus> --power-query 'sum(DCGM_FI_DEV_POWER_USAGE)'
+rm-bench e2e --scenario pd-smoke --power cmd --power-cmd 'furiosa-smi info' --power-regex '(\d+(?:\.\d+)?)\s*W\b'
+# GuideLLM sweeps and MLPerf LoadGen runs into the same results
+rm-bench import guidellm benchmarks.json --deployment vendor-pd --cards 2 --slo ttft_p90_ms=2000
+rm-bench import mlperf mlperf_log_summary.txt --model meta-llama/Llama-3.1-8B-Instruct --deployment replication
+# one markdown table: SLO attainment, goodput per card, tok/J
+rm-bench compare results/*.json [LABEL=results/x.json ...] --out compare.md
+```
+
+- **Power** (`--power prom|cmd|none`, default `none`): a sampler polls every `--power-interval` s (default 1) while requests
+  run. `prom` sums the result vector of an instant query (default `sum(DCGM_FI_DEV_POWER_USAGE)`, `--power-url` or
+  `$PROMETHEUS_URL`; for NPUs pass the query of the exporter in use). `cmd` runs any CLI that prints watts and sums every
+  match of `--power-regex` (first group); match the draw column only, not caps. Mean power is time-weighted over the samples,
+  energy = mean × run wall time, tok/J = output tokens / energy. The run writes `power_w` and `energy_j` with
+  `scope=card|node` (`--power-scope`, default `card`); peak W and tok/J go in the run record. A failed read loses one sample,
+  never the run.
+- **`--deployment LABEL`** names the deployment (e.g. `same-vendor-pd`, `vendor-pd`, `replication`); **`--cards N`** writes
+  `accelerators` and gives goodput per card.
+- **Imports.** `guidellm`: a GuideLLM JSON report (`benchmarks.json`, schema of GuideLLM 0.8, older `run_stats`/`median`
+  layouts too); every benchmark of a sweep becomes one run with TTFT/TPOT p50/p90/p99, `e2e_p90_ms`, tok/s (output tokens over
+  the measured window), req/s, and `slo_attainment`/`request_goodput` when GuideLLM had objectives. `mlperf`: LoadGen's
+  `mlperf_log_summary.txt` or `mlperf_log_detail.txt` (LLM Server/Offline); first-token and time-per-output-token percentiles,
+  completed tokens/samples per second, and a verdict from `Result is : VALID` plus the Server TTFT/TPOT p99 constraints.
+  LoadGen reports no per-request SLO share, so MLPerf runs have no `slo_attainment_pct`. `--slo KEY=VALUE` judges any
+  import against an SLO from its percentiles.
+- **Compare** puts one row per run_id: SLO attainment and verdict, TTFT/TPOT p90, tok/s, goodput (requests meeting the SLO
+  per second; else req/s × attainment), goodput per card, mean (peak) W and tok/J (else tok_s / power_w). Labels come from
+  `LABEL=`, else the run's deployment, else the file name.
 
 ## 📈 Real traces
 
@@ -152,6 +193,8 @@ scenario's.
 | `gateway` | no | gateway base URL; default `$LLMD_GATEWAY_URL` |
 | `out` | no | Measurement JSON path; default `results/<run_id>.json`, `None` to skip |
 | `kv_transport` | no | KV transport of the serving path under test, recorded as the `kv_transport` tag (rm-bench moves no KV) |
+| `power` | no | a sampler from `rm_bench.power.make_sampler(...)`, sampled during the run |
+| `deployment`, `cards` | no | deployment label and accelerator count for `rm-bench compare` |
 
 ```bash
 python -m pytest -q tests     # from packages/rm-bench
@@ -168,6 +211,10 @@ Percentile metrics with no samples (e.g. `ttft_p90_ms` when every request failed
   "tags": {"component": "rm-bench", "model": "...", "workload": "pd-smoke", "run_id": "pd-smoke-20261019T001448Z-0c86f2"}}]
 ```
 
+Next to it, `<name>.meta.json` is the run record for what rm-core metrics do not carry: deployment, cards, SLO checks and
+verdict, goodput, ITL percentiles, and power (`power_w`, `power_peak_w`, `energy_j`, `tok_per_j`, `scope`, `source`,
+`samples`). `rm-bench compare` reads both; files without a record (e.g. `loadgen/` output) still compare.
+
 Measured runs with these tools: ai-rm [end-to-end run](../../docs/e2e.md).
 
 <details>
@@ -176,7 +223,7 @@ Measured runs with these tools: ai-rm [end-to-end run](../../docs/e2e.md).
 
 | Path | Contents |
 |---|---|
-| `rm_bench/` | `rm-bench e2e` runner, Measurement output, trace readers, ai-rm adapter (`rm_bench/airm.py`) |
+| `rm_bench/` | `rm-bench e2e` runner, Measurement output, trace readers, ai-rm adapter (`rm_bench/airm.py`), power samplers (`power.py`), GuideLLM/MLPerf import (`imports.py`), comparison table (`compare.py`) |
 | `scenarios/` | e2e scenarios (`pd-smoke.yaml`, `trace-*.yaml`) |
 | `loadgen/replay_vllm_azure2024.py` | Azure LLM inference trace replayer (QPS, latency, live terminal dashboard) |
 | `loadgen/synthetic_load_llm.py` | synthetic load generator |
