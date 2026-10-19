@@ -1,5 +1,7 @@
 # rngd-pd — L3 카드
 
+> **Optimus Prime 전환 안내:** PD 서빙과 NPU 백엔드 기술은 Optimus Prime 모듈로 통합하는 방향입니다. 아래는 전환 중 기존 소스의 계약·검증 기준입니다. 구현 완료를 뜻하지 않습니다. [통합 설계](../ko/engine-integration.md) · [English design](../engine-integration.md) · [계획 설정](../../config/engine-integration.yaml)
+
 ## 이번에 할 일
 1. **기존 KV 경로를 `KVTransport`로**: `rngd_pd.connector.transport`(/dev/shm 세그먼트, bf16 wire)를 감싼
    `rngd_pd.airm:ShmTransport` (entry point `airm.kv_transports` 이름 `shm`). host staging 경로임을 README에 명시.

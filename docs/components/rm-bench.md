@@ -1,5 +1,7 @@
 # rm-bench — L5 카드
 
+> **Optimus Prime 전환 안내:** 부하·측정 책임은 유지하며 후속 작업에서 Optimus Prime 실행 실측과 FASOP 추정값을 구분해 비교합니다. 구현 완료를 뜻하지 않습니다. [통합 설계](../ko/engine-integration.md) · [English design](../engine-integration.md) · [계획 설정](../../config/engine-integration.yaml)
+
 end-to-end 시나리오의 실행기가 됩니다.
 
 ## 이번에 할 일
