@@ -191,7 +191,9 @@ Details: [interfaces](docs/interfaces.md) · [integration guide](docs/integratio
 - [x] Component adapters for protocol v0.1, verified together ([status](docs/status.md#protocol-v01-integration--verified-2026-10-19))
 - [ ] Optimus Prime integration branch: PD, KV-transport and expert-offload modules from the migration sources
 - [ ] FASOP inference planning and a reviewed llm-d placement adapter
-- [ ] Umbrella chart, simulated cluster and end-to-end scenario with TTFT / TPOT / power / MFU evidence
+- [x] First end-to-end run on the live cluster: L1 placement → llm-d → PD serving → measurement ([results](docs/e2e.md))
+- [ ] Placement controller writing `airm-placement`; RNGD→ATOM decode and P2P with live buffers end to end
+- [ ] Umbrella chart, simulated cluster and power / MFU evidence from every run
 - [ ] Protocol v0.2: bind live buffers (`MemoryRegion`) to KV transfers
 
 ## 📚 Documentation

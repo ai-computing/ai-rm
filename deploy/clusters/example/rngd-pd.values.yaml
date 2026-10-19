@@ -1,0 +1,69 @@
+# Example site override for rngd-pd, as used in the 2026-10-19 end-to-end run (docs/e2e.md).
+# Copy to deploy/clusters/<name>/ (untracked) and replace the /path/to/... host paths.
+# ubuntu:22.04 + host runtimes/venv mounted, RNGD prefill + RNGD decode, KV over /dev/shm.
+image: {repository: ubuntu, tag: "22.04", pullPolicy: IfNotPresent}
+bootstrap: |
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y -qq --no-install-recommends python3.10 python3-pip libdrm2 libnuma1 libgomp1 ca-certificates tzdata >/dev/null
+python: /venv/bin/python
+pythonPath: /app/src
+
+airm:
+  kvTransport: shm
+  metricsPort: 9400
+
+model: meta-llama/Llama-3.1-8B-Instruct
+seqLen: 512
+
+env:
+  PYTHONPATH: /app/src:/path/to/user/site-packages:/host-sys-local-pkgs:/host-sys-pkgs
+  LD_LIBRARY_PATH: /host-rbln-lib:/host-libs
+  PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/host-rbln-bin
+  HF_HOME: /hf
+  PD_PREFETCH: "1"
+  RNGD_MAX_SHAPES: "8"
+  PD_KV_PULL_TIMEOUT: "120"
+  RNGD_BUCKETS: 32,64,128,256
+
+hostMounts:
+  - {name: local-pkgs, hostPath: /path/to/user/site-packages, mountPath: /path/to/user/site-packages, readOnly: true}
+  - {name: sys-local-pkgs, hostPath: /usr/local/lib/python3.10/dist-packages, mountPath: /host-sys-local-pkgs, readOnly: true}
+  - {name: sys-pkgs, hostPath: /usr/lib/python3/dist-packages, mountPath: /host-sys-pkgs, readOnly: true}
+  - {name: libs, hostPath: /usr/lib/x86_64-linux-gnu, mountPath: /host-libs, readOnly: true}
+  - {name: rbln-lib, hostPath: /usr/lib, mountPath: /host-rbln-lib, readOnly: true}
+  - {name: rbln-bin, hostPath: /usr/bin, mountPath: /host-rbln-bin, readOnly: true}
+  - {name: app, hostPath: /path/to/rngd-pd, mountPath: /app, readOnly: true}
+  - {name: hf, hostPath: /path/to/huggingface-cache, mountPath: /hf}
+  - {name: venv, hostPath: /path/to/furiosa-venv, mountPath: /venv, readOnly: true}
+  - {name: devrngd, hostPath: /dev/rngd, mountPath: /dev/rngd}
+
+# Placement from the L1 labels: the node that publishes both RNGD and ATOM (hetero PD node).
+nodeAffinity:
+  requiredDuringSchedulingIgnoredDuringExecution:
+    nodeSelectorTerms:
+      - matchExpressions:
+          - {key: airm.ai-computing.io/furiosa.RNGD, operator: Exists}
+          - {key: airm.ai-computing.io/rebellions.ATOM, operator: Exists}
+
+prefill:
+  backend: rngd-full
+  # --chip -1 picks the first visible card, and a privileged pod with /dev/rngd sees every card,
+  # so pin the cards as the proven sweeps did (prefill 0, decode 1).
+  args: ["--C", "512", "--group", "2", "--chip", "0"]
+  privileged: true
+
+decode:
+  backend: rngd
+  args: ["--chip", "1"]
+  acceleratorLabel: airm.ai-computing.io/furiosa.RNGD
+  privileged: true
+  # Helm merges maps: null removes the chart's default ATOM request for an RNGD decode.
+  resources:
+    limits: {furiosa.ai/rngd: "1", rebellions.ai/ATOM: null}
+    requests: {cpu: "8", memory: 96Gi, furiosa.ai/rngd: "1", rebellions.ai/ATOM: null}
+
+gateway:
+  appLabel: llama8b-pd
+  resources:
+    requests: {cpu: "2", memory: 4Gi}
