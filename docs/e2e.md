@@ -73,6 +73,21 @@ figure does not show. Bursts push the server's TTFT p90 up to 1.5 s within the r
 | L3↔L5 | The PD gateway serves only non-streaming `/v1/completions`; rm-bench sent streaming chat | rm-bench `--api completions`, TTFT from the server's reported timing |
 | L4↔L5 | hetero-llm-d documents `airm-placement` as one `decisions.json` list; lmd-top read one key per workload and looked in namespace `llm-d` | lmd-top reads both layouts; `LMD_AIRM_NS` follows `LMD_NS` |
 
+## Measuring the next runs (benchmark surface and energy)
+
+rm-bench now covers what the next runs need beyond this smoke test
+([packages/rm-bench](../packages/rm-bench/README.md#-energy-standard-benchmarks-and-baselines)):
+
+- **Streaming chat on the PD path.** `--api chat` times TTFT, TPOT and ITL from the SSE chunks (usage chunk,
+  `[DONE]`, non-streaming fallback). It replaces `--api completions` on the PD path once the engine serves streaming chat
+  (aicomp#41); until then client TTFT there is derived from server timing.
+- **Energy in every run.** `--power prom` (DCGM or an NPU exporter query) or `--power cmd` (a CLI such as furiosa-smi
+  printing watts) adds `power_w`/`energy_j` with `scope`, peak W and tok/J to each run. Not yet exercised on the cluster.
+- **Standard benchmarks.** `rm-bench import guidellm|mlperf` brings GuideLLM sweeps and MLPerf LoadGen (llama3.1-8b
+  Server) results into the same Measurements, so they land in the same tables.
+- **Baselines.** `rm-bench compare` builds one table of SLO attainment, goodput per card and tok/J across runs labeled
+  by `--deployment` (same-vendor PD, vendor PD, replication).
+
 ## Open items
 
 - **Placement is manual.** No controller writes `airm-placement`; this run records the deployed placement

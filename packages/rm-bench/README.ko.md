@@ -20,6 +20,7 @@
   <a href="#-빠른-시작"><b>빠른 시작</b></a> ·
   <a href="#-end-to-end-시나리오"><b>시나리오</b></a> ·
   <a href="#-실제-트레이스"><b>실제 트레이스</b></a> ·
+  <a href="#-에너지-표준-벤치마크-기준선-비교"><b>에너지·기준선</b></a> ·
   <a href="#-ai-rm-연동"><b>ai-rm 연동</b></a> ·
   <a href="#-결과-형식"><b>결과 형식</b></a>
 </p>
@@ -68,6 +69,7 @@ python -m pytest -q packages/rm-bench/tests   # 가짜 OpenAI 호환 서버, 클
 
 ```bash
 rm-bench e2e --scenario pd-smoke [--gateway URL] [--model M] [--out results/<run>.json] [--kv-transport NAME] [--api chat|completions]
+         [--deployment LABEL] [--cards N] [--power prom|cmd|none ...]
 ```
 
 - **시나리오 위치:** `scenarios/<name>.yaml`, `.yaml` 경로, 또는 `$RM_BENCH_SCENARIOS` 디렉터리. 이름으로 찾을 때는
@@ -85,7 +87,11 @@ rm-bench e2e --scenario pd-smoke [--gateway URL] [--model M] [--out results/<run
 - **열린 루프:** 요청은 시나리오의 도착 시각에 맞춰 나가고 TTFT·E2E는 **예정 도착 시각부터** 잽니다. 그래서 클라이언트의
   `concurrency` 한도 때문에 기다린 시간도 사용자가 겪는 지연에 들어갑니다. `duration_s`가 지나면 새 요청을 내지 않고, 대기열에
   남은 요청은 실패(미처리)로 셉니다. `timeout_s`는 요청 하나의 전체 시간 한도입니다.
-- **TPOT**은 `(e2e − TTFT) / (출력 토큰 − 1)`이고, 출력 토큰 수는 서버의 `usage`(없으면 content chunk 수)입니다.
+- **스트리밍 chat**(`--api chat`, 기본)은 SSE chunk로 잽니다. TTFT는 생성 텍스트(`content`, 추론 모델의 `reasoning_content`)가 든 첫
+  chunk, ITL은 텍스트 chunk 사이 간격(p50/p90/p99는 실행 기록에), TPOT은 `(마지막 토큰 − TTFT) / (출력 토큰 − 1)`이라 마지막 토큰 뒤의
+  `usage` chunk와 `[DONE]`은 decode 시간에 들어가지 않습니다. 출력 토큰 수는 마지막 `usage` chunk(없으면 텍스트 chunk 수)입니다.
+  `[DONE]`으로 끝나거나 `finish_reason` 뒤 정상 종료되면 성공이고, `stream`을 무시하고 JSON 하나로 답하는 서버는 `--api completions`처럼
+  잽니다. 연결 종료로 끝나는 스트림도 버퍼가 찰 때까지 기다리지 않고 도착하는 대로 읽습니다.
 - **`--api completions`**(또는 시나리오 `api: completions`)는 스트리밍 없이 `/v1/completions`만 있는 서버용입니다. 첫 토큰을 볼 수
   없으므로 응답에 서버 측 시간(`pd.ttft_ms`, `pd.wall_ms`, rngd-pd 게이트웨이가 보냄)이 있으면 TTFT = (e2e − wall_ms) + ttft_ms,
   없으면 TTFT = e2e(상한)입니다. `--gateway`에 `/completions`로 끝나는 전체 URL을 주면 그대로 씁니다(접두사를 `/v1`로 바꾸는
@@ -94,6 +100,37 @@ rm-bench e2e --scenario pd-smoke [--gateway URL] [--model M] [--out results/<run
 - `loadgen/` 도구들은 기존 정의(TPOT을 출력 chunk 수로 나눔, 토큰 = chunk)를 그대로 둡니다. 한 chunk에 여러 토큰을 보내는 서버에서는
   `tpot_*`/`tok_s`가 `rm-bench e2e`와 다르므로, 비교와 KPI에는 `rm-bench e2e` 값을 쓰세요.
 </details>
+
+## 🔋 에너지, 표준 벤치마크, 기준선 비교
+
+```bash
+# 실행 중 전력 샘플링 -> power_w, energy_j, tok/J (W7 근거)
+rm-bench e2e --scenario pd-smoke --deployment same-vendor-pd --cards 2 \
+  --power prom --power-url http://<prometheus> --power-query 'sum(DCGM_FI_DEV_POWER_USAGE)'
+rm-bench e2e --scenario pd-smoke --power cmd --power-cmd 'furiosa-smi info' --power-regex '(\d+(?:\.\d+)?)\s*W\b'
+# GuideLLM sweep과 MLPerf LoadGen 결과를 같은 형식으로
+rm-bench import guidellm benchmarks.json --deployment vendor-pd --cards 2 --slo ttft_p90_ms=2000
+rm-bench import mlperf mlperf_log_summary.txt --model meta-llama/Llama-3.1-8B-Instruct --deployment replication
+# 하나의 markdown 표: SLO 달성률, 카드당 goodput, tok/J
+rm-bench compare results/*.json [LABEL=results/x.json ...] --out compare.md
+```
+
+- **전력** (`--power prom|cmd|none`, 기본 `none`): 요청이 도는 동안 `--power-interval`초(기본 1)마다 샘플링합니다. `prom`은 instant
+  query 결과 벡터의 합(기본 `sum(DCGM_FI_DEV_POWER_USAGE)`, `--power-url` 또는 `$PROMETHEUS_URL`, NPU는 쓰는 exporter의 query를
+  지정)입니다. `cmd`는 와트를 출력하는 아무 CLI나 실행해 `--power-regex`(첫 그룹)에 맞는 값을 모두 더합니다. 상한(cap) 열이 아니라
+  소비 전력 열만 맞추세요. 평균 전력은 샘플의 시간 가중 평균, 에너지 = 평균 × 실행 시간, tok/J = 출력 토큰 / 에너지입니다.
+  `power_w`, `energy_j`를 `scope=card|node`(`--power-scope`, 기본 `card`)로 기록하고, 최대 W와 tok/J는 실행 기록에 남깁니다. 읽기
+  실패는 샘플 하나만 잃고 실행은 계속됩니다.
+- **`--deployment LABEL`**은 배치 형태 이름(예: `same-vendor-pd`, `vendor-pd`, `replication`), **`--cards N`**은 `accelerators`를
+  기록하고 카드당 goodput에 씁니다.
+- **가져오기.** `guidellm`: GuideLLM JSON 보고서(`benchmarks.json`, GuideLLM 0.8 스키마, 예전 `run_stats`/`median` 형태도). sweep의
+  benchmark마다 실행 하나가 되고 TTFT/TPOT p50/p90/p99, `e2e_p90_ms`, tok/s(측정 구간의 출력 토큰), req/s, 그리고 GuideLLM에 목표가
+  있었으면 `slo_attainment`/`request_goodput`을 씁니다. `mlperf`: LoadGen의 `mlperf_log_summary.txt` 또는 `mlperf_log_detail.txt`
+  (LLM Server/Offline). 첫 토큰·출력 토큰당 시간 백분위, 초당 완료 토큰/샘플, 그리고 `Result is : VALID`와 Server의 TTFT/TPOT p99
+  제약으로 판정합니다. LoadGen은 요청별 SLO 비율을 내지 않으므로 MLPerf 실행에는 `slo_attainment_pct`가 없습니다.
+  `--slo KEY=VALUE`를 주면 백분위로 SLO를 판정합니다.
+- **비교**는 run_id마다 한 행: SLO 달성률과 판정, TTFT/TPOT p90, tok/s, goodput(초당 SLO 만족 요청, 없으면 req/s × 달성률), 카드당
+  goodput, 평균(최대) W, tok/J(없으면 tok_s / power_w). 라벨은 `LABEL=`, 없으면 실행의 deployment, 없으면 파일 이름입니다.
 
 ## 📈 실제 트레이스
 
@@ -145,6 +182,8 @@ result.passed, result.measurements
 | `gateway` | 아니오 | 게이트웨이 base URL. 기본 `$LLMD_GATEWAY_URL` |
 | `out` | 아니오 | Measurement JSON 경로. 기본 `results/<run_id>.json`, `None`이면 저장 안 함 |
 | `kv_transport` | 아니오 | 시험 대상 서빙 경로의 KV transport 이름. `kv_transport` 태그로만 기록(rm-bench는 KV를 옮기지 않음) |
+| `power` | 아니오 | `rm_bench.power.make_sampler(...)`로 만든 sampler. 실행 중 샘플링 |
+| `deployment`, `cards` | 아니오 | `rm-bench compare`용 배치 라벨과 가속기 수 |
 
 ```bash
 python -m pytest -q tests     # packages/rm-bench에서
@@ -161,6 +200,10 @@ rm-core protocol v0.1의 지표 이름·태그만 쓰고, 저장 전에 항목�
   "tags": {"component": "rm-bench", "model": "...", "workload": "pd-smoke", "run_id": "pd-smoke-20261019T001448Z-0c86f2"}}]
 ```
 
+옆의 `<name>.meta.json`은 rm-core 지표에 없는 내용을 담는 실행 기록입니다: deployment, cards, SLO 판정 내역, goodput, ITL 백분위,
+전력(`power_w`, `power_peak_w`, `energy_j`, `tok_per_j`, `scope`, `source`, `samples`). `rm-bench compare`는 둘 다 읽고, 기록이 없는
+파일(예: `loadgen/` 출력)도 비교할 수 있습니다.
+
 이 도구로 실측한 결과: ai-rm [end-to-end 실행](../../docs/ko/e2e.md).
 
 <details>
@@ -169,7 +212,7 @@ rm-core protocol v0.1의 지표 이름·태그만 쓰고, 저장 전에 항목�
 
 | 경로 | 내용 |
 |---|---|
-| `rm_bench/` | `rm-bench e2e` 실행기, Measurement 출력, 트레이스 reader, ai-rm adapter(`rm_bench/airm.py`) |
+| `rm_bench/` | `rm-bench e2e` 실행기, Measurement 출력, 트레이스 reader, ai-rm adapter(`rm_bench/airm.py`), 전력 sampler(`power.py`), GuideLLM/MLPerf 가져오기(`imports.py`), 비교 표(`compare.py`) |
 | `scenarios/` | e2e 시나리오 (`pd-smoke.yaml`, `trace-*.yaml`) |
 | `loadgen/replay_vllm_azure2024.py` | Azure LLM inference trace 재생기 (QPS, 지연, 실시간 터미널 대시보드) |
 | `loadgen/synthetic_load_llm.py` | 합성 부하 생성기 |

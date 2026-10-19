@@ -51,15 +51,93 @@ def make_prompt(num_tokens: int) -> str:
     return " ".join(["word"] * max(1, int(num_tokens)))
 
 
+def _sse_lines(resp):
+    """Lines of an event stream as they arrive.
+
+    `iter_lines` is fine for chunked responses (urllib3 yields per HTTP chunk), but on a
+    close-delimited or Content-Length stream it blocks until its read size fills, which would push
+    TTFT late. There `read1` returns whatever the socket has.
+    """
+    raw = resp.raw
+    if getattr(raw, "chunked", False) or not hasattr(raw, "read1"):
+        for line in resp.iter_lines():
+            yield line.decode("utf-8", "replace") if isinstance(line, bytes) else line
+        return
+    buf = b""
+    while True:
+        data = raw.read1(65536)
+        if not data:
+            break
+        buf += data
+        *lines, buf = buf.split(b"\n")
+        for line in lines:
+            yield line.rstrip(b"\r").decode("utf-8", "replace")
+    if buf:
+        yield buf.decode("utf-8", "replace")
+
+
+def _chunk_text(choice) -> str:
+    """Generated text in one streamed choice: `delta.content`, a reasoning model's
+    `delta.reasoning_content`/`reasoning`, or `text` (completions-style chunks)."""
+    if not isinstance(choice, dict):
+        return ""
+    delta = choice.get("delta")
+    if isinstance(delta, dict):
+        for key in ("content", "reasoning_content", "reasoning"):
+            if isinstance(delta.get(key), str) and delta[key]:
+                return delta[key]
+    return choice["text"] if isinstance(choice.get("text"), str) else ""
+
+
+def _record(ttft_ms: float | None, last_ms: float | None, e2e_ms: float,
+            out_tokens: int, token_times: list[float]) -> RequestRecord:
+    """A successful request's record. TPOT spans first to last token over the tokens between them,
+    so time spent after the last token (the usage chunk, `[DONE]`, connection close) is not decode."""
+    tpot_ms = None
+    if out_tokens > 1 and ttft_ms is not None:
+        end_ms = last_ms if last_ms is not None and last_ms > ttft_ms else e2e_ms
+        tpot_ms = max(0.0, (end_ms - ttft_ms) / (out_tokens - 1))
+    itl = tuple(b - a for a, b in zip(token_times, token_times[1:]))
+    return RequestRecord(ok=True, e2e_ms=e2e_ms, ttft_ms=ttft_ms, tpot_ms=tpot_ms, out_tokens=out_tokens,
+                         itl_ms=itl)
+
+
+def _from_json_body(obj, e2e_ms: float) -> RequestRecord:
+    """A server that answered a stream request with one JSON body (chat or completions shape).
+    The first token is not visible: use server timing `pd.ttft_ms`/`pd.wall_ms` if present, else
+    TTFT = e2e (an upper bound), as `complete` does."""
+    choices = obj.get("choices") if isinstance(obj, dict) else None
+    first = choices[0] if choices and isinstance(choices[0], dict) else {}
+    msg = first.get("message") if isinstance(first.get("message"), dict) else {}
+    text = msg.get("content") if isinstance(msg.get("content"), str) else first.get("text")
+    if not isinstance(text, str):
+        return RequestRecord(ok=False, e2e_ms=e2e_ms)
+    usage = obj.get("usage") if isinstance(obj.get("usage"), dict) else {}
+    out_tokens = usage.get("completion_tokens")
+    if not isinstance(out_tokens, int):
+        out_tokens = max(1, len(text.split()))
+    pd = obj.get("pd") if isinstance(obj.get("pd"), dict) else {}
+    server_ttft, server_wall = pd.get("ttft_ms"), pd.get("wall_ms")
+    if isinstance(server_ttft, (int, float)) and isinstance(server_wall, (int, float)):
+        ttft_ms = min(e2e_ms, max(0.0, e2e_ms - server_wall) + server_ttft)
+    else:
+        ttft_ms = e2e_ms
+    tpot_ms = max(0.0, (e2e_ms - ttft_ms) / (out_tokens - 1)) if out_tokens > 1 else None
+    return RequestRecord(ok=True, e2e_ms=e2e_ms, ttft_ms=ttft_ms, tpot_ms=tpot_ms, out_tokens=out_tokens)
+
+
 def stream_chat(url: str, model: str, prompt_tokens: int, max_tokens: int, timeout_s: float,
                 scheduled_at: float | None = None, prompt: str | None = None) -> RequestRecord:
-    """Send one streaming request; TTFT is the first non-empty content chunk.
+    """Send one streaming chat request and time it from the SSE chunks.
 
-    TTFT and e2e are measured from `scheduled_at` (a `time.perf_counter()` value) when given, so
-    time spent queued behind the client's concurrency limit counts, as it would for a user.
-    `timeout_s` bounds the whole request. A request counts as ok only if it streams content and
-    ends with `[DONE]`. Output tokens come from the final `usage` chunk when the server sends one,
-    otherwise from the number of content chunks. TPOT = (e2e - ttft) / (out_tokens - 1).
+    TTFT is the first chunk carrying generated text; ITL the gaps between text chunks; TPOT
+    (last text chunk - first) / (out_tokens - 1). Output tokens come from the last `usage` chunk
+    (vLLM sends it with empty `choices` before `[DONE]`), else the number of text chunks. TTFT and
+    e2e count from `scheduled_at` (a `time.perf_counter()` value) when given, so time queued behind
+    the client's concurrency limit counts, as it would for a user. `timeout_s` bounds the whole
+    request. The request is ok when it streamed text and ended with `[DONE]`, or, for servers that
+    omit `[DONE]`, a `finish_reason` and a clean close. A server that ignores `stream` and answers
+    with one JSON body is handled like `complete` (TTFT not visible).
     """
     payload = {
         "model": model,
@@ -70,47 +148,53 @@ def stream_chat(url: str, model: str, prompt_tokens: int, max_tokens: int, timeo
     }
     t0 = time.perf_counter() if scheduled_at is None else scheduled_at
     deadline = time.perf_counter() + timeout_s
-    ttft_ms: float | None = None
-    chunks = 0
+    token_times: list[float] = []
     usage_tokens: int | None = None
-    ok = False
+    done = finished = timed_out = False
+    done_ms: float | None = None
     try:
         with requests.post(url, headers=headers(), json=payload, stream=True, timeout=timeout_s) as resp:
-            if resp.status_code < 400:
-                for raw in resp.iter_lines(decode_unicode=True):
-                    if time.perf_counter() > deadline:
-                        break
-                    line = (raw or "").strip()
-                    if not line.startswith("data:"):
-                        continue
-                    data = line[5:].strip()
-                    if data == "[DONE]":
-                        ok = True
-                        break
-                    try:
-                        obj = json.loads(data)
-                    except ValueError:
-                        continue
-                    if not isinstance(obj, dict):
-                        continue
-                    usage = obj.get("usage")
-                    if isinstance(usage, dict) and isinstance(usage.get("completion_tokens"), int):
-                        usage_tokens = usage["completion_tokens"]
-                    for choice in obj.get("choices") or []:
-                        delta = choice.get("delta") if isinstance(choice, dict) else None
-                        if isinstance(delta, dict) and delta.get("content"):
-                            chunks += 1
-                            if ttft_ms is None:
-                                ttft_ms = (time.perf_counter() - t0) * 1000.0
+            if resp.status_code >= 400:
+                return RequestRecord(ok=False, e2e_ms=(time.perf_counter() - t0) * 1000.0)
+            if resp.headers.get("Content-Type", "").split(";")[0].strip() == "application/json":
+                obj = resp.json()
+                return _from_json_body(obj, (time.perf_counter() - t0) * 1000.0)
+            for line in _sse_lines(resp):
+                if time.perf_counter() > deadline:
+                    timed_out = not done
+                    break
+                if done:
+                    continue          # drain to the end so the connection can be reused
+                line = (line or "").strip()
+                if not line.startswith("data:"):
+                    continue          # comments (": keepalive"), event:/id: fields, blank separators
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    done = True
+                    done_ms = (time.perf_counter() - t0) * 1000.0
+                    continue
+                try:
+                    obj = json.loads(data)
+                except ValueError:
+                    continue
+                if not isinstance(obj, dict):
+                    continue
+                usage = obj.get("usage")
+                if isinstance(usage, dict) and isinstance(usage.get("completion_tokens"), int):
+                    usage_tokens = usage["completion_tokens"]
+                for choice in obj.get("choices") or []:
+                    if _chunk_text(choice):
+                        token_times.append((time.perf_counter() - t0) * 1000.0)
+                    if isinstance(choice, dict) and choice.get("finish_reason"):
+                        finished = True
     except Exception:  # noqa: BLE001 -- any transport/protocol error fails the request, not the run
-        ok = False
-    e2e_ms = (time.perf_counter() - t0) * 1000.0
-    out_tokens = usage_tokens if usage_tokens is not None else chunks
-    ok = ok and ttft_ms is not None
-    tpot_ms = None
-    if ok and out_tokens > 1:
-        tpot_ms = max(0.0, (e2e_ms - ttft_ms) / (out_tokens - 1))
-    return RequestRecord(ok=ok, e2e_ms=e2e_ms, ttft_ms=ttft_ms, tpot_ms=tpot_ms, out_tokens=out_tokens if ok else 0)
+        if not done:   # an error while draining after [DONE] does not undo a complete answer
+            return RequestRecord(ok=False, e2e_ms=(time.perf_counter() - t0) * 1000.0)
+    e2e_ms = done_ms if done_ms is not None else (time.perf_counter() - t0) * 1000.0
+    if not token_times or timed_out or not (done or finished):
+        return RequestRecord(ok=False, e2e_ms=e2e_ms)
+    out_tokens = usage_tokens if usage_tokens is not None else len(token_times)
+    return _record(token_times[0], token_times[-1], e2e_ms, out_tokens, token_times)
 
 
 def complete(url: str, model: str, prompt_tokens: int, max_tokens: int, timeout_s: float,
@@ -133,20 +217,4 @@ def complete(url: str, model: str, prompt_tokens: int, max_tokens: int, timeout_
             obj = resp.json()
     except Exception:  # noqa: BLE001 -- any transport/protocol error fails the request, not the run
         obj = None
-    e2e_ms = (time.perf_counter() - t0) * 1000.0
-    choices = obj.get("choices") if isinstance(obj, dict) else None
-    ok = bool(choices) and isinstance(choices[0], dict) and isinstance(choices[0].get("text"), str)
-    if not ok:
-        return RequestRecord(ok=False, e2e_ms=e2e_ms)
-    usage = obj.get("usage") if isinstance(obj.get("usage"), dict) else {}
-    out_tokens = usage.get("completion_tokens")
-    if not isinstance(out_tokens, int):
-        out_tokens = max(1, len(choices[0]["text"].split()))
-    pd = obj.get("pd") if isinstance(obj.get("pd"), dict) else {}
-    server_ttft, server_wall = pd.get("ttft_ms"), pd.get("wall_ms")
-    if isinstance(server_ttft, (int, float)) and isinstance(server_wall, (int, float)):
-        ttft_ms = min(e2e_ms, max(0.0, e2e_ms - server_wall) + server_ttft)
-    else:
-        ttft_ms = e2e_ms
-    tpot_ms = max(0.0, (e2e_ms - ttft_ms) / (out_tokens - 1)) if out_tokens > 1 else None
-    return RequestRecord(ok=True, e2e_ms=e2e_ms, ttft_ms=ttft_ms, tpot_ms=tpot_ms, out_tokens=out_tokens)
+    return _from_json_body(obj, (time.perf_counter() - t0) * 1000.0)

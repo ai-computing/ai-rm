@@ -1,6 +1,9 @@
 """rm-bench command line.
 
     rm-bench e2e --gateway $LLMD_GATEWAY_URL --scenario pd-smoke [--model M] [--out results/<run>.json]
+                 [--deployment LABEL] [--cards N] [--power prom|cmd|none ...]
+    rm-bench import guidellm|mlperf FILE [--out results/<name>.json] [--slo KEY=VALUE ...]
+    rm-bench compare [LABEL=]RESULT.json ... [--out table.md]
     rm-bench traces fetch [NAME ...] [--dest DIR]       download real traces into $RM_BENCH_TRACES
     rm-bench traces stats SCENARIO|PATH [--limits ...]  rate, burstiness, lengths, prefix reuse, fit
 
@@ -15,9 +18,11 @@ import sys
 
 import requests
 import yaml
+from rm_core.workload import SLO_KEYS
 
-from . import e2e, traces
-from .results import to_json, write_measurements
+from . import compare, e2e, power, traces
+from .imports import IMPORTERS
+from .results import to_json, write_run
 from .scenario import load_scenario
 
 
@@ -28,6 +33,14 @@ def _print_result(res: e2e.E2EResult, out: str) -> None:
         measured = "n/a" if c["measured"] is None else f"{c['measured']:.2f}"
         print(f"  {'PASS' if c['ok'] else 'FAIL'}  {key}: measured={measured} target={c['target']}")
     print(json.dumps(to_json(res.measurements), indent=2))
+    rec = res.record
+    if "itl_p90_ms" in rec:
+        print(f"  ITL p50/p90/p99 ms: {rec['itl_p50_ms']:.1f} / {rec['itl_p90_ms']:.1f} / {rec['itl_p99_ms']:.1f}")
+    pw = rec.get("power")
+    if pw:
+        tpj = "n/a" if pw["tok_per_j"] is None else f"{pw['tok_per_j']:.3f}"
+        print(f"  power ({pw['source']}, scope={pw['scope']}, {pw['samples']} samples): "
+              f"mean {pw['power_w']:.1f} W, peak {pw['power_peak_w']:.1f} W, {pw['energy_j']:.0f} J, {tpj} tok/J")
     print(f"SLO {'PASS' if res.passed else 'FAIL'}  -> {out}")
 
 
@@ -59,13 +72,53 @@ def cmd_e2e(args) -> int:
         return 2
     scenario = load_scenario(args.scenario)
     _apply_trace_overrides(scenario, args)
+    sampler = power.make_sampler(args.power, url=args.power_url or os.environ.get("PROMETHEUS_URL"),
+                                 query=args.power_query, command=args.power_cmd, regex=args.power_regex,
+                                 interval_s=args.power_interval, scope=args.power_scope)
     run_id = e2e.new_run_id(scenario.name)
     res = e2e.run(scenario, gateway, args.model, run_id=run_id, kv_transport=args.kv_transport,
-                  api=args.api)
+                  api=args.api, power=sampler, deployment=args.deployment, cards=args.cards)
     out = args.out or os.path.join("results", f"{run_id}.json")
-    write_measurements(out, res.measurements)
+    write_run(out, res.measurements, {run_id: res.record})
     _print_result(res, out)
     return 0 if res.passed else 1
+
+
+def _parse_slo(items: list[str] | None) -> dict[str, float]:
+    slo = {}
+    for item in items or []:
+        key, sep, value = item.partition("=")
+        if not sep:
+            raise ValueError(f"--slo expects KEY=VALUE, got {item!r}")
+        slo[key.strip()] = float(value)
+    unknown = set(slo) - set(SLO_KEYS)
+    if unknown:
+        raise ValueError(f"unknown SLO keys {sorted(unknown)}; allowed {SLO_KEYS}")
+    return slo
+
+
+def cmd_import(args) -> int:
+    measurements, runs = IMPORTERS[args.format](args.file, model=args.model, deployment=args.deployment,
+                                                cards=args.cards, slo=_parse_slo(args.slo))
+    stem = os.path.splitext(os.path.basename(args.file))[0]
+    out = args.out or os.path.join("results", f"{args.format}-{stem}.json")
+    write_run(out, measurements, runs)
+    for run_id, rec in runs.items():
+        verdict = {True: "PASS", False: "FAIL"}.get(rec.get("passed"), "not judged")
+        print(f"{run_id}: {verdict}")
+        for key, c in (rec.get("checks") or {}).items():
+            print(f"  {'PASS' if c['ok'] else 'FAIL'}  {key}: measured={c['measured']} target={c['target']}")
+    print(f"{len(measurements)} measurements, {len(runs)} run(s) -> {out}")
+    return 0
+
+
+def cmd_compare(args) -> int:
+    text = compare.table(compare.load_rows(args.results))
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as f:
+            f.write(text)
+    print(text, end="")
+    return 0
 
 
 def cmd_traces_fetch(args) -> int:
@@ -114,6 +167,20 @@ def _add_window_args(p) -> None:
     p.add_argument("--policy", choices=traces.POLICIES, default=None, help="over-limit requests: skip | clip")
 
 
+def _add_power_args(p) -> None:
+    p.add_argument("--power", choices=power.SOURCES, default="none",
+                   help="sample power during the run: prom (Prometheus query) | cmd (command output) | none")
+    p.add_argument("--power-url", default=None, help="Prometheus base URL (default: $PROMETHEUS_URL)")
+    p.add_argument("--power-query", default=None,
+                   help=f"PromQL returning watts, summed (default: {power.DEFAULT_PROM_QUERY})")
+    p.add_argument("--power-cmd", default=None, help="command printing watts (e.g. furiosa-smi info)")
+    p.add_argument("--power-regex", default=None,
+                   help=f"regex for the watts in --power-cmd output, matches summed (default: {power.DEFAULT_REGEX})")
+    p.add_argument("--power-interval", type=float, default=1.0, help="sampling interval in seconds")
+    p.add_argument("--power-scope", choices=power.SCOPES, default="card",
+                   help="what the source measures: card (accelerators) or node (whole node)")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="rm-bench")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -125,8 +192,28 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--kv-transport", default=None, help="KV transport name under test, recorded as a tag")
     p.add_argument("--api", choices=("chat", "completions"), default=None,
                    help="request API (default: the scenario's api, else chat)")
+    p.add_argument("--deployment", default=None,
+                   help="deployment label for compare (e.g. same-vendor-pd, vendor-pd, replication)")
+    p.add_argument("--cards", type=int, default=None, help="accelerators serving the run (per-card goodput)")
+    _add_power_args(p)
     _add_window_args(p)
     p.set_defaults(func=cmd_e2e)
+
+    im = sub.add_parser("import", help="convert a GuideLLM report or MLPerf LoadGen log to rm-bench results")
+    im.add_argument("format", choices=sorted(IMPORTERS))
+    im.add_argument("file", help="GuideLLM benchmarks.json, or mlperf_log_summary.txt / mlperf_log_detail.txt")
+    im.add_argument("--out", default=None, help="Measurement JSON path (default: results/<format>-<name>.json)")
+    im.add_argument("--model", default=None, help="model tag (default: from the report when it has one)")
+    im.add_argument("--deployment", default=None, help="deployment label for compare")
+    im.add_argument("--cards", type=int, default=None, help="accelerators serving the run")
+    im.add_argument("--slo", action="append", metavar="KEY=VALUE",
+                    help="judge against an SLO bound (rm_core SLO_KEYS), repeatable")
+    im.set_defaults(func=cmd_import)
+
+    c = sub.add_parser("compare", help="markdown table of SLO attainment, goodput per card and tok/J")
+    c.add_argument("results", nargs="+", help="result .json files, optionally LABEL=path")
+    c.add_argument("--out", default=None, help="also write the table to this file")
+    c.set_defaults(func=cmd_compare)
 
     t = sub.add_parser("traces", help="real request traces: download and inspect")
     tsub = t.add_subparsers(dest="traces_cmd", required=True)
