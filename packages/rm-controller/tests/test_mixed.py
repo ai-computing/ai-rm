@@ -32,7 +32,8 @@ def test_single_type_is_the_old_estimate_bit_for_bit():
 def test_mixed_estimate_weights_follow_slo_feasible_capacity():
     e = estimate_mixed([(A100, 1), (RNGD, 2)], [(A100, 1)], kv90(), CONV, SLO)
     w = dict(e.prefill_weights)
-    assert sum(w.values()) == pytest.approx(1.0, abs=1e-3) and w["nvidia.A100"] > w["furiosa.RNGD"] > 0
+    # two RNGD instances (measured) now take most of the traffic; per instance the A100 still takes more
+    assert sum(w.values()) == pytest.approx(1.0, abs=1e-3) and w["nvidia.A100"] > w["furiosa.RNGD"] / 2 > 0
     assert e.decode_weights == (("nvidia.A100", 1.0),)
     assert e.ttft_p90_ms <= SLO["ttft_p90_ms"] + 1e-6
     alone = estimate(A100, 1, A100, 1, kv90(), CONV, SLO)
@@ -85,23 +86,34 @@ def test_search_matches_brute_force_over_all_type_count_vectors():
     assert o.last_plan.estimate.goodput_rps == pytest.approx(best, rel=1e-6)
 
 
-def test_per_card_objective_is_unchanged_by_mixed_roles():
-    for cards in list(baselines.CARD_SETS.values()) + list(sim.CARD_SETS.values()):
+def test_per_card_objective_with_mixed_roles_is_never_worse():
+    # Unchanged wherever one type per role is best; on the mixed node the measured RNGD prefill now joins A100
+    # prefill and raises goodput per card, so there the layouts may differ but never lose per card.
+    for name, cards in list(baselines.CARD_SETS.items()) + list(sim.CARD_SETS.items()):
         for trace in ("azure-conv", "azure-code", "burstgpt"):
             m, slo = mix.from_trace(trace), mix.trace_slo(trace)
-            got = []
+            got, per_card = [], []
             for mixed in (True, False):
                 o = OptimalPlacement(profiles=PERF, mix=m.with_rate(None), mixed_roles=mixed)
-                got.append([x.accelerator_ids for x in o.place_pd(Workload(kind="prefill", model="m", slo=slo),
-                                                                  Workload(kind="decode", model="m", slo=slo),
-                                                                  cards, kv_transport="auto")])
-            assert got[0] == got[1]
+                ids = [x.accelerator_ids for x in o.place_pd(Workload(kind="prefill", model="m", slo=slo),
+                                                             Workload(kind="decode", model="m", slo=slo),
+                                                             cards, kv_transport="auto")]
+                got.append(ids)
+                per_card.append(o.last_plan.estimate.goodput_rps / len(ids[0] + ids[1]))
+            assert per_card[0] >= per_card[1] * (1 - 1e-9)
+            if not name.startswith("Mixed"):
+                assert got[0] == got[1]
 
 
 def test_every_prefill_decode_type_pair_needs_the_link():
     o, _ = solve(kv_transport="cuda-ipc")           # A100->A100 only: no type to mix in
     assert not o.last_plan.mixed and o.last_plan.kinds == ["nvidia.A100", "nvidia.A100"]
-    o, _ = solve(kv_transport="p2p")                # RNGD->ATOM only
+    # measured ATOM decode (108 ms/token, 4 x 512 tokens of KV) needs a looser TPOT and S=512-sized requests
+    loose = {"ttft_p90_ms": 2000, "tpot_p90_ms": 200}
+    short = mix.from_spec({"mean_input_tokens": 300, "mean_output_tokens": 100})
+    o = OptimalPlacement(profiles=PERF, mix=short, objective="goodput")
+    o.place_pd(Workload(kind="prefill", model="m", slo=loose), Workload(kind="decode", model="m", slo=loose), MIXED,
+               kv_transport="p2p")                    # RNGD->ATOM only
     assert o.last_plan.prefill_kind == "furiosa.RNGD" and o.last_plan.decode_kind == "rebellions.ATOM"
 
 

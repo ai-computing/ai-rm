@@ -75,6 +75,8 @@ figure does not show. Bursts push the server's TTFT p90 up to 1.5 s within the r
 
 ## Measuring the next runs (benchmark surface and energy)
 
+The first runs with it, controller-applied placement and same-budget baselines with energy: [baselines](baselines.md).
+
 rm-bench now covers what the next runs need beyond this smoke test
 ([packages/rm-bench](../packages/rm-bench/README.md#-energy-standard-benchmarks-and-baselines)):
 

@@ -1,6 +1,8 @@
 """Simulator: arrivals, the serving model, and topology vs optimal on the reference card set."""
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from rm_controller import mix, profiles, sim
@@ -19,8 +21,9 @@ def test_arrivals_keep_the_mean_rate_and_are_reproducible():
 
 
 def test_layout_groups_atom_cards():
+    tp2 = replace(PERF, devices={**PERF.devices, "rebellions.ATOM": replace(PERF.devices["rebellions.ATOM"], group=2)})
     lay = sim.layout("x", ["node-a/furiosa:0"], ["node-a/rebellions:0", "node-a/rebellions:1",
-                                                 "node-a/rebellions:2", "node-a/rebellions:3"], "p2p", CARDS, PERF)
+                                                 "node-a/rebellions:2", "node-a/rebellions:3"], "p2p", CARDS, tp2)
     assert lay.prefill == (("furiosa.RNGD", "node-a"),) and len(lay.decode) == 2 and lay.cards == 5
     assert lay.describe() == "P 1x RNGD / D 2x ATOM, p2p"
 

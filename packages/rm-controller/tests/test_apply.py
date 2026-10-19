@@ -36,10 +36,10 @@ def _spec(tmp_path):
 
 def test_patches_follow_decisions_and_atom_groups():
     io = ApplyIO([dep("pre", "prefill", replicas=1), dep("dec", "decode", replicas=3), dep("other", "serve")])
-    perf = profiles.load()
+    groups = {**{k: d.group for k, d in profiles.load().devices.items()}, "rebellions.ATOM": 2}   # a TP-2 ATOM
     entries, _ = controller.plan(_spec_obj(), POOL, {"etri-esc8000-e11"})
     doc, _ = document.build(entries, document.parse(None), "topology")
-    out = {p["name"]: p for p in apply.patches(doc, io.deps, POOL, {k: d.group for k, d in perf.devices.items()})}
+    out = {p["name"]: p for p in apply.patches(doc, io.deps, POOL, groups)}
     dec = out["dec"]["patch"]
     assert dec["spec"]["replicas"] == 1                              # two ATOM cards = one TP-2 instance
     terms = dec["spec"]["template"]["spec"]["affinity"]["nodeAffinity"][
