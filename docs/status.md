@@ -48,19 +48,20 @@ component hosts where a check needs their environment.
 
 | Component | Pinned | Adapter / role | Result |
 |---|---|---|---|
-| rm_abstract_layer | `473d0d6` (0.4.0) | `airm.accelerator_providers:rm-abstract` | Conformance PASS; discovered 3 RNGD + 2 ATOM, matching vendor tools; daemon dry-run emits 5 `AcceleratorProfile`s and node labels |
+| rm_abstract_layer | `c72f356` (0.4.1, chart 0.4.2) | `airm.accelerator_providers:rm-abstract` | Conformance PASS; 3 RNGD + 4 ATOM on npu-node-1, matching the device plugins. *Correction:* the first record here said 2 ATOM matched the vendor tools; it did not — `rbln-stat` numbering, fixed in 0.4.1 |
 | hetero-npu-p2p | `9556e1a` | `airm.kv_transports:p2p` | 91 unit tests PASS; conformance **SKIP** (needs `HETERO_P2P_HELPER` and a live-buffer fixture) |
 | npu-offload | `486d1e7` | `airm.workloads:npu-offload`, memory tiers | 6/6 tests PASS with `RNGD_LLMD`; chart renders and lints |
 | rngd-pd | `83ba553` | `airm.kv_transports:shm`, `airm.workloads:rngd-pd` | `shm` conformance PASS; 44 tests PASS; chart renders and lints |
 | npu-lora | `f9b7bc5` | `airm.workloads:npu-lora`, `airm_tok_s` | Tests PASS; chart renders and lints |
 | llm-d-setup | `0f4f58e` | CRD, `airm_*` scrape, dashboard, placement ConfigMap | Server-side dry-run PASS on the live cluster |
-| lmd-top | `b1edd66` | reads `AcceleratorProfile`, `airm_*`, placement | 446 + 11 cargo tests PASS, clippy clean |
-| rm-bench | `8d77023` | `airm.workloads:rm-bench`, measurements | 13 tests PASS |
+| lmd-top | `73e07d7` | reads `AcceleratorProfile`, `airm_*`, placement | 447 + 11 cargo tests PASS, clippy clean |
+| rm-bench | `7779ce1` | `airm.workloads:rm-bench`, measurements | 14 tests PASS |
 
-The L1 → L5 wiring check (discover → profiles → placement → transport chosen by name → transfer → measurements →
-workload runners resolvable) passes through rm-core alone. It does not run a model: an end-to-end scenario with
-real serving, and a live-buffer P2P transfer test, remain open. Sensitive-data scans of every component tree are
-clean.
+The L1 → L5 wiring check passes through rm-core alone, and on 2026-10-19 the layers ran together on the live
+cluster: L1 profiles placed rngd-pd's PD pods, requests went through the llm-d gateway and EPP, KV moved over
+`shm`, and rm-bench and lmd-top measured and displayed the result — see the [end-to-end run](e2e.md) for numbers,
+the fixes it produced and what remains (placement controller, P2P with live buffers, RNGD→ATOM decode).
+Sensitive-data scans of every component tree are clean.
 
 ## Work still requiring independent validation
 

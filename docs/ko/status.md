@@ -44,17 +44,19 @@ Umbrella chart, 시뮬레이션 클러스터 명령, 자동 배치 controller, �
 
 | 구성요소 | 고정 커밋 | Adapter / 역할 | 결과 |
 |---|---|---|---|
-| rm_abstract_layer | `473d0d6` (0.4.0) | `airm.accelerator_providers:rm-abstract` | 적합성 PASS, RNGD 3 + ATOM 2 탐지(벤더 도구와 일치), 데몬 dry-run이 `AcceleratorProfile` 5개와 노드 레이블 생성 |
+| rm_abstract_layer | `c72f356` (0.4.1, chart 0.4.2) | `airm.accelerator_providers:rm-abstract` | 적합성 PASS, npu-node-1에서 RNGD 3 + ATOM 4 탐지(device plugin과 일치). *정정:* 처음 기록한 "ATOM 2, 벤더 도구와 일치"는 틀렸습니다. `rbln-stat` 번호 문제였고 0.4.1에서 수정 |
 | hetero-npu-p2p | `9556e1a` | `airm.kv_transports:p2p` | 단위 테스트 91개 PASS, 적합성 **SKIP** (`HETERO_P2P_HELPER`와 실제 버퍼 fixture 필요) |
 | npu-offload | `486d1e7` | `airm.workloads:npu-offload`, 메모리 계층 | `RNGD_LLMD` 설정 시 6/6 PASS, chart 렌더·lint 통과 |
 | rngd-pd | `83ba553` | `airm.kv_transports:shm`, `airm.workloads:rngd-pd` | `shm` 적합성 PASS, 테스트 44개 PASS, chart 렌더·lint 통과 |
 | npu-lora | `f9b7bc5` | `airm.workloads:npu-lora`, `airm_tok_s` | 테스트 PASS, chart 렌더·lint 통과 |
 | llm-d-setup | `0f4f58e` | CRD, `airm_*` 수집, 대시보드, 배치 ConfigMap | 실제 클러스터에서 server dry-run PASS |
-| lmd-top | `b1edd66` | `AcceleratorProfile`·`airm_*`·배치 결정 표시 | cargo 테스트 446 + 11개 PASS, clippy 경고 0 |
-| rm-bench | `8d77023` | `airm.workloads:rm-bench`, 측정 | 테스트 13개 PASS |
+| lmd-top | `73e07d7` | `AcceleratorProfile`·`airm_*`·배치 결정 표시 | cargo 테스트 447 + 11개 PASS, clippy 경고 0 |
+| rm-bench | `7779ce1` | `airm.workloads:rm-bench`, 측정 | 테스트 14개 PASS |
 
 L1 → L5 연결 검사(탐지 → 프로파일 → 배치 → 이름으로 고른 전송 → 전송 → 측정 → 워크로드 실행기 확인)는 rm-core만으로
-통과합니다. 모델은 실행하지 않으므로 실제 서빙을 포함한 end-to-end 시나리오와 실제 버퍼 P2P 전송 검증은 남아 있습니다.
+통과하며, 2026-10-19에는 실제 클러스터에서 모든 계층을 함께 실행했습니다(L1 프로파일로 PD 파드 배치, llm-d 게이트웨이·EPP 경유,
+`shm` KV 전송, rm-bench·lmd-top 측정·표시). 수치와 수정 사항, 남은 과제(배치 컨트롤러, 실제 버퍼 P2P, RNGD→ATOM decode)는
+[end-to-end 실행](e2e.md)을 참고하세요.
 모든 구성요소 트리의 민감정보 검사는 clean입니다.
 
 ## 기존 구조 변경
