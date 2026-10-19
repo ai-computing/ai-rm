@@ -93,6 +93,9 @@ def test_salted_prompts_do_not_share_a_prefix():
     b = traces.prompt_for(50, salt=1)
     assert len(a.split()) == 50 and a != b and a.split()[:5] != b.split()[:5]
     assert traces.prompt_for(3) == "word word word"
+    # No accidental sharing across a run's worth of requests (the affine word index had 72 sequences).
+    heads = {tuple(traces.prompt_for(200, salt=i).split()[:8]) for i in range(2000)}
+    assert len(heads) == 2000
 
 
 def test_stats_reports_rate_lengths_and_fit(files):

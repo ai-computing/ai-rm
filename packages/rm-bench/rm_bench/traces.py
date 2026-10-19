@@ -285,8 +285,18 @@ _VOCAB = ("the of and to in is was for on with as at by from this that are be it
 
 
 def block_text(hash_id: int, n: int) -> str:
-    """`n` words that depend only on `hash_id`: equal ids give equal text."""
-    return " ".join(_VOCAB[(hash_id * 2654435761 + i * 40503) % len(_VOCAB)] for i in range(n))
+    """`n` words that depend only on `hash_id`: equal ids give equal text, different ids different text.
+
+    Words come from a hash stream of the id. (An affine index over the 72-word vocabulary gave only
+    72 distinct sequences, so ids, and the per-request salts, collided and a server with prefix
+    caching saw shared prefixes the trace never had.)
+    """
+    words, chunk = [], 0
+    while len(words) < n:
+        digest = hashlib.blake2b(f"{hash_id}:{chunk}".encode(), digest_size=64).digest()
+        words.extend(_VOCAB[b % len(_VOCAB)] for b in digest)
+        chunk += 1
+    return " ".join(words[:n])
 
 
 def prompt_for(prompt_tokens: int, *, blocks=None, block_tokens: int = 512, salt: int | None = None) -> str:
