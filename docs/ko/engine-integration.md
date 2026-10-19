@@ -22,19 +22,19 @@
 | **Optimus Prime / opt_prime** | 통합 추론 런타임·백엔드·PD·KV·전문가 오프로딩 | NPU와 기존 기술의 이전은 계획 상태 |
 | **FASOP / fasop** | Optimus Prime 내부 계획·탐색 요소 | 논리적으로 L4 정책에 연결하되 k8s·llm-d 라우팅을 대체하지 않음 |
 | **rm-core** | 자원·전송·작업·배치·측정 공통 계약 | 새로운 규범 타입은 별도 검토 |
-| **llm-d-setup** | 클러스터·Gateway·InferencePool/EPP·스토어·모니터링 | 검토된 배치를 기존 클러스터 체계로 적용 |
+| **hetero-llm-d** | 클러스터·Gateway·InferencePool/EPP·스토어·모니터링 | 검토된 배치를 기존 클러스터 체계로 적용 |
 | **lmd-top / rm-bench** | 관측·운영 / 부하·측정 | 같은 엔진·자원 식별자와 측정 정의 사용 |
 
 ## 기존 구성요소의 이동 방향
 
 | 소스 | 통합 대상·역할 | 유지할 경계 |
 |---|---|---|
-| rm_abstract_layer | 엔진 실행·백엔드 adapter 부분 → Optimus Prime | 장치 탐지·능력 게시는 L1 자원 책임 |
+| rm-accel | 엔진 실행·백엔드 adapter 부분 → Optimus Prime | 장치 탐지·능력 게시는 L1 자원 책임 |
 | rngd-pd | Optimus Prime의 PD·NPU 백엔드 모듈 | 출력 동작·명시적 전송 선택·llm-d 연결 검증 |
 | hetero-npu-p2p | Optimus Prime KV 전송 모듈·연동 | 동일 호스트·ABI·완료 fence·명시적 실패 |
 | npu-offload | Optimus Prime 전문가 오프로딩 모듈 | KVTransport가 아닌 MoE 가중치·실행 분담 |
 | aicomp/fasop | 같은 제품의 계획·탐색 요소 | 학습 비용 추정과 추론 실측 구분 |
-| npu-lora | 학습 workload, 필요 시 엔진 adapter | 학습 통합을 추론 이전 완료로 간주하지 않기 |
+| npu-train | 학습 workload, 필요 시 엔진 adapter | 학습 통합을 추론 이전 완료로 간주하지 않기 |
 | duet | 선택적인 비공개 검색·RAG workload | 공개 엔진으로 비공개 코드 복사 금지 |
 
 기존 저장소는 이전 중 개발·출처·비교 기준으로 유지합니다. 서브모듈 제거·소스 저장소 archive는 통합 엔진 검증 이후의 전환 단계입니다.

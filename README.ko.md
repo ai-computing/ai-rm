@@ -92,10 +92,10 @@ TTFT, TPOT, tok/s, 전력, MFU를 모든 계층이 같은 <code>airm_*</code> �
 | 계층 | 책임 | 구성요소 |
 |:-:|---|---|
 | **L5** | 관측·운영 | lmd-top · rm-bench |
-| **L4** | 클러스터·배치 | llm-d-setup · rm-controller · FASOP 어댑터 *(계획)* |
-| **L3** | 통합 엔진 | Optimus Prime · rngd-pd *(이전 소스)* · npu-lora |
+| **L4** | 클러스터·배치 | hetero-llm-d · rm-controller · FASOP 어댑터 *(계획)* |
+| **L3** | 통합 엔진 | Optimus Prime · rngd-pd *(이전 소스)* · npu-train |
 | **L2** | 메모리·전송 | hetero-npu-p2p · npu-offload · duet |
-| **L1** | 가속기 추상화 | rm_abstract_layer |
+| **L1** | 가속기 추상화 | rm-accel |
 
 자세히: [아키텍처](docs/ko/architecture.md) · [인터페이스](docs/ko/interfaces.md) · [엔진 통합 설계](docs/ko/engine-integration.md)
 </details>
@@ -149,11 +149,11 @@ make deploy CLUSTER=local DRY_RUN=1                 # 적용 전 검토
 | | 영역 | 구성요소 |
 |:-:|---|---|
 | 🚂 | **엔진·계획** | [Optimus Prime · `opt_prime`](https://github.com/ai-computing/aicomp/tree/main/opt_prime) · [FASOP · `fasop`](https://github.com/ai-computing/aicomp/tree/main/fasop) |
-| 🟣 | **자원 탐지** | [rm_abstract_layer](https://github.com/ai-computing/rm_abstract_layer) |
+| 🟣 | **자원 탐지** | [rm-accel](https://github.com/ai-computing/rm-accel) |
 | 🔵 | **엔진 이전 소스** | [rngd-pd](https://github.com/ai-computing/rngd-pd) · [hetero-npu-p2p](https://github.com/ai-computing/hetero-npu-p2p) · [npu-offload](https://github.com/ai-computing/npu-offload) |
-| 🟡 | **클러스터 통합** | [llm-d-setup](https://github.com/ai-computing/llm-d-setup) · [rm-controller](packages/rm-controller) · [rm-core 계약](https://github.com/ai-computing/rm-core) |
+| 🟡 | **클러스터 통합** | [hetero-llm-d](https://github.com/ai-computing/hetero-llm-d) · [rm-controller](packages/rm-controller) · [rm-core 계약](https://github.com/ai-computing/rm-core) |
 | 🟠 | **운영·측정** | [lmd-top](https://github.com/ai-computing/lmd-top) · [rm-bench](packages/rm-bench) |
-| 🟢 | **학습·검색 워크로드** | [npu-lora](https://github.com/ai-computing/npu-lora) · **duet** *(비공개·선택 사항)* |
+| 🟢 | **학습·검색 워크로드** | [npu-train](https://github.com/ai-computing/npu-train) · **duet** *(비공개·선택 사항)* |
 
 역할, 소스 이전 방향, 통합 작업은 [구성요소 디렉터리](docs/components/README.md)에 정리했습니다.
 

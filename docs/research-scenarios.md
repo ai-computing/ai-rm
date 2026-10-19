@@ -33,10 +33,10 @@ Private optional `duet` studies GB10 vector search with CPU graph traversal and 
 
 ## 4. Connect NPU training to the same resource vocabulary
 
-`npu-lora` studies LoRA/full fine-tuning on inference-oriented NPUs, with backend-specific execution and reference comparisons. The integration targets a workload runner and Kubernetes Job configuration. Record training throughput and task accuracy, including dataset and backend; verify supported combinations in the component repository.
+`npu-train` studies LoRA/full fine-tuning on inference-oriented NPUs, with backend-specific execution and reference comparisons. The integration targets a workload runner and Kubernetes Job configuration. Record training throughput and task accuracy, including dataset and backend; verify supported combinations in the component repository.
 
 ## 5. Observe, load and compare
 
-`llm-d-setup` supplies the cluster/monitoring integration, `lmd-top` provides an operator view, and `rm-bench` supplies replay/synthetic load and measurements. Shared metric definitions allow a benchmark result and an operator view to refer to the same quantities.
+`hetero-llm-d` supplies the cluster/monitoring integration, `lmd-top` provides an operator view, and `rm-bench` supplies replay/synthetic load and measurements. Shared metric definitions allow a benchmark result and an operator view to refer to the same quantities.
 
 Use the [KPI map](kpi-map.md) for measurement mapping, [interfaces](interfaces.md) for units and [status](status.md) for integration boundaries.

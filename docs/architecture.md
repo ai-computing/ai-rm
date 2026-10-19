@@ -12,10 +12,10 @@ AI-RM's logical architecture separates resource description, data movement, work
 
 | Layer | Responsibility | Components | Cluster integration point |
 |---|---|---|---|
-| L1 · Accelerator abstraction | Discover devices; describe memory, precision, peak provenance, power and interconnects | rm_abstract_layer | Device information, AcceleratorProfile and node labels; engine selection |
+| L1 · Accelerator abstraction | Discover devices; describe memory, precision, peak provenance, power and interconnects | rm-accel | Device information, AcceleratorProfile and node labels; engine selection |
 | L2 · Memory and transport | Represent tiers and move workload data | Planned Optimus Prime KV/offload modules; current hetero-npu-p2p/npu-offload sources; private duet workload | Explicit transport and offload boundaries; unified-memory search remains an external workload |
-| L3 · Unified engine and workloads | Execute inference under one runtime owner; connect training workloads | Optimus Prime target; rngd-pd migration source; npu-lora workload | Planned engine serving adapter; current component pods/Jobs remain until cutover |
-| L4 · Cluster and planning | Routing, reviewed planning proposals, storage and monitoring | llm-d-setup; FASOP adapter planned inside Optimus Prime | Gateway, InferencePool, EPP; no automatic FASOP live reconfiguration |
+| L3 · Unified engine and workloads | Execute inference under one runtime owner; connect training workloads | Optimus Prime target; rngd-pd migration source; npu-train workload | Planned engine serving adapter; current component pods/Jobs remain until cutover |
+| L4 · Cluster and planning | Routing, reviewed planning proposals, storage and monitoring | hetero-llm-d; FASOP adapter planned inside Optimus Prime | Gateway, InferencePool, EPP; no automatic FASOP live reconfiguration |
 | L4 · Placement | Choose accelerators for each serving pool and publish the decision | rm-controller (`airm-placement`) | AcceleratorProfiles, node state |
 | L5 · Observation and operations | Inspect cluster behavior and generate measurement evidence | lmd-top, rm-bench | Kubernetes / Prometheus readers, endpoint load generation |
 

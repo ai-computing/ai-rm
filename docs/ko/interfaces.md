@@ -14,11 +14,11 @@
 
 | 계약 | entry-point 그룹 | 무엇 | 현재 대응 코드 |
 |---|---|---|---|
-| `Accelerator` / `AcceleratorProvider` | `airm.accelerator_providers` | 장치 하나의 능력(메모리, 정밀도별 peak와 출처, 전력, 인터커넥트), 노드의 장치 탐지 | rm_abstract_layer `resources/*`, `hardware_detector.py` |
+| `Accelerator` / `AcceleratorProvider` | `airm.accelerator_providers` | 장치 하나의 능력(메모리, 정밀도별 peak와 출처, 전력, 인터커넥트), 노드의 장치 탐지 | rm-accel `resources/*`, `hardware_detector.py` |
 | `AcceleratorProfile` (k8s) | — | 위 정보를 클러스터에 게시하는 CRD와 노드 레이블 `airm.ai-computing.io/<vendor>.<model>` | rm-core `k8s/`, `rm_core.k8s` |
 | `MemoryTier` / `KVLayout` / `KVTransport` | `airm.kv_transports` | KV 이동: completion fence, 조용한 대체 금지, 이름으로 선택 | hetero-npu-p2p `core`·`backend`·`layout`, rngd-pd `connector/transport.py` |
 | `Workload` / `Placement` | `airm.placements` | 무엇을(prefill/decode/serve/train/search) 어느 장치에, 어떤 KV 경로로 | llm-d EPP 설정, rngd-pd serving |
-| workload runner | `airm.workloads` | 서빙·학습·검색 작업을 기동하는 진입점 | rngd-pd, npu-offload serve 모드, npu-lora trainer, duet |
+| workload runner | `airm.workloads` | 서빙·학습·검색 작업을 기동하는 진입점 | rngd-pd, npu-offload serve 모드, npu-train trainer, duet |
 | Metrics | — | 공통 지표 이름·단위·태그, Prometheus `airm_<name>` | 각 bench·exporter, `report.py --metric` |
 
 ## 공통 지표 (rm-core v0.1)
