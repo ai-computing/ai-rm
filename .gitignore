@@ -10,3 +10,8 @@ __pycache__/
 .venv/
 *.egg-info/
 .pytest_cache/
+
+# Umbrella chart dependencies (helm dependency update charts/ai-rm)
+charts/ai-rm/charts/
+charts/ai-rm/Chart.lock
+results/

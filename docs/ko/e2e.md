@@ -69,6 +69,21 @@ S=512로 컴파일한 RNGD PD는 실제 대화 트래픽의 1/4–1/3만 처리�
 | L3↔L5 | PD 게이트웨이는 스트리밍 없는 `/v1/completions`만 제공, rm-bench는 스트리밍 chat만 전송 | rm-bench `--api completions`, 서버가 보낸 시간으로 TTFT 계산 |
 | L4↔L5 | hetero-llm-d는 `airm-placement`를 `decisions.json` 목록으로 문서화, lmd-top은 워크로드별 키를 `llm-d` 네임스페이스에서 읽음 | lmd-top이 두 형식을 모두 읽고 `LMD_AIRM_NS` 기본값을 `LMD_NS`로 |
 
+## 다음 실행의 측정 (벤치마크 표면과 에너지)
+
+rm-bench는 이 스모크 테스트 이후 실행에 필요한 측정을 갖췄습니다
+([packages/rm-bench](../../packages/rm-bench/README.ko.md#-에너지-표준-벤치마크-기준선-비교)):
+
+- **PD 경로의 스트리밍 chat.** `--api chat`은 SSE chunk로 TTFT, TPOT, ITL을 잽니다(usage chunk, `[DONE]`, 비스트리밍 응답
+  대응). 엔진이 스트리밍 chat을 제공하면(aicomp#41) PD 경로에서 `--api completions` 대신 씁니다. 그 전까지 PD 경로의 클라이언트
+  TTFT는 서버 시간에서 계산합니다.
+- **모든 실행에 에너지.** `--power prom`(DCGM 또는 NPU exporter query)이나 `--power cmd`(furiosa-smi처럼 와트를 출력하는 CLI)로
+  실행마다 `scope`가 붙은 `power_w`/`energy_j`, 최대 W, tok/J를 남깁니다. 클러스터에서는 아직 돌려 보지 않았습니다.
+- **표준 벤치마크.** `rm-bench import guidellm|mlperf`로 GuideLLM sweep과 MLPerf LoadGen(llama3.1-8b Server) 결과를 같은
+  Measurement로 바꿔 같은 표에 넣습니다.
+- **기준선.** `rm-bench compare`는 `--deployment`(같은 vendor PD, vendor 간 PD, 복제)로 라벨을 붙인 실행들의 SLO 달성률, 카드당
+  goodput, tok/J를 한 표로 만듭니다.
+
 ## 남은 과제
 
 - **배치는 수동입니다.** `airm-placement`를 쓰는 컨트롤러가 없어 이번에는 실제 배치를 `placement: "manual"`로 기록했습니다.

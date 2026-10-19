@@ -71,6 +71,22 @@ python3 tools/airm.py deploy --cluster local --dry-run --layer l3-serving
 
 실제 적용할 리소스와 클러스터를 검토한 뒤 배포를 의도할 때만 `--dry-run`을 제거하세요. [배포 문서](../../deploy/README.ko.md)를 참고하세요.
 
+## 시뮬레이션 클러스터로 실행해 보기
+
+가속기나 사이트 클러스터 없이 Linux(또는 Docker가 있는 WSL)에서 Docker, [kind](https://kind.sigs.k8s.io/),
+kubectl, Helm만 있으면 됩니다. umbrella chart를 rm-core의 `sim` 가속기와 가짜 OpenAI 호환 PD 풀로 실행합니다.
+
+```bash
+git submodule update --init components/l1-accel/rm-accel
+python3 -m pip install PyYAML -e packages/rm-controller -e packages/rm-bench
+make e2e-sim NO_CLUSTER=1   # 배치 + rm-bench를 프로세스 안에서(Docker 없이): 빠른 첫 확인
+make up-sim                 # charts/ai-rm을 설치한 kind 클러스터 airm-sim
+make e2e-sim                # AcceleratorProfile -> rm-controller -> airm-placement, rm-bench pd-smoke
+make down-sim
+```
+
+실제 클러스터에는 같은 chart를 사이트 값으로 설치합니다. [배포 문서](../../deploy/README.ko.md#umbrella-chart)를 참고하세요.
+
 ## 자주 만나는 상황
 
 | 상황 | 확인할 것 |
@@ -82,3 +98,4 @@ python3 tools/airm.py deploy --cluster local --dry-run --layer l3-serving
 | `no manifests` | 해당 고정 버전의 배포 자산과 작업 카드 확인 |
 | P2P 미지원 | 같은 호스트·장치·ABI 조건 확인, staging은 명시적으로 선택 |
 | 하드웨어 conformance SKIP | 이유와 함께 기록하며 하드웨어 PASS로 보고하지 않기 |
+| `make up-sim`이 `missing tools`를 보고하거나 rm-accel에 Dockerfile이 없음 | Docker, kind, kubectl, Helm 설치; `components/l1-accel/rm-accel`을 고정 리비전으로 받기 |

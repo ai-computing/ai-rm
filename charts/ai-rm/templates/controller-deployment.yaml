@@ -1,0 +1,70 @@
+{{- if .Values.controller.enabled }}
+{{- $c := .Values.controller }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ai-rm.controller" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ai-rm.labels" . | nindent 4 }}
+    app.kubernetes.io/name: rm-controller
+    app.kubernetes.io/component: placement-controller
+spec:
+  replicas: 1                    # the only writer of airm-placement
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "ai-rm.controllerSelector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ai-rm.labels" . | nindent 8 }}
+        app.kubernetes.io/name: rm-controller
+        app.kubernetes.io/component: placement-controller
+      annotations:
+        checksum/spec: {{ include "ai-rm.controllerSpec" . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "ai-rm.controller" . }}
+      {{- with $c.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $c.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+      containers:
+        - name: rm-controller
+          image: "{{ required "controller.image.repository is required" $c.image.repository }}:{{ $c.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ $c.image.pullPolicy }}
+          command: ["rm-controller"]
+          args:
+            - --spec=/etc/rm-controller/spec.yaml
+            - --interval={{ $c.intervalSeconds }}
+            - --kube=client
+            {{- with $c.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          {{- with $c.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: spec
+              mountPath: /etc/rm-controller
+              readOnly: true
+      volumes:
+        - name: spec
+          configMap:
+            name: {{ include "ai-rm.controller" . }}
+{{- end }}

@@ -17,10 +17,10 @@ adapters:
   - group: airm.placements
     name: optimal
 deploy:
-  target: none
-  chart: null
+  target: k8s
+  chart: charts/ai-rm            # umbrella chart (repository root)
   manifests: null
-  image: null
+  image: ghcr.io/ai-computing/rm-controller
 config:
   env_example: null
 interfaces:

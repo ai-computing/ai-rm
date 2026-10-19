@@ -229,10 +229,10 @@ BurstGPT 2초/100 ms, Azure 코드 4초/100 ms, Mooncake 15초/100 ms(긴 프롬
 - [x] 실시간 부하(대기열, TTFT/TPOT)와 워크로드 모양([트레이스](../../docs/ko/workload-traces.md))을 선택에 반영 (`--rebalance`, `optimal`)
 - [x] 결정을 따르는 서빙 Deployment (`--apply`). chart가 `accelerator-ids`로 카드를 고정하는 일은 남음
 - [x] `airm-placement` 형식을 rm-core 프로토콜에 규범화 (§5.4, v0.1.2)
+- [x] 이미지(`ghcr.io/ai-computing/rm-controller`, [`Dockerfile`](Dockerfile))와 umbrella chart [`charts/ai-rm`](../../charts/ai-rm)의 Deployment
 - [ ] 추정치 대신 측정 프로파일 (FASOP NPU 비용 모델, aicomp #50), GPU 전용 기준선을 위한 GPU 종류
 - [ ] `optimal`이 노드를 넘을 수 있도록 노드 간 KV 전송
 - [ ] `optimal`, `--rebalance`, `--apply`를 실제 클러스터에서 실행
-- [ ] 클러스터에 상주할 이미지와 chart (umbrella chart의 일부)
 
 ## 📄 라이선스
 
