@@ -187,7 +187,7 @@ transport = registry.load("airm.kv_transports", "p2p")   # kvTransport: p2p | sh
 
 - [x] 5계층 구조, 고정된 서브모듈, 셋업 도구 (`list` · `doctor` · `setup` · `test` · `deploy` · `check`)
 - [x] rm-core v0.1 계약, 참조 구현, 적합성 검사, `AcceleratorProfile` CRD
-- [ ] 프로토콜 v0.1 구성요소 어댑터 (검토 중)
+- [x] 프로토콜 v0.1 구성요소 어댑터, 통합 검증 완료 ([현재 상태](docs/ko/status.md))
 - [ ] Optimus Prime 통합 브랜치: 이전 소스의 PD, KV 전송, 전문가 offload 모듈 통합
 - [ ] FASOP 추론 계획과 검토된 llm-d 배치 어댑터
 - [ ] 통합 차트, 시뮬레이션 클러스터, TTFT / TPOT / 전력 / MFU 증빙을 남기는 end-to-end 시나리오
