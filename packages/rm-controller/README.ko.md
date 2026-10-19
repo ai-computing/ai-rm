@@ -65,6 +65,7 @@ rm-controller --spec spec.yaml --rebalance       # prefill과 decode 사이 카�
 rm-controller --spec packages/rm-controller/examples/optimal.yaml --dry-run   # optimal 정책 (W6)
 python -m rm_core.conformance airm.placements topology optimal
 python -m rm_controller.sim --compare            # 트레이스 통계로 topology와 optimal을 시뮬레이션 비교
+python -m rm_controller.sim --episode            # W5 재조정기 에피소드 재생, 선형 규칙 대 예측 규칙
 python -m rm_controller.baselines --compare      # DistServe·HexGen-2 방식 기준선
 ```
 
@@ -143,7 +144,7 @@ pools:
     kv_transport: auto                 # optimal 전용: 구현된 링크 중 선택
     workload: {trace: azure-conv}      # 또는 {mean_input_tokens, mean_output_tokens, rate_rps, peak_ratio}
     budget: 6                          # 이 풀의 최대 카드 수 (optimal, rebalance)
-    rebalance: {metrics: http://<pod>:8000/metrics, band: 0.2, hold: 3, cooldown_s: 300}
+    rebalance: {metrics: http://<pod>:8000/metrics, band: 0.2, hold: 3, cooldown_s: 300, margin: 0.2}
 ```
 
 예시: [`examples/spec.yaml`](examples/spec.yaml)(shm으로 RNGD+RNGD, rebalance 포함),
@@ -162,9 +163,20 @@ pools:
 - 지표로: URL이나 파일의 Prometheus 텍스트(하나, 또는 `{prefill: …, decode: …}`). 역할별 `vllm:num_requests_waiting`
   (`role` / `llm-d.ai/role` 레이블), `vllm:time_to_first_token_seconds`·`vllm:time_per_output_token_seconds` 히스토그램
   (읽기 사이 구간), 또는 게이트웨이의 `airm_ttft_p90_ms` / `airm_tpot_p90_ms`. Optimus Prime이
-  [aicomp #45](https://github.com/ai-computing/aicomp/issues/45)로 내보낼 이름입니다. 역할별 압력 = max(지연/SLO, 인스턴스당 대기/2),
-  필요 인스턴스 = 현재 × 압력;
+  [aicomp #45](https://github.com/ai-computing/aicomp/issues/45)로 내보낼 이름입니다. 역할별 압력 = max(지연/SLO, 인스턴스당 대기/2).
+  도착률과 평균 길이는 `vllm:request_success_total`과 `vllm:request_prompt_tokens` / `vllm:request_generation_tokens`
+  히스토그램, 또는 게이트웨이의 `airm_req_s` / `airm_tok_s`에서, 없으면 풀의 `workload` 트레이스 통계에서 가져옵니다;
 - 지표가 없으면 워크로드의 트레이스 통계와 프로파일로(peak 도착률 ÷ 인스턴스 하나의 용량).
+
+지표가 있고 두 장치 종류의 프로파일이 있으면 목표는 예측에서 나옵니다([`predict.py`](rm_controller/predict.py)). 예산의 모든
+분할에서 두 역할의 압력을 `optimal`의 대기열 모델로 예측합니다(prefill은 TTFT p90용 M/G/c, decode는 TPOT SLO 배치의 lane과 그
+대기를 TPOT에 넣고, `admit_blocking` 링크(`shm`)에서는 admission마다 KV 로드 동안 decode 루프가 멈춤). 모델은 먼저 현재 분할에
+맞춥니다. SLO를 넘은 역할이 보이는 값을 재현하는 도착률이 풀의 실효 도착률이 되고(평균 도착률이 놓치는 burst가 여기 드러남),
+여유 있는 역할은 자기 측정값으로 예측 도착률에 상한을 두며, decode는 prefill이 통과시키는 만큼 받으므로 prefill이 많은 분할일수록
+burst가 decode에 더 많이 넘어갑니다. 가장 좋은 분할의 예측 최악 역할 압력이 현재 분할보다 `margin`(기본 20 %) 이상 낮을 때만
+목표가 되고, 아니면 분할을 유지하며 라운드 로그에 이유를 남깁니다(예: `hold: no split predicted better than now 1:2 P 2.44 D
+0.66; best other 2:1 P 0.12 D inf at 6.37 req/s (prefill fit)`). 프로파일이 없는 장치 종류는 선형 규칙(필요 인스턴스 = 현재 ×
+압력)을 그대로 씁니다.
 
 히스테리시스: 두 압력이 모두 1 이하면 그대로 둡니다. 목표는 P:D 비율을 `band`보다 크게 바꿔야 하고, `hold`번 연속 제안되어야
 하며, 마지막 변경 후 `cooldown_s`가 지나야 합니다(`--once`는 hold 1, cooldown 없음). 분할이, 따라서 결정이 바뀔 때만 새
@@ -222,6 +234,13 @@ BurstGPT 2초/100 ms, Azure 코드 4초/100 ms, Mooncake 15초/100 ms(긴 프롬
 - 용량을 트레이스별 60초 peak(BurstGPT 69배)에 맞추므로 절대값이 낮습니다.
 - `optimal`의 분석 모델은 시뮬레이션 goodput의 0.68–0.93배로 모든 행에서 보수적입니다([컴포넌트 카드](../../docs/components/rm-controller.md)의
   "Model est." 열). 둘 다 같은 프로파일을 읽으며, 프로파일 자체는 실제 실행으로 확인합니다([기준선](../../docs/ko/baselines.md#보정-w6)).
+
+**에피소드 재생 (`--episode`).** [`episode.py`](rm_controller/episode.py)는 W5의 실제 재조정기 실행을 재생합니다. rngd-pd
+게이트웨이 뒤 RNGD 카드 3장에 Azure 코드 ×3과 대화 ×2 재생을 번갈아 걸고(`$RM_BENCH_TRACES`의 Azure 2023 CSV가 있으면 실제
+도착 시각, 없으면 구간 통계), 재조정기가 60초마다 게이트웨이 지표를 읽어 hysteresis대로 움직입니다. 파드 시작 2분, 옮기는 카드의
+처리 중 요청 손실도 넣습니다. 프로파일 위에 클라이언트의 동시 요청 64개, decode admission 때 루프 안의 KV 로드, Service로 무작위로
+닿는 prefill 파드, 부하에서 유휴 프로파일의 1.5배인 prefill 시간(`--prefill-scale`)을 모델링합니다. 결과:
+[기준선](../../docs/ko/baselines.md#예측-규칙).
 
 ## ⚖️ 기준선: DistServe·HexGen-2 방식 배치
 
@@ -290,7 +309,7 @@ A100 수치는 일부 추정입니다(prefill 속도와 batch 1 TPOT는 데이�
 
 ## ✅ 검증
 
-- 테스트 74개(topology, optimal과 역할 내 혼합, 재조정, 상태·재배치, 적용, 시뮬레이터, 기준선, 0.1과 같은 바이트의 문서), rm-core v0.1.2로
+- 테스트 84개(topology, optimal과 역할 내 혼합, 재조정과 예측기, 상태·재배치, 적용, 시뮬레이터와 에피소드 재생, 기준선, 0.1과 같은 바이트의 문서), rm-core v0.1.2로
   `rm_core.conformance airm.placements topology optimal` PASS, CI에서 둘 다 실행.
 - 실제 클러스터 읽기 전용 dry-run(2026-10-19, topology): shm 풀은 `npu-node-1/furiosa:0` + `furiosa:1`(end-to-end 실행에서 손으로 고정했던 배치와
   같음, cordon된 노드는 제외), p2p 풀은 RNGD 0 + ATOM 0, 1.
@@ -302,6 +321,10 @@ A100 수치는 일부 추정입니다(prefill 속도와 batch 1 TPOT는 데이�
 - RNGD+ATOM 노드에서 rngd-pd 게이트웨이의 `airm_*` 지표로 `--rebalance --apply`를 실제로 돌림(2026-10-19): 한 시간에 P:D가 세 번
   바뀌었고 매번 부하가 걸린 역할 쪽으로 움직였습니다. 대화에서는 옳았고(달성률 약 10 % → 85 %) 코드 ×3에서는 틀렸습니다(63–68 % →
   45 %, 카드를 내준 역할의 손실을 모델링하지 않음). [기준선](../../docs/ko/baselines.md#w5-pd-재조정기-실제-실행) 참고.
+- 예측 규칙(2026-10-20): 실제 실행의 신호에서 선형 규칙이 코드 ×3 이동을 한 자리에서는 유지하고(2:1은 decode 포화로 예측, 측정
+  3.1–3.8), 대화 이동은 그대로 합니다. `python -m rm_controller.sim --episode`(W5의 교대 부하, 실제 Azure 도착 시각)로 재생하면
+  선형 규칙은 8번 움직이며 코드 평균 74–76 %, 대화 56 %였고, 예측 규칙은 1P+2D를 유지했습니다(78 %, 99 %). 2P+1D에서 시작하면
+  대화 이동만 했습니다. 실제 재확인: [기준선](../../docs/ko/baselines.md#예측-규칙).
 
 ## 🗺 로드맵
 
@@ -316,7 +339,8 @@ A100 수치는 일부 추정입니다(prefill 속도와 batch 1 TPOT는 데이�
 - [ ] `optimal`이 노드를 넘을 수 있도록 노드 간 KV 전송
 - [x] `optimal`, `--apply`를 실제 클러스터에서 실행
 - [x] `--rebalance`를 실제 클러스터에서 실행 ([기준선](../../docs/ko/baselines.md#w5-pd-재조정기-실제-실행))
-- [ ] 재조정기: 이동 뒤 카드를 내준 역할의 압력을 예측(프로파일이나 admission 비용)하고, 측정한 달성률로 이동을 검증
+- [x] 재조정기: 이동 뒤 두 역할의 압력을 예측(프로파일, admission 비용)하고, 더 나은 분할이 없으면 유지
+- [ ] 재조정기: 이동 뒤 측정한 달성률로 이동을 검증(나빠졌으면 되돌림)
 
 ## 📄 라이선스
 
