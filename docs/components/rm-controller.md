@@ -27,8 +27,11 @@ AcceleratorProfile(L1)과 노드 상태를 읽어 prefill/decode 풀을 배치�
 - **적용 모드 (HUB-11, `--apply`)**: `airm.ai-computing.io/pool`·`role` annotation이 있는 Deployment에 replicas, node affinity
   (`airm.ai-computing.io/<vendor>.<model>`, hostname), `accelerator-ids` annotation을 patch. `--dry-run`은 patch를 출력. 기본 동작은 그대로.
 - **시뮬레이터**: `python -m rm_controller.sim --compare`. 아래 표(영문).
-- 검증: 테스트 51개, `rm_core.conformance airm.placements topology optimal` PASS(rm-core v0.1.2). `optimal`·`--rebalance`·
-  `--apply`는 아직 실제 클러스터에서 실행하지 않았습니다(가짜 IO와 시뮬레이션만).
+- 검증: 테스트 51개, `rm_core.conformance airm.placements topology optimal` PASS(rm-core v0.1.2).
+- **실제 클러스터 (2026-10-19, [기준선](../baselines.md))**: `optimal`이 RNGD+ATOM 노드에 `airm-placement` generation 2(prefill RNGD 2,
+  decode RNGD 1, `shm`)를 쓰고 `--apply`가 rngd-pd Deployment를 맞췄습니다. 파드는 결정한 노드·카드 수로 떴고(카드 선택은 device
+  plugin), `pd-smoke`가 llm-d 게이트웨이를 거쳐 PASS. 기준선 실행으로 RNGD·ATOM decode 프로파일을 측정값으로 보정했고, 보정 후
+  `optimal`은 prefill 1 / decode 2를 골랐습니다(generation 3). `--rebalance`는 아직 실제 클러스터에서 실행하지 않았습니다.
 
 ## Simulation: topology vs optimal (EN)
 
@@ -36,7 +39,7 @@ AcceleratorProfile(L1)과 노드 상태를 읽어 prefill/decode 풀을 배치�
 [workload traces](../workload-traces.md) (length p50/p90/p99, mean rate, 60 s peak/mean as an on/off burst model) and run
 through a discrete-event model of each placement: FCFS prefill per instance, KV handoff over the link, continuous-batching
 decode limited by the TPOT-SLO batch and KV capacity. Goodput = highest mean rate at which ≥ 90 % of requests meet both TTFT
-and TPOT. "Model est." is the `optimal` policy's analytical estimate for the same layout (0.43–1.25× the simulated value).
+and TPOT. "Model est." is the `optimal` policy's analytical estimate for the same layout (0.71–0.88× the simulated value).
 Card sets: one node with 2 RNGD + 4 ATOM, and two such nodes. `tcp` is a planned cross-node link (estimate, no transport
 plugin yet), offered only in the row that says so.
 
@@ -44,70 +47,71 @@ plugin yet), offered only in the row that says so.
 
 | Trace (SLO TTFT/TPOT p90) | Policy | Layout | Cards | Goodput req/s | req/s per card | Model est. |
 |---|---|---|--:|--:|--:|--:|
-| azure-conv (2 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.335 | 0.168 | 0.182 |
-| azure-conv (2 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 1x ATOM, p2p | 3 | 0.046 | 0.015 | 0.049 |
-| azure-conv (2 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.335 | 0.168 | 0.182 |
-| azure-conv (2 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.335 | 0.168 | 0.182 |
-| azure-code (4 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.125 | 0.063 | 0.054 |
-| azure-code (4 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 1x ATOM, p2p | 3 | 0.000 | 0.000 | 0.000 |
-| azure-code (4 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.125 | 0.063 | 0.054 |
-| azure-code (4 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.125 | 0.063 | 0.054 |
-| burstgpt (2 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.027 | 0.013 | 0.019 |
-| burstgpt (2 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 1x ATOM, p2p | 3 | 0.004 | 0.001 | 0.005 |
-| burstgpt (2 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.027 | 0.013 | 0.019 |
-| burstgpt (2 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.027 | 0.013 | 0.019 |
-| mooncake-conv (15 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.000 | 0.000 | 0.000 |
-| mooncake-conv (15 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 1x ATOM, p2p | 3 | 0.000 | 0.000 | 0.000 |
-| mooncake-conv (15 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.000 | 0.000 |  |
-| mooncake-conv (15 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.000 | 0.000 |  |
-| mooncake-tool (15 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.038 | 0.019 | 0.046 |
-| mooncake-tool (15 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 1x ATOM, p2p | 3 | 0.000 | 0.000 | 0.000 |
-| mooncake-tool (15 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.038 | 0.019 | 0.046 |
-| mooncake-tool (15 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.038 | 0.019 | 0.046 |
+| azure-conv (2 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.750 | 0.375 | 0.653 |
+| azure-conv (2 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 2x ATOM, p2p | 3 | 0.000 | 0.000 | 0.000 |
+| azure-conv (2 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.750 | 0.375 | 0.653 |
+| azure-conv (2 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.750 | 0.375 | 0.653 |
+| azure-code (4 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.999 | 0.500 | 0.874 |
+| azure-code (4 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 2x ATOM, p2p | 3 | 0.000 | 0.000 | 0.000 |
+| azure-code (4 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.999 | 0.500 | 0.874 |
+| azure-code (4 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.999 | 0.500 | 0.874 |
+| burstgpt (2 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.024 | 0.012 | 0.017 |
+| burstgpt (2 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 2x ATOM, p2p | 3 | 0.000 | 0.000 | 0.000 |
+| burstgpt (2 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.024 | 0.012 | 0.017 |
+| burstgpt (2 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.024 | 0.012 | 0.017 |
+| mooncake-conv (15 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.557 | 0.279 | 0.449 |
+| mooncake-conv (15 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 2x ATOM, p2p | 3 | 0.000 | 0.000 | 0.000 |
+| mooncake-conv (15 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.557 | 0.279 | 0.449 |
+| mooncake-conv (15 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.557 | 0.279 | 0.449 |
+| mooncake-tool (15 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.948 | 0.474 | 0.812 |
+| mooncake-tool (15 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 2x ATOM, p2p | 3 | 0.000 | 0.000 | 0.000 |
+| mooncake-tool (15 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.948 | 0.474 | 0.812 |
+| mooncake-tool (15 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.948 | 0.474 | 0.812 |
 
 **2 nodes: 2 x (2 RNGD + 4 ATOM)**
 
 | Trace (SLO TTFT/TPOT p90) | Policy | Layout | Cards | Goodput req/s | req/s per card | Model est. |
 |---|---|---|--:|--:|--:|--:|
-| azure-conv (2 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.335 | 0.168 | 0.182 |
-| azure-conv (2 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 1x ATOM, p2p | 3 | 0.046 | 0.015 | 0.049 |
-| azure-conv (2 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.335 | 0.168 | 0.182 |
-| azure-conv (2 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.335 | 0.168 | 0.182 |
-| azure-conv (2 s / 100 ms) | optimal, max goodput + planned tcp | P 3x RNGD / D 1x RNGD, tcp, 2 nodes | 4 | 0.705 | 0.176 | 0.707 |
-| azure-code (4 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.125 | 0.063 | 0.054 |
-| azure-code (4 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 1x ATOM, p2p | 3 | 0.000 | 0.000 | 0.000 |
-| azure-code (4 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.125 | 0.063 | 0.054 |
-| azure-code (4 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.125 | 0.063 | 0.054 |
-| azure-code (4 s / 100 ms) | optimal, max goodput + planned tcp | P 3x RNGD / D 1x RNGD, tcp, 2 nodes | 4 | 0.627 | 0.157 | 0.405 |
-| burstgpt (2 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.027 | 0.013 | 0.019 |
-| burstgpt (2 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 1x ATOM, p2p | 3 | 0.004 | 0.001 | 0.005 |
-| burstgpt (2 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.027 | 0.013 | 0.019 |
-| burstgpt (2 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.027 | 0.013 | 0.019 |
-| burstgpt (2 s / 100 ms) | optimal, max goodput + planned tcp | P 2x RNGD / D 2x RNGD, tcp, 2 nodes | 4 | 0.061 | 0.015 | 0.049 |
-| mooncake-conv (15 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.000 | 0.000 | 0.000 |
-| mooncake-conv (15 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 1x ATOM, p2p | 3 | 0.000 | 0.000 | 0.000 |
-| mooncake-conv (15 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.000 | 0.000 |  |
-| mooncake-conv (15 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.000 | 0.000 |  |
-| mooncake-conv (15 s / 100 ms) | optimal, max goodput + planned tcp | P 1x RNGD / D 1x RNGD, shm | 2 | 0.000 | 0.000 |  |
-| mooncake-tool (15 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.038 | 0.019 | 0.046 |
-| mooncake-tool (15 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 1x ATOM, p2p | 3 | 0.000 | 0.000 | 0.000 |
-| mooncake-tool (15 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.038 | 0.019 | 0.046 |
-| mooncake-tool (15 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.038 | 0.019 | 0.046 |
-| mooncake-tool (15 s / 100 ms) | optimal, max goodput + planned tcp | P 3x RNGD / D 1x RNGD, tcp, 2 nodes | 4 | 0.380 | 0.095 | 0.359 |
+| azure-conv (2 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.750 | 0.375 | 0.653 |
+| azure-conv (2 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 2x ATOM, p2p | 3 | 0.000 | 0.000 | 0.000 |
+| azure-conv (2 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.750 | 0.375 | 0.653 |
+| azure-conv (2 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.750 | 0.375 | 0.653 |
+| azure-conv (2 s / 100 ms) | optimal, max goodput + planned tcp | P 1x RNGD / D 3x RNGD, tcp, 2 nodes | 4 | 2.661 | 0.665 | 2.295 |
+| azure-code (4 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.999 | 0.500 | 0.874 |
+| azure-code (4 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 2x ATOM, p2p | 3 | 0.000 | 0.000 | 0.000 |
+| azure-code (4 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.999 | 0.500 | 0.874 |
+| azure-code (4 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.999 | 0.500 | 0.874 |
+| azure-code (4 s / 100 ms) | optimal, max goodput + planned tcp | P 3x RNGD / D 1x RNGD, tcp, 2 nodes | 4 | 2.195 | 0.549 | 1.853 |
+| burstgpt (2 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.024 | 0.012 | 0.017 |
+| burstgpt (2 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 2x ATOM, p2p | 3 | 0.000 | 0.000 | 0.000 |
+| burstgpt (2 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.024 | 0.012 | 0.017 |
+| burstgpt (2 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.024 | 0.012 | 0.017 |
+| burstgpt (2 s / 100 ms) | optimal, max goodput + planned tcp | P 1x RNGD / D 3x RNGD, tcp, 2 nodes | 4 | 0.082 | 0.021 | 0.065 |
+| mooncake-conv (15 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.557 | 0.279 | 0.449 |
+| mooncake-conv (15 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 2x ATOM, p2p | 3 | 0.000 | 0.000 | 0.000 |
+| mooncake-conv (15 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.557 | 0.279 | 0.449 |
+| mooncake-conv (15 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.557 | 0.279 | 0.449 |
+| mooncake-conv (15 s / 100 ms) | optimal, max goodput + planned tcp | P 2x RNGD / D 2x RNGD, tcp, 2 nodes | 4 | 1.129 | 0.282 | 0.972 |
+| mooncake-tool (15 s / 100 ms) | topology, RNGD/RNGD shm (examples/spec.yaml) | P 1x RNGD / D 1x RNGD, shm | 2 | 0.948 | 0.474 | 0.812 |
+| mooncake-tool (15 s / 100 ms) | topology, RNGD/ATOM x2 p2p (examples/hetero-p2p.yaml) | P 1x RNGD / D 2x ATOM, p2p | 3 | 0.000 | 0.000 | 0.000 |
+| mooncake-tool (15 s / 100 ms) | optimal, per card | P 1x RNGD / D 1x RNGD, shm | 2 | 0.948 | 0.474 | 0.812 |
+| mooncake-tool (15 s / 100 ms) | optimal, max goodput | P 1x RNGD / D 1x RNGD, shm | 2 | 0.948 | 0.474 | 0.812 |
+| mooncake-tool (15 s / 100 ms) | optimal, max goodput + planned tcp | P 2x RNGD / D 2x RNGD, tcp, 2 nodes | 4 | 1.977 | 0.494 | 1.734 |
 
 
 **Honesty notes.** The simulator and `optimal` read the same profile table, so this comparison tests the placement logic
-(queueing, bursts, KV fit, routing, link choice), not the hardware numbers. In that table RNGD's batch-1 TPOT, the `shm`
-bandwidth and ATOM's batch-8 throughput and memory limit are measured or derived from measurements (docs/e2e.md,
-docs/workload-traces.md); RNGD's batch-8 TPOT, ATOM prefill and batch-1 TPOT, the `p2p` bandwidth and the whole `tcp` link
-are estimates. Lengths beyond the compiled S=512 graphs are extrapolated linearly. Under these numbers the outcome is:
-optimal equals the RNGD/RNGD pool on one node and beats the hetero RNGD/ATOM×2 pool by about 10× per card (ATOM decode is
-limited by its ~4 K tokens of KV room); across nodes it gains (2.1–10× goodput) only with a cross-node KV transport.
-W6's "optimal beats topology per card" therefore holds against the hetero spec and ties the RNGD/RNGD spec; a GPU-only
+(queueing, bursts, KV fit, routing, link choice), not the hardware numbers. Since the live baselines
+([baselines](../baselines.md)) the table is measured for RNGD (prefill, decode at batch 1–8 on the continuous B=8 graph),
+ATOM decode (batch 1–4 on one card) and `shm`; ATOM prefill, the `p2p` bandwidth and the whole `tcp` link are estimates.
+Lengths beyond the compiled S=512 graphs are extrapolated linearly, so the Mooncake rows describe graphs that do not exist
+yet. Under these numbers: optimal equals the RNGD/RNGD pool on one node; ATOM decode (108 ms per token) misses the 100 ms
+TPOT SLO, so the hetero pool has no goodput, as on the cluster; across nodes optimal gains 2.0–3.5× only with a cross-node
+KV transport. W6's "optimal beats topology per card" holds against the hetero spec and ties the RNGD/RNGD spec; a GPU-only
 baseline needs a GPU profile first.
 
 ## 다음 할 일
-1. 프로파일 추정치를 측정으로 교체: FASOP NPU 비용 모델(aicomp #50), RNGD batch>1·ATOM prefill·p2p 대역폭 sweep. GPU 종류 추가.
-2. `--rebalance`를 aicomp #45 지표(또는 게이트웨이 `airm_*`)로 실제 클러스터에서 실행, `--apply`로 annotation된 Deployment 구동.
+1. 남은 추정치 교체: ATOM prefill·p2p 대역폭 측정, FASOP NPU 비용 모델(aicomp #50). GPU 종류 추가. 시뮬레이터에 decode 진입 시
+   KV 적재 지연과 단일 카드(solo) 서빙 추가([기준선](../baselines.md#calibration-w6)).
+2. `--rebalance`를 aicomp #45 지표(또는 게이트웨이 `airm_*`)로 실제 클러스터에서 실행.
 3. 노드 간 KV 전송(`airm.kv_transports`) — 있어야 `optimal`이 두 노드를 함께 씁니다.
 4. 클러스터 상주: 이미지와 chart(umbrella chart에 포함), in-cluster 클라이언트(`[k8s]`).

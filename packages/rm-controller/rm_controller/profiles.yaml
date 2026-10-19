@@ -1,8 +1,9 @@
 # Throughput profiles for the `optimal` policy and the simulator (rm_controller/sim.py).
 #
 # One entry per device type (`vendor.model`, as in the node labels) for ONE model class: Llama-3.1-8B-class
-# models in bf16/fp16 on the host-staged serving path as of 2026-10-19. Every number says where it comes from:
-#   measured  -- read off a run recorded in ai-rm docs (docs/e2e.md, docs/workload-traces.md)
+# models in bf16/fp16 on the host-staged serving path, with the S=512 graphs the live baselines ran
+# (docs/baselines.md, 2026-10-19). Every number says where it comes from:
+#   measured  -- read off a run recorded in ai-rm docs (docs/baselines.md, docs/e2e.md)
 #   derived   -- arithmetic on measured numbers (the derivation is in `source`)
 #   estimate  -- not measured; a placeholder until FASOP's NPU cost model (aicomp #50) or a sweep replaces it
 # Lengths beyond the compiled S=512 graphs are extrapolated linearly (attention's quadratic term is ignored).
@@ -12,30 +13,32 @@ kv_bytes_per_token: 131072           # derived: 32 layers x 8 KV heads x 128 dim
 devices:
   furiosa.RNGD:
     group: 1                         # cards per serving instance; 48 GB holds the 16 GB of weights
-    prefill_tok_s: 2500              # derived: ~0.2 s for 200-400-token prompts (docs/workload-traces.md)
-    prefill_overhead_ms: 60          #   with a 60 ms fixed cost; at S=512 the graph is padded, so this is a fit
-    tpot_ms_b1: 17.0                 # measured: server TPOT 15.8-19.5 ms at batch 1 (docs/e2e.md)
-    tpot_ms_bmax: 24.0               # estimate: decode is memory-bound; batch 8 adds KV reads only
-    max_batch: 8                     # estimate: the batch verified on ATOM; RNGD batch > 1 unmeasured in PD
-    kv_tokens: 250000                # derived: ~32 GB free after weights / 128 KiB per token (workload-traces.md)
+    prefill_tok_s: 12000             # measured: rngd-full prefill 66-105 ms for 16-480 tokens at idle (S=512
+    prefill_overhead_ms: 66          #   graphs, buckets 32-512), a linear fit; download spikes reach 245 ms
+    tpot_ms_b1: 30.0                 # measured: continuous B=8 decode graph, 29.8 ms with one stream
+    tpot_ms_bmax: 30.3               # measured: 30.3 ms with eight; the graph is fixed-width (B=1 graph: 16-19 ms)
+    max_batch: 8                     # measured: continuous batching B=8 served the baselines
+    kv_tokens: 250000                # derived: ~32 GB free after weights / 128 KiB per token; the S=512 graph
+                                     #   itself holds max_batch x 512
     source:
-      prefill_tok_s: derived
+      prefill_tok_s: measured
       tpot_ms_b1: measured
-      tpot_ms_bmax: estimate
-      max_batch: estimate
+      tpot_ms_bmax: measured
+      max_batch: measured
       kv_tokens: derived
   rebellions.ATOM:
-    group: 2                         # 16 GB of bf16 weights do not fit one 15.7 GiB card; PD verified on 2-3 ATOM
-    prefill_tok_s: 600               # estimate: RNGD's rate x (2 x 32 / 256) peak TFLOPS, unmeasured
+    group: 1                         # measured: the fp16 decode artifact (32 layers on the card, embedding and
+                                     #   lm_head on the host) runs on one 15.7 GiB card
+    prefill_tok_s: 600               # estimate: RNGD's old rate x (2 x 32 / 256) peak TFLOPS, unmeasured
     prefill_overhead_ms: 80          # estimate
-    tpot_ms_b1: 40.0                 # estimate: 8 GB of weights per card over ~256 GB/s GDDR6
-    tpot_ms_bmax: 52.0               # derived: batch 8 gave 135-177 tok/s on 1 RNGD + 2-3 ATOM -> 8 / 154 tok/s
-    max_batch: 8                     # measured: batch 8 uses ~15.0 of 15.7 GiB, batch 16 does not fit
-    kv_tokens: 4096                  # derived: what batch 8 at S=512 leaves room for
+    tpot_ms_b1: 108.2                # measured: S=512 B=4 decode artifact, one stream
+    tpot_ms_bmax: 108.6              # measured: four streams; fixed-width graph
+    max_batch: 4                     # measured: the largest S=512 decode artifact compiled (B=8 exists for S=256)
+    kv_tokens: 2048                  # derived: 4 lanes x 512
     source:
       prefill_tok_s: estimate
-      tpot_ms_b1: estimate
-      tpot_ms_bmax: derived
+      tpot_ms_b1: measured
+      tpot_ms_bmax: measured
       max_batch: measured
       kv_tokens: derived
 
@@ -52,7 +55,8 @@ links:
     source: rm-core reference transport
   shm:
     scope: host
-    gb_s: 0.6                        # measured: 67 MB in 111-112 ms p90 (docs/e2e.md)
+    gb_s: 1.6                        # measured: 67 MB loaded in 31-54 ms (median 33) at decode admission,
+                                     #   PD_PREFETCH=0 (docs/baselines.md); 111 ms p90 with prefetch (docs/e2e.md)
     latency_ms: 0
     min_bytes: 67108864              # measured: copies the whole S=512 buffer whatever the prompt length
     implemented: true
