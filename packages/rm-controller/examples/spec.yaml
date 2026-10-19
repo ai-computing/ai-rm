@@ -1,5 +1,6 @@
 # Pools rm-controller places on this cluster's llm-d (see README). Placed in order; no card is shared.
 namespace: llm-serving
+placement: topology                        # default; `optimal` chooses types and counts from profiles.yaml
 pools:
   - pool: llama8b-pd-pool                  # the end-to-end run: RNGD prefill + RNGD decode over shm
     model: meta-llama/Llama-3.1-8B-Instruct
@@ -7,3 +8,8 @@ pools:
     slo: {tpot_p90_ms: 100}
     prefill: {accelerator: furiosa.RNGD, count: 1}
     decode:  {accelerator: furiosa.RNGD, count: 1}
+    # With --rebalance: move cards between prefill and decode within `budget` from the pods' metrics
+    # (vLLM names, aicomp #45) or, without `metrics`, from the workload's trace statistics.
+    budget: 3
+    workload: {trace: azure-conv, rate_rps: 0.3}
+    rebalance: {band: 0.2, hold: 3, cooldown_s: 300}
