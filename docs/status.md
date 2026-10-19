@@ -40,6 +40,28 @@ Use explicit submodule paths for a public-only checkout. `git clone --recursive`
 | Interface integration | rm-core protocol and component work cards | Confirm adapter implementation/conformance per component |
 | Publication checks | Tracked-file sensitive-data scanner and CI | Not a complete history audit or hardware validation |
 
+## Protocol v0.1 integration · verified 2026-10-19
+
+The v0.1 adapters were merged in every component and the submodules point at those merge commits. Verification
+ran with every Python component installed in **one** environment (rm-core v0.1.1) on an RNGD + ATOM node, plus
+component hosts where a check needs their environment.
+
+| Component | Pinned | Adapter / role | Result |
+|---|---|---|---|
+| rm_abstract_layer | `473d0d6` (0.4.0) | `airm.accelerator_providers:rm-abstract` | Conformance PASS; discovered 3 RNGD + 2 ATOM, matching vendor tools; daemon dry-run emits 5 `AcceleratorProfile`s and node labels |
+| hetero-npu-p2p | `9556e1a` | `airm.kv_transports:p2p` | 91 unit tests PASS; conformance **SKIP** (needs `HETERO_P2P_HELPER` and a live-buffer fixture) |
+| npu-offload | `486d1e7` | `airm.workloads:npu-offload`, memory tiers | 6/6 tests PASS with `RNGD_LLMD`; chart renders and lints |
+| rngd-pd | `83ba553` | `airm.kv_transports:shm`, `airm.workloads:rngd-pd` | `shm` conformance PASS; 44 tests PASS; chart renders and lints |
+| npu-lora | `f9b7bc5` | `airm.workloads:npu-lora`, `airm_tok_s` | Tests PASS; chart renders and lints |
+| llm-d-setup | `0f4f58e` | CRD, `airm_*` scrape, dashboard, placement ConfigMap | Server-side dry-run PASS on the live cluster |
+| lmd-top | `b1edd66` | reads `AcceleratorProfile`, `airm_*`, placement | 446 + 11 cargo tests PASS, clippy clean |
+| rm-bench | `8d77023` | `airm.workloads:rm-bench`, measurements | 13 tests PASS |
+
+The L1 → L5 wiring check (discover → profiles → placement → transport chosen by name → transfer → measurements →
+workload runners resolvable) passes through rm-core alone. It does not run a model: an end-to-end scenario with
+real serving, and a live-buffer P2P transfer test, remain open. Sensitive-data scans of every component tree are
+clean.
+
 ## Work still requiring independent validation
 
 Component adapters, device-profile publication, charts and metrics readers have their own work cards and acceptance criteria. A combined umbrella chart, simulation cluster command, automated placement controller and compatibility registry are integration directions, **not available capabilities demonstrated by this documentation update**.

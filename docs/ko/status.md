@@ -37,6 +37,26 @@
 
 Umbrella chart, 시뮬레이션 클러스터 명령, 자동 배치 controller, 호환성 registry는 통합 방향이며 이 문서 변경으로 제공·검증되는 기능이 아닙니다. PASS·FAIL·하드웨어 SKIP을 구분하고 구성요소 조합과 실행 조건을 남기세요.
 
+## 프로토콜 v0.1 통합 · 2026-10-19 검증
+
+모든 구성요소에 v0.1 adapter를 머지했고 서브모듈은 그 머지 커밋을 가리킵니다. 검증은 RNGD + ATOM 노드에서 Python
+구성요소 전부를 **한** 환경(rm-core v0.1.1)에 설치해 수행했고, 고유 환경이 필요한 항목은 해당 구성요소 호스트에서 확인했습니다.
+
+| 구성요소 | 고정 커밋 | Adapter / 역할 | 결과 |
+|---|---|---|---|
+| rm_abstract_layer | `473d0d6` (0.4.0) | `airm.accelerator_providers:rm-abstract` | 적합성 PASS, RNGD 3 + ATOM 2 탐지(벤더 도구와 일치), 데몬 dry-run이 `AcceleratorProfile` 5개와 노드 레이블 생성 |
+| hetero-npu-p2p | `9556e1a` | `airm.kv_transports:p2p` | 단위 테스트 91개 PASS, 적합성 **SKIP** (`HETERO_P2P_HELPER`와 실제 버퍼 fixture 필요) |
+| npu-offload | `486d1e7` | `airm.workloads:npu-offload`, 메모리 계층 | `RNGD_LLMD` 설정 시 6/6 PASS, chart 렌더·lint 통과 |
+| rngd-pd | `83ba553` | `airm.kv_transports:shm`, `airm.workloads:rngd-pd` | `shm` 적합성 PASS, 테스트 44개 PASS, chart 렌더·lint 통과 |
+| npu-lora | `f9b7bc5` | `airm.workloads:npu-lora`, `airm_tok_s` | 테스트 PASS, chart 렌더·lint 통과 |
+| llm-d-setup | `0f4f58e` | CRD, `airm_*` 수집, 대시보드, 배치 ConfigMap | 실제 클러스터에서 server dry-run PASS |
+| lmd-top | `b1edd66` | `AcceleratorProfile`·`airm_*`·배치 결정 표시 | cargo 테스트 446 + 11개 PASS, clippy 경고 0 |
+| rm-bench | `8d77023` | `airm.workloads:rm-bench`, 측정 | 테스트 13개 PASS |
+
+L1 → L5 연결 검사(탐지 → 프로파일 → 배치 → 이름으로 고른 전송 → 전송 → 측정 → 워크로드 실행기 확인)는 rm-core만으로
+통과합니다. 모델은 실행하지 않으므로 실제 서빙을 포함한 end-to-end 시나리오와 실제 버퍼 P2P 전송 검증은 남아 있습니다.
+모든 구성요소 트리의 민감정보 검사는 clean입니다.
+
 ## 기존 구조 변경
 
 이전 `rm_monitor`의 역할은 `llm-d-setup/monitoring/`의 모니터링·Grafana, `rm-bench`의 trace·부하, `lmd-top`의 운영 콘솔로 나뉘었습니다. `rm_monitor`는 archive 상태이며 `rm_abstract_layer`는 `components/l1-accel/`에 있습니다.
