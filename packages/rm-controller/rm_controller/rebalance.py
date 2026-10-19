@@ -6,17 +6,28 @@ Signals, read from Prometheus text exposition (a serving pod's /metrics, or a fi
     vllm:time_to_first_token_seconds        histogram
     vllm:time_per_output_token_seconds      histogram (vllm:inter_token_latency_seconds also read)
     airm_ttft_p90_ms, airm_tpot_p90_ms      rngd-pd gateway gauges, used when the histograms are absent
+    vllm:request_success_total              counter: arrival rate (windowed between reads)
+    vllm:request_prompt_tokens, vllm:request_generation_tokens   histograms: mean prompt / answer length
+    airm_req_s, airm_tok_s                  gateway gauges: request rate, output tokens/s (mean answer = ratio)
 
 These are the vLLM names that Optimus Prime will expose (aicomp #45). Histogram quantiles are taken over
 the window since the previous read when there is one, else over the counters' lifetime.
 
-Rule: each role gets a pressure = the largest of (latency / its SLO) and (waiting per instance /
-`queue_ref`), floored at 0.25; no signal = 1. Needed instances = current x pressure. Without metrics, the
-need comes from a workload mix and the throughput profiles (mean rate x peak over one instance's
-capacity). The split of the card budget that minimises the worst need/instance is the target. Nothing
-moves while both pressures are <= 1 (SLOs met, queues short), and a target must differ from the current
-split by more than `band` in P:D ratio and be proposed `hold` times in a row, `cooldown_s` after the last
-change (hysteresis), so the controller writes a new generation only on a real, lasting change.
+Pressure: each role's is the largest of (latency / its SLO) and (waiting per instance / `queue_ref`),
+floored at 0.25; no signal = 1. Nothing moves while both pressures are <= 1 (SLOs met, queues short).
+
+Rule (`decide`), when the profiles know both device types: predict.py predicts both roles' pressure at
+every split of the card budget, at an arrival rate calibrated on what the roles show now and on the
+observed rate and mix (metrics above, else the pool's `workload` trace statistics). The split with the
+lowest predicted worst-role pressure is the target only if that is below the current split's by `margin`
+(default 20 %); otherwise the split holds and the note says why. Without profiles (`target`), the rule
+is the linear one: needed instances = current x pressure, and the split that minimises the worst
+need/instance is the target. Without metrics, the need comes from a workload mix and the throughput
+profiles (mean rate x peak over one instance's capacity).
+
+Hysteresis on top of either: a target must differ from the current split by more than `band` in P:D
+ratio and be proposed `hold` times in a row, `cooldown_s` after the last change, so the controller writes
+a new generation only on a real, lasting change.
 """
 from __future__ import annotations
 
@@ -28,12 +39,15 @@ from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
 from . import mix as mixes
+from . import predict as pred
 from . import profiles as prof
 
 ROLE_LABELS = ("role", "llm_d_ai_role", "llm-d.ai/role", "airm_role")
 WAITING = "vllm:num_requests_waiting"
 TTFT = "vllm:time_to_first_token_seconds"
 TPOT = ("vllm:time_per_output_token_seconds", "vllm:inter_token_latency_seconds")
+SUCCESS = "vllm:request_success_total"
+PROMPT, ANSWER = "vllm:request_prompt_tokens", "vllm:request_generation_tokens"
 FLOOR = 0.25
 
 _SAMPLE = re.compile(r'^([a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{(.*)\})?\s+(\S+)')
@@ -116,12 +130,22 @@ class Observation:
     decode_waiting: Optional[float] = None
     ttft_p90_ms: Optional[float] = None
     tpot_p90_ms: Optional[float] = None
+    rate_rps: Optional[float] = None        # arrivals (completions) per second
+    mean_input: Optional[float] = None      # tokens per prompt
+    mean_output: Optional[float] = None     # tokens per answer
+    tok_s: Optional[float] = None           # output tokens per second (gives the rate with a mean answer)
+
+
+def _total(samples: List[Sample], name: str) -> Optional[float]:
+    vals = [s.value for s in samples if s.name == name]
+    return sum(vals) if vals else None
 
 
 def observe(samples: List[Sample], *, role_label: Optional[str] = None, role: Optional[str] = None,
-            previous: Optional[List[Sample]] = None) -> Observation:
+            previous: Optional[List[Sample]] = None, elapsed_s: Optional[float] = None) -> Observation:
     """Signals from one scrape. `role` forces every sample's role (a per-role source); `previous` is the
-    scrape before, so latency quantiles cover only the window in between."""
+    scrape before, `elapsed_s` seconds earlier, so latency quantiles, the rate and the mean lengths cover
+    only the window in between."""
     waiting: Dict[str, float] = {}
     for s in samples:
         if s.name == WAITING:
@@ -141,18 +165,40 @@ def observe(samples: List[Sample], *, role_label: Optional[str] = None, role: Op
         gauges = [s.value for s in samples if s.name == airm]
         return max(gauges) if gauges else None
 
+    def delta(name):
+        now = _total(samples, name)
+        if now is None or not previous:
+            return now
+        before = _total(previous, name)
+        return now - before if before is not None and now >= before else now
+
+    def mean(name):
+        n, total = delta(name + "_count"), delta(name + "_sum")
+        return total / n if n and total is not None else None
+
+    rate = None
+    done = delta(SUCCESS)
+    if done is not None and previous and elapsed_s:
+        rate = done / elapsed_s
+    req_s, tok_s = _total(samples, "airm_req_s"), _total(samples, "airm_tok_s")
+    rate = rate if rate is not None else req_s
+    out = mean(ANSWER)
+    if out is None and req_s and tok_s is not None:
+        out = tok_s / req_s
     return Observation(waiting.get("prefill"), waiting.get("decode"),
-                       quant((TTFT,), "airm_ttft_p90_ms"), quant(TPOT, "airm_tpot_p90_ms"))
+                       quant((TTFT,), "airm_ttft_p90_ms"), quant(TPOT, "airm_tpot_p90_ms"),
+                       rate, mean(PROMPT), out, tok_s)
 
 
 def merge(a: Observation, b: Observation) -> Observation:
     pick = lambda x, y: y if x is None else (x if y is None else max(x, y))  # noqa: E731
-    return Observation(pick(a.prefill_waiting, b.prefill_waiting), pick(a.decode_waiting, b.decode_waiting),
-                       pick(a.ttft_p90_ms, b.ttft_p90_ms), pick(a.tpot_p90_ms, b.tpot_p90_ms))
+    return Observation(*(pick(getattr(a, f), getattr(b, f)) for f in Observation.__dataclass_fields__))
 
 
 def pressures(obs: Observation, current: Tuple[int, int], slo: Dict[str, float],
-              queue_ref: float = 2.0) -> Tuple[float, float]:
+              queue_ref: float = 2.0, floor: Optional[float] = FLOOR) -> Tuple[Optional[float], Optional[float]]:
+    """(prefill, decode) pressure. With the default floor a role without signal reads 1; with floor=None
+    it reads None and nothing is floored (what predict.py fits)."""
     n_p, n_d = current
 
     def one(latency, slo_ms, waiting, n):
@@ -161,10 +207,61 @@ def pressures(obs: Observation, current: Tuple[int, int], slo: Dict[str, float],
             sig.append(latency / slo_ms)
         if waiting is not None:
             sig.append(waiting / (max(n, 1) * queue_ref))
-        return max(FLOOR, max(sig)) if sig else 1.0
+        if floor is None:
+            return max(sig) if sig else None
+        return max(floor, max(sig)) if sig else 1.0
 
     return (one(obs.ttft_p90_ms, slo.get("ttft_p90_ms"), obs.prefill_waiting, n_p),
             one(obs.tpot_p90_ms, slo.get("tpot_p90_ms"), obs.decode_waiting, n_d))
+
+
+def observed_mix(obs: Optional[Observation], base: mixes.Mix) -> Tuple[mixes.Mix, Optional[float], str]:
+    """The mix to predict with (the workload's shapes, scaled to observed mean lengths), the known mean
+    arrival rate and where it came from."""
+    rate, src = base.rate_rps, ("trace" if base.rate_rps else "no known rate")
+    if obs is None:
+        return base, rate, src
+    inp = base.input.scaled(obs.mean_input / base.mean_input) if obs.mean_input else base.input
+    out = base.output.scaled(obs.mean_output / base.mean_output) if obs.mean_output else base.output
+    if obs.rate_rps is not None:
+        rate, src = obs.rate_rps, "metrics"
+    elif obs.tok_s is not None:
+        rate, src = obs.tok_s / out.mean, "metrics: tok/s over the mean answer"
+    return mixes.Mix(base.name, inp, out, rate, base.peak_ratio), rate, src
+
+
+@dataclass(frozen=True)
+class Decision:
+    want: Tuple[int, int]
+    why: str
+    prediction: Optional[pred.Prediction] = None
+
+
+def decide(current: Tuple[int, int], budget_cards: int, groups: Tuple[int, int], obs: Observation,
+           slo: Dict[str, float], model: Optional[pred.Model], *, known_rate: Optional[float] = None,
+           known_source: str = "trace", queue_ref: float = 2.0, margin: float = 0.2) -> Decision:
+    """Target split from an observation: the predicted best split if it beats the current one by `margin`
+    (module doc); the linear `target` when there is no model (a device type without a profile)."""
+    pp, pd = pressures(obs, current, slo, queue_ref)
+    if pp <= 1.0 and pd <= 1.0:
+        return Decision(current, "SLOs met")
+    if model is None:
+        return Decision(target(current, budget_cards, groups, obs=obs, slo=slo, queue_ref=queue_ref),
+                        "linear rule (no profile)")
+    raw = pressures(obs, current, slo, queue_ref, floor=None)
+    p = pred.predict(model, current, budget_cards, groups, raw, known_rate, known_source)
+    now, best = p.current, p.best
+    at = f"at {p.arrivals:.2f} req/s ({p.source})"
+    if best.split == now.split:
+        return Decision(current, f"hold: no split predicted better {at}; now {now.describe()}", p)
+    if math.isinf(now.worst) and math.isinf(best.worst):
+        better = best.util < now.util * (1.0 - margin)
+    else:
+        better = best.worst < now.worst * (1.0 - margin)
+    if not better:
+        return Decision(current, f"hold: best {best.describe()} not {margin:.0%} better than now "
+                                 f"{now.describe()} {at}", p)
+    return Decision(best.split, f"predicted {now.describe()} -> {best.describe()} {at}", p)
 
 
 def need_from_mix(m: mixes.Mix, pp: prof.DeviceProfile, dp: prof.DeviceProfile,

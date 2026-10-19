@@ -58,6 +58,7 @@ class Link:
     implemented: bool = True
     source: str = ""
     pairs: Tuple[str, ...] = ()     # "prefill.kind->decode.kind" it works for; () = any
+    admit_blocking: bool = False    # the decode side loads the KV at admission inside its loop (stalls all streams)
 
     def serves(self, prefill_kind: str, decode_kind: str) -> bool:
         return not self.pairs or f"{prefill_kind}->{decode_kind}" in self.pairs
@@ -96,7 +97,8 @@ def parse(raw: dict) -> Profiles:
         links[name] = Link(name=name, scope=l["scope"], gb_s=float(l.get("gb_s", 0)),
                            latency_ms=float(l.get("latency_ms", 0)), min_bytes=int(l.get("min_bytes", 0)),
                            implemented=bool(l.get("implemented", True)), source=str(l.get("source", "")),
-                           pairs=tuple(str(p).replace(" ", "") for p in (l.get("pairs") or ())))
+                           pairs=tuple(str(p).replace(" ", "") for p in (l.get("pairs") or ())),
+                           admit_blocking=bool(l.get("admit_blocking", False)))
     return Profiles(model=str(raw.get("model", "")), kv_bytes_per_token=int(raw.get("kv_bytes_per_token", 131072)),
                     devices=devices, links=links)
 
