@@ -237,10 +237,10 @@ What it shows, with these profiles:
 - [x] Use live load (queueing, TTFT/TPOT) and workload shape ([traces](../../docs/workload-traces.md)) in the choice (`--rebalance`, `optimal`)
 - [x] Serving Deployments that follow the decisions (`--apply`); charts still have to pin cards from `accelerator-ids`
 - [x] The `airm-placement` format made normative in rm-core's protocol (§5.4, v0.1.2)
+- [x] An image (`ghcr.io/ai-computing/rm-controller`, [`Dockerfile`](Dockerfile)) and a Deployment in the umbrella chart [`charts/ai-rm`](../../charts/ai-rm)
 - [ ] Measured profiles (FASOP NPU cost model, aicomp #50) in place of the estimates; a GPU type for the GPU-only baseline
 - [ ] A cross-node KV transport, so that `optimal` can span nodes
 - [ ] Run `optimal`, `--rebalance` and `--apply` on the live cluster
-- [ ] An image and chart to run in the cluster, as part of the umbrella chart
 
 ## 📄 License
 

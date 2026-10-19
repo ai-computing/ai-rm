@@ -1,0 +1,28 @@
+# Example site override for the umbrella chart charts/ai-rm; copy to deploy/clusters/<name>/ (untracked).
+#   helm dependency update charts/ai-rm
+#   helm upgrade --install airm charts/ai-rm -n airm-system --create-namespace \
+#     -f deploy/clusters/<name>/ai-rm.values.yaml
+placementNamespace: llm-serving        # the llm-d namespace (EPP scorer, lmd-top read airm-placement there)
+
+node:
+  provider: rm-abstract
+  nodeAffinity: {}                     # every node; restrict with your own node labels if needed
+  # hostBin: /usr/bin
+
+controller:
+  intervalSeconds: 60
+  pools:
+    # RNGD prefill + RNGD decode over shared memory on one node (the end-to-end run's shape)
+    - pool: llama8b-pd-pool
+      model: meta-llama/Llama-3.1-8B-Instruct
+      kv_transport: shm
+      slo: {tpot_p90_ms: 100}
+      prefill: {accelerator: furiosa.RNGD, count: 1}
+      decode: {accelerator: furiosa.RNGD, count: 1}
+    # RNGD prefill + 2x ATOM decode over same-host P2P DMA
+    # - pool: llama8b-hetero-pool
+    #   model: meta-llama/Llama-3.1-8B-Instruct
+    #   kv_transport: p2p
+    #   slo: {tpot_p90_ms: 100}
+    #   prefill: {accelerator: furiosa.RNGD, count: 1}
+    #   decode: {accelerator: rebellions.ATOM, count: 2}

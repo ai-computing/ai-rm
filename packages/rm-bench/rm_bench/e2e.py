@@ -13,11 +13,14 @@ from rm_core.errors import ContractError
 from rm_core.workload import SLO_KEYS
 
 from . import client, traces
+from .power import PowerSampler
 from .results import RequestRecord, make_tags, percentile, summarize
 from .scenario import API_KINDS, Scenario
 
 # Measurements `rm-bench e2e` reports (ai-rm.yaml `metrics`).
 E2E_METRICS = ("slo_attainment_pct", "tok_s", "ttft_p90_ms", "tpot_p90_ms")
+# Added when configured: a power sampler (power_w, energy_j) and --cards (accelerators).
+EVIDENCE_METRICS = ("power_w", "energy_j", "accelerators")
 
 
 @dataclass
@@ -31,6 +34,7 @@ class E2EResult:
     measurements: list[Measurement]
     slo: dict[str, float]
     checks: dict[str, dict] = field(default_factory=dict)  # slo key -> {target, measured, ok}
+    record: dict = field(default_factory=dict)  # this run's entry in the run record (results.write_run)
 
     @property
     def passed(self) -> bool:
@@ -81,9 +85,13 @@ def judge(records: list[RequestRecord], wall_s: float, slo: Mapping[str, float],
 
 def run(scenario: Scenario, gateway: str, model: str | None = None, *,
         slo: Mapping[str, float] | None = None, run_id: str | None = None,
-        kv_transport: str | None = None, api: str | None = None) -> E2EResult:
+        kv_transport: str | None = None, api: str | None = None,
+        power: PowerSampler | None = None, deployment: str | None = None,
+        cards: int | None = None) -> E2EResult:
     """Run `scenario` against `gateway`. `slo` overrides the scenario's SLO when given, `api`
-    the scenario's request API (chat | completions)."""
+    the scenario's request API (chat | completions). `power` samples power while requests run;
+    `deployment` labels the run for `rm-bench compare` and `cards` (accelerators serving it) gives
+    per-card goodput."""
     if not gateway:
         raise ValueError("no gateway: pass --gateway or set LLMD_GATEWAY_URL")
     slo = dict(scenario.slo if slo is None else slo)
@@ -99,6 +107,8 @@ def run(scenario: Scenario, gateway: str, model: str | None = None, *,
     model = model or scenario.model or client.discover_model(gateway, scenario.timeout_s)
     schedule = [r for r in scenario.schedule() if r[0] < scenario.duration_s]
 
+    if power is not None:
+        power.start()
     t0 = time.perf_counter()
     stop_at = t0 + scenario.duration_s
 
@@ -124,13 +134,34 @@ def run(scenario: Scenario, gateway: str, model: str | None = None, *,
             futures.append(pool.submit(one, index, offset, prompt_tokens, max_tokens, *blocks))
         records = [f.result() for f in futures]
     wall_s = time.perf_counter() - t0
+    out_tokens = sum(r.out_tokens for r in records if r.ok)
+    psum = power.stop(window_s=wall_s, out_tokens=out_tokens) if power is not None else None
 
     tags = make_tags(model=model, workload=scenario.name, run_id=run_id, kv_transport=kv_transport)
     summary = {m.name: m for m in summarize(records, wall_s, tags)}
     measurements = [summary[n] for n in E2E_METRICS if n in summary]
     # With no SLO every successful request attains it, so this is the success rate.
-    attained = 100.0 * sum(_meets(r, slo) for r in records) / max(1, len(records))
+    meets = sum(_meets(r, slo) for r in records)
+    attained = 100.0 * meets / max(1, len(records))
     measurements.insert(0, Measurement("slo_attainment_pct", attained, dict(tags)).validate())
+    if psum is not None:
+        ptags = dict(tags, scope=psum.scope)
+        measurements.append(Measurement("power_w", psum.mean_w, ptags).validate())
+        measurements.append(Measurement("energy_j", psum.energy_j, ptags).validate())
+    if cards:
+        measurements.append(Measurement("accelerators", float(cards), dict(tags)).validate())
+    checks = judge(records, wall_s, slo, scenario.max_error_pct)
+    itl = [g for r in records if r.ok for g in r.itl_ms]
+    record = {"source": "rm-bench e2e", "deployment": deployment or "", "cards": cards,
+              "model": model, "workload": scenario.name, "api": api, "slo": dict(slo),
+              "checks": checks, "passed": all(c["ok"] for c in checks.values()),
+              "sent": len(records), "failed": sum(not r.ok for r in records), "wall_s": wall_s,
+              "out_tokens": out_tokens, "goodput_req_s": meets / max(wall_s, 1e-9)}
+    if itl:
+        record.update({f"itl_p{p}_ms": percentile(itl, p / 100.0) for p in (50, 90, 99)})
+    if psum is not None:
+        record["power"] = psum.as_dict()
+        record["power"]["errors"] = power.errors
     return E2EResult(scenario=scenario.name, run_id=run_id, model=model, sent=len(records),
-                     failed=sum(not r.ok for r in records), wall_s=wall_s, measurements=measurements,
-                     slo=slo, checks=judge(records, wall_s, slo, scenario.max_error_pct))
+                     failed=record["failed"], wall_s=wall_s, measurements=measurements,
+                     slo=slo, checks=checks, record=record)

@@ -1,0 +1,28 @@
+# Simulated cluster (kind; make up-sim, CI sim-e2e): rm-core's sim provider on every node (one RNGD and
+# one ATOM each, placeholder figures), images built locally and loaded into kind, no host access.
+node:
+  provider: sim
+  image: {repository: airm/rm-accel, tag: sim, pullPolicy: Never}
+  privileged: false
+  hostDev: false
+  hostBin: ""
+  intervalSeconds: 10
+
+controller:
+  image: {repository: airm/rm-controller, tag: sim, pullPolicy: Never}
+  intervalSeconds: 15
+  # Two RNGD-prefill / ATOM-decode pools over host-local KV paths: each needs one node to itself, so on
+  # the two-node sim cluster they land on different nodes.
+  pools:
+    - pool: sim-pd-a
+      model: sim-model
+      kv_transport: shm
+      slo: {tpot_p90_ms: 500}
+      prefill: {accelerator: furiosa.RNGD, count: 1}
+      decode: {accelerator: rebellions.ATOM, count: 1}
+    - pool: sim-pd-b
+      model: sim-model
+      kv_transport: p2p
+      slo: {tpot_p90_ms: 500}
+      prefill: {accelerator: furiosa.RNGD, count: 1}
+      decode: {accelerator: rebellions.ATOM, count: 1}
