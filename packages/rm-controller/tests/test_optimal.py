@@ -1,6 +1,8 @@
 """The `optimal` policy: objective, constraints, fallbacks, and agreement with topology on trivial pools."""
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from rm_core import Accelerator, Workload
 from rm_core.conformance import check_placement
@@ -12,6 +14,9 @@ from test_controller import GB, POOL, D, M, P, rngd
 
 PERF = profiles.load()
 RNGD, ATOM = PERF.devices["furiosa.RNGD"], PERF.devices["rebellions.ATOM"]
+# ATOM as a two-card (TP-2) instance with a TPOT that meets 100 ms, to exercise card groups
+TP2 = replace(PERF, devices={**PERF.devices, "rebellions.ATOM": replace(ATOM, group=2, tpot_ms_b1=40.0,
+                                                                         tpot_ms_bmax=52.0, max_batch=8)})
 SLO = {"ttft_p90_ms": 2000, "tpot_p90_ms": 100}
 PS, DS = Workload(kind="prefill", model=M, slo=SLO), Workload(kind="decode", model=M, slo=SLO)
 
@@ -22,9 +27,10 @@ def test_conformance():
 
 
 def test_profile_table_loads_and_marks_estimates():
-    assert RNGD.group == 1 and ATOM.group == 2 and ATOM.estimated
-    assert RNGD.tpot_ms(1) == 17.0 and RNGD.tpot_ms(8) == 24.0 and RNGD.batch_for(20) < RNGD.max_batch
-    assert PERF.links["shm"].transfer_ms(1) == pytest.approx(111.8, abs=0.5)    # the measured 67 MB copy
+    assert RNGD.group == 1 and ATOM.group == 1 and ATOM.estimated and not RNGD.estimated
+    assert RNGD.tpot_ms(1) == 30.0 and RNGD.tpot_ms(8) == 30.3 and RNGD.batch_for(20) < RNGD.max_batch
+    assert ATOM.max_batch == 4 and ATOM.batch_for(100) == 0         # measured ATOM TPOT misses a 100 ms SLO
+    assert PERF.links["shm"].transfer_ms(1) == pytest.approx(41.9, abs=0.5)     # the measured 67 MB load
     assert not PERF.links["tcp"].implemented and PERF.links["p2p"].serves("furiosa.RNGD", "rebellions.ATOM")
     assert not PERF.links["p2p"].serves("furiosa.RNGD", "furiosa.RNGD")
 
@@ -55,14 +61,16 @@ def test_trivial_pool_matches_topology():
 
 def test_lab_pool_picks_rngd_pair_and_skips_unschedulable_node():
     p, d = OptimalPlacement({"npu-node-2"}).place_pd(PS, DS, POOL, kv_transport="auto")
-    assert p.accelerator_ids == ["npu-node-1/furiosa:0"] and d.accelerator_ids == ["npu-node-1/furiosa:1"]
+    ids = p.accelerator_ids + d.accelerator_ids
+    assert p.accelerator_ids == ["npu-node-1/furiosa:0"] and all(i.startswith("npu-node-1/furiosa:") for i in ids)
+    assert len(set(ids)) == len(ids) == 3  # decode-bound default mix (1 K in, 128 out): one prefill, two decode
     assert p.kv_transport == "shm"       # p2p is verified only for RNGD -> ATOM; tcp is not implemented
-    assert "partly estimated" in p.reason
+    assert "profiles measured" in p.reason
 
 
 def test_role_filters_are_constraints_and_atom_groups_stay_whole():
-    p, d = OptimalPlacement().place_pd(P, D, POOL, kv_transport="p2p", prefill_spec=RoleSpec("furiosa.RNGD"),
-                                       decode_spec=RoleSpec("rebellions.ATOM"))
+    p, d = OptimalPlacement(profiles=TP2).place_pd(P, D, POOL, kv_transport="p2p", prefill_spec=RoleSpec("furiosa.RNGD"),
+                                                   decode_spec=RoleSpec("rebellions.ATOM"))
     assert all("furiosa" in i for i in p.accelerator_ids)
     assert d.accelerator_ids and len(d.accelerator_ids) % 2 == 0 and all("rebellions" in i for i in d.accelerator_ids)
     assert {i.split("/")[0] for i in p.accelerator_ids + d.accelerator_ids} == {"npu-node-1"}   # p2p is host-local
@@ -124,7 +132,7 @@ def test_infeasible_mix_falls_back_with_the_why():
 
 
 def test_place_single_by_profiled_throughput():
-    o = OptimalPlacement()
+    o = OptimalPlacement(profiles=TP2)
     assert o.place(Workload(kind="decode", model=M, labels={"airm.ai-computing.io/accelerator": "rebellions.ATOM"}),
                    POOL).accelerator_ids == ["npu-node-1/rebellions:0", "npu-node-1/rebellions:1"]
     assert o.place(Workload(kind="prefill", model=M), POOL).accelerator_ids == ["npu-node-1/furiosa:0"]

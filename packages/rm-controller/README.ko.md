@@ -112,8 +112,9 @@ condition)와 Disk/Memory/PID pressure 노드도 cordon 노드처럼 제외합�
 | 대체 | 빈 카드 종류에 프로파일이 없거나, `loopback`, 모르는 전송, SLO를 지키는 후보 없음 → spec의 개수로 `topology`, 이유에 기록. 선택지가 하나뿐인 풀은 topology와 같은 결과 |
 
 `kv_transport: auto`는 구현된 링크 중에서 고릅니다. `p2p`는 검증된 RNGD → ATOM에만 제시합니다.
-**프로파일 수치는 일부 추정치입니다.** 파일에 측정(measured)·유도(derived)·추정(estimate)을 표시했으며, FASOP NPU 비용 모델
-([aicomp #50](https://github.com/ai-computing/aicomp/issues/50))이나 측정 sweep으로 바꿀 예정입니다.
+프로파일 수치마다 파일에 측정(measured)·유도(derived)·추정(estimate)을 표시했습니다. RNGD와 ATOM decode는 실제 S=512 그래프에서
+측정했고([기준선](../../docs/ko/baselines.md)), ATOM prefill과 `p2p`·`tcp` 링크는 FASOP NPU 비용 모델
+([aicomp #50](https://github.com/ai-computing/aicomp/issues/50))이나 sweep으로 바꿀 때까지 추정치입니다.
 
 ## 📝 Spec
 
@@ -184,36 +185,37 @@ BurstGPT 2초/100 ms, Azure 코드 4초/100 ms, Mooncake 15초/100 ms(긴 프롬
 
 | 트레이스 | topology RNGD/RNGD shm | topology RNGD/ATOM×2 p2p | optimal (per card) | optimal (max goodput) |
 |---|--:|--:|--:|--:|
-| azure-conv | 0.335 (0.168) | 0.046 (0.015) | 0.335 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.335 (0.168)<br>P 1x RNGD / D 1x RNGD, shm |
-| azure-code | 0.125 (0.063) | 0.000 (0.000) | 0.125 (0.063)<br>P 1x RNGD / D 1x RNGD, shm | 0.125 (0.063)<br>P 1x RNGD / D 1x RNGD, shm |
-| burstgpt | 0.027 (0.013) | 0.004 (0.001) | 0.027 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.027 (0.013)<br>P 1x RNGD / D 1x RNGD, shm |
-| mooncake-conv | 0.000 (0.000) | 0.000 (0.000) | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm |
-| mooncake-tool | 0.038 (0.019) | 0.000 (0.000) | 0.038 (0.019)<br>P 1x RNGD / D 1x RNGD, shm | 0.038 (0.019)<br>P 1x RNGD / D 1x RNGD, shm |
+| azure-conv | 0.750 (0.375) | 0.000 (0.000) | 0.750 (0.375)<br>P 1x RNGD / D 1x RNGD, shm | 0.750 (0.375)<br>P 1x RNGD / D 1x RNGD, shm |
+| azure-code | 0.999 (0.500) | 0.000 (0.000) | 0.999 (0.500)<br>P 1x RNGD / D 1x RNGD, shm | 0.999 (0.500)<br>P 1x RNGD / D 1x RNGD, shm |
+| burstgpt | 0.024 (0.012) | 0.000 (0.000) | 0.024 (0.012)<br>P 1x RNGD / D 1x RNGD, shm | 0.024 (0.012)<br>P 1x RNGD / D 1x RNGD, shm |
+| mooncake-conv | 0.557 (0.279) | 0.000 (0.000) | 0.557 (0.279)<br>P 1x RNGD / D 1x RNGD, shm | 0.557 (0.279)<br>P 1x RNGD / D 1x RNGD, shm |
+| mooncake-tool | 0.948 (0.474) | 0.000 (0.000) | 0.948 (0.474)<br>P 1x RNGD / D 1x RNGD, shm | 0.948 (0.474)<br>P 1x RNGD / D 1x RNGD, shm |
 
 **2 nodes: 2 x (2 RNGD + 4 ATOM)** — goodput req/s (카드당 req/s), optimal은 숫자 아래에 배치
 
 | 트레이스 | topology RNGD/RNGD shm | topology RNGD/ATOM×2 p2p | optimal (per card) | optimal (max goodput) | optimal (max goodput, planned tcp) |
 |---|--:|--:|--:|--:|--:|
-| azure-conv | 0.335 (0.168) | 0.046 (0.015) | 0.335 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.335 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.705 (0.176)<br>P 3x RNGD / D 1x RNGD, tcp, 2 nodes |
-| azure-code | 0.125 (0.063) | 0.000 (0.000) | 0.125 (0.063)<br>P 1x RNGD / D 1x RNGD, shm | 0.125 (0.063)<br>P 1x RNGD / D 1x RNGD, shm | 0.627 (0.157)<br>P 3x RNGD / D 1x RNGD, tcp, 2 nodes |
-| burstgpt | 0.027 (0.013) | 0.004 (0.001) | 0.027 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.027 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.061 (0.015)<br>P 2x RNGD / D 2x RNGD, tcp, 2 nodes |
-| mooncake-conv | 0.000 (0.000) | 0.000 (0.000) | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm |
-| mooncake-tool | 0.038 (0.019) | 0.000 (0.000) | 0.038 (0.019)<br>P 1x RNGD / D 1x RNGD, shm | 0.038 (0.019)<br>P 1x RNGD / D 1x RNGD, shm | 0.380 (0.095)<br>P 3x RNGD / D 1x RNGD, tcp, 2 nodes |
+| azure-conv | 0.750 (0.375) | 0.000 (0.000) | 0.750 (0.375)<br>P 1x RNGD / D 1x RNGD, shm | 0.750 (0.375)<br>P 1x RNGD / D 1x RNGD, shm | 2.661 (0.665)<br>P 1x RNGD / D 3x RNGD, tcp, 2 nodes |
+| azure-code | 0.999 (0.500) | 0.000 (0.000) | 0.999 (0.500)<br>P 1x RNGD / D 1x RNGD, shm | 0.999 (0.500)<br>P 1x RNGD / D 1x RNGD, shm | 2.195 (0.549)<br>P 3x RNGD / D 1x RNGD, tcp, 2 nodes |
+| burstgpt | 0.024 (0.012) | 0.000 (0.000) | 0.024 (0.012)<br>P 1x RNGD / D 1x RNGD, shm | 0.024 (0.012)<br>P 1x RNGD / D 1x RNGD, shm | 0.082 (0.021)<br>P 1x RNGD / D 3x RNGD, tcp, 2 nodes |
+| mooncake-conv | 0.557 (0.279) | 0.000 (0.000) | 0.557 (0.279)<br>P 1x RNGD / D 1x RNGD, shm | 0.557 (0.279)<br>P 1x RNGD / D 1x RNGD, shm | 1.129 (0.282)<br>P 2x RNGD / D 2x RNGD, tcp, 2 nodes |
+| mooncake-tool | 0.948 (0.474) | 0.000 (0.000) | 0.948 (0.474)<br>P 1x RNGD / D 1x RNGD, shm | 0.948 (0.474)<br>P 1x RNGD / D 1x RNGD, shm | 1.977 (0.494)<br>P 2x RNGD / D 2x RNGD, tcp, 2 nodes |
 
 이 프로파일로 보면:
 
-- **노드 하나에서는 optimal이 RNGD/RNGD 풀**이며, Azure 대화와 BurstGPT에서 이종 RNGD/ATOM×2 풀보다 카드당 goodput이 약 10배입니다.
-  ATOM decode는 KV 여유(가중치 옆 약 4K 토큰: 대화는 batch 2, Azure 코드·Mooncake 프롬프트 대부분은 들어가지 않음)에 묶이고,
-  ATOM prefill은 TTFT SLO에 비해 느립니다.
+- **프로파일은 이제 대부분 측정값**입니다. 실제 기준선 실험의 S=512 그래프에서 쟀습니다([기준선](../../docs/ko/baselines.md)):
+  RNGD prefill 66 ms + 12K tok/s, RNGD decode는 batch 8까지 토큰당 30 ms(continuous B=8 그래프는 폭이 고정), ATOM decode는 카드 한 장에서
+  batch 4까지 토큰당 108 ms, `shm` 1.6 GB/s. ATOM prefill과 `p2p`·`tcp` 링크는 아직 추정치입니다.
+- **노드 하나에서는 optimal이 RNGD/RNGD 풀**입니다. ATOM decode는 어떤 batch에서도 TPOT SLO 100 ms를 넘으므로 ATOM으로 decode하는
+  풀은 goodput이 0입니다. 실제 RNGD → ATOM 기준선도 SLO를 지킨 요청이 0 %였습니다.
 - **노드 둘에서는 노드 간 KV 전송이 있어야만 이득**이 납니다. 아직 없습니다(표의 `tcp`는 0.5 GB/s로 추정한 계획 링크). 있으면
-  goodput이 2.1배(Azure 대화)에서 10배(Mooncake tool-agent), 카드당 최대 5배이며, 대부분 길고 들쭉날쭉한 프롬프트를 위한 prefill
-  서버 추가에서 옵니다.
-- Mooncake 대화는 어디서도 불가능합니다(p90 프롬프트 27K 토큰 ≈ prefill 11초). optimal은 topology로 대체합니다.
-- 절대값이 낮은 이유: 측정된 `shm` 경로가 0.6 GB/s(1K 토큰 프롬프트의 KV에 약 0.3초)이고, 용량을 트레이스별 60초 peak(BurstGPT
-  69배)에 맞춰 잡기 때문입니다.
-- `optimal`의 분석 모델은 시뮬레이션 goodput의 0.43–1.25배로 대부분 보수적입니다([컴포넌트 카드](../../docs/components/rm-controller.md)의
-  "Model est." 열). 둘 다 같은 프로파일을 읽으므로 시뮬레이션은 대기열·burst·KV 적합·라우팅을 검증할 뿐, **일부 추정치인 프로파일
-  수치 자체는 검증하지 않습니다**.
+  goodput 2.0–3.5배, 카드당 최대 1.8배입니다. 이제 대화형은 decode가 병목이고(Azure 대화와 BurstGPT에서 optimal이 decode를 늘림)
+  Azure 코드는 prefill이 병목입니다.
+- Mooncake 행은 외삽입니다. S=512 그래프는 그 프롬프트를 아예 처리하지 못하고, prefill 속도를 512 토큰 너머로 선형 연장했으므로
+  (attention의 제곱 항 무시) 낙관적입니다.
+- 용량을 트레이스별 60초 peak(BurstGPT 69배)에 맞추므로 절대값이 낮습니다.
+- `optimal`의 분석 모델은 시뮬레이션 goodput의 0.71–0.88배입니다([컴포넌트 카드](../../docs/components/rm-controller.md)의
+  "Model est." 열). 둘 다 같은 프로파일을 읽으며, 프로파일 자체는 실제 실행으로 확인합니다([기준선](../../docs/ko/baselines.md#보정-w6)).
 
 ## ✅ 검증
 
@@ -221,8 +223,12 @@ BurstGPT 2초/100 ms, Azure 코드 4초/100 ms, Mooncake 15초/100 ms(긴 프롬
   `rm_core.conformance airm.placements topology optimal` PASS, CI에서 둘 다 실행.
 - 실제 클러스터 읽기 전용 dry-run(2026-10-19, topology): shm 풀은 `npu-node-1/furiosa:0` + `furiosa:1`(end-to-end 실행에서 손으로 고정했던 배치와
   같음, cordon된 노드는 제외), p2p 풀은 RNGD 0 + ATOM 0, 1.
-- 아직 클러스터에서 돌리지 않음: `optimal`, `--rebalance`(aicomp #45의 vLLM 지표나 게이트웨이 `airm_*` 필요), `--apply`(annotation된
-  Deployment 필요). 가짜 클러스터 IO와 시뮬레이터로만 검증했습니다.
+- RNGD+ATOM 노드에서 실제 실행(2026-10-19, [기준선](../../docs/ko/baselines.md)): `optimal`(`examples/optimal.yaml`, budget 6)이
+  generation 2(prefill RNGD 2장, decode RNGD 1장, `shm`)를 쓰고, `--apply`가 annotation된 rngd-pd Deployment를 patch했습니다(replicas
+  2와 1, node affinity, `accelerator-ids`). 파드는 결정한 노드에 결정한 카드 수로 올라왔고, PD 경로는 llm-d 게이트웨이를 거쳐
+  `pd-smoke`를 통과했습니다. 어느 카드를 받는지는 여전히 device plugin이 정합니다. 보정한 프로파일로는 prefill 1장 / decode 2장을
+  골랐고(generation 3), `--apply`가 Deployment를 그에 맞췄습니다.
+- 아직 클러스터에서 돌리지 않음: `--rebalance`(aicomp #45의 vLLM 지표나 게이트웨이 `airm_*` 필요).
 
 ## 🗺 로드맵
 
@@ -230,9 +236,11 @@ BurstGPT 2초/100 ms, Azure 코드 4초/100 ms, Mooncake 15초/100 ms(긴 프롬
 - [x] 결정을 따르는 서빙 Deployment (`--apply`). chart가 `accelerator-ids`로 카드를 고정하는 일은 남음
 - [x] `airm-placement` 형식을 rm-core 프로토콜에 규범화 (§5.4, v0.1.2)
 - [x] 이미지(`ghcr.io/ai-computing/rm-controller`, [`Dockerfile`](Dockerfile))와 umbrella chart [`charts/ai-rm`](../../charts/ai-rm)의 Deployment
-- [ ] 추정치 대신 측정 프로파일 (FASOP NPU 비용 모델, aicomp #50), GPU 전용 기준선을 위한 GPU 종류
+- [x] 실제 기준선에서 측정한 RNGD·ATOM decode 프로파일
+- [ ] ATOM prefill·`p2p` 측정, FASOP NPU 비용 모델(aicomp #50), GPU 전용 기준선을 위한 GPU 종류
 - [ ] `optimal`이 노드를 넘을 수 있도록 노드 간 KV 전송
-- [ ] `optimal`, `--rebalance`, `--apply`를 실제 클러스터에서 실행
+- [x] `optimal`, `--apply`를 실제 클러스터에서 실행
+- [ ] `--rebalance`를 실제 클러스터에서 실행
 
 ## 📄 라이선스
 
