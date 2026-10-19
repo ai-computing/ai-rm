@@ -1,0 +1,8 @@
+ai-rm {{ .Chart.Version }} installed in {{ .Release.Namespace }}.
+
+  kubectl get acceleratorprofiles          # L1: one per device{{ if .Values.node.enabled }} (provider {{ .Values.node.provider }}){{ end }}
+  kubectl -n {{ include "ai-rm.placementNamespace" . }} get configmap airm-placement -o jsonpath='{.data.decisions\.json}'
+{{- if .Values.controller.enabled }}
+  kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "ai-rm.controller" . }}
+  kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "ai-rm.controller" . }} -- rm-controller --spec /etc/rm-controller/spec.yaml --once
+{{- end }}

@@ -1,0 +1,48 @@
+# ai-rm umbrella chart: L1 node daemon + AcceleratorProfile CRD, L4 rm-controller, airm-placement.
+# Defaults describe an example accelerator cluster. Site overrides go in an untracked
+# deploy/clusters/<name>/ai-rm.values.yaml (start from deploy/clusters/example/ai-rm.values.yaml);
+# the simulated kind cluster uses ci/sim-values.yaml (make up-sim).
+
+# Namespace of the airm-placement ConfigMap: the llm-d namespace, where the EPP scorer and lmd-top
+# read it. "" = the release namespace.
+placementNamespace: ""
+
+# L1: rm-accel node daemon (subchart rm-abstract-node from components/l1-accel/rm-accel, chart >= 0.5.0).
+# Every value of that chart can be set here; see its values.yaml.
+node:
+  enabled: true
+  provider: rm-abstract          # "sim" for a simulated cluster
+  # image: ghcr.io/ai-computing/rm-accel:<chart appVersion> by default
+  # hostDev / hostBin / privileged: the host's vendor tools read the device nodes (chart defaults)
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 512Mi}
+
+# L4: rm-controller places the pools below and writes airm-placement (packages/rm-controller).
+controller:
+  enabled: true
+  image:
+    repository: ghcr.io/ai-computing/rm-controller
+    tag: "0.1.0"                 # packages/rm-controller version; :master follows ai-rm master
+    pullPolicy: IfNotPresent
+  intervalSeconds: 60            # seconds between placements
+  # Pools to place, in order (rm-controller spec, packages/rm-controller/README.md). The spec's
+  # namespace is placementNamespace. accelerator is vendor.model as in airm.ai-computing.io/<vendor>.<model>.
+  pools:
+    - pool: llama8b-pd-pool                # InferencePool name
+      model: meta-llama/Llama-3.1-8B-Instruct
+      kv_transport: shm
+      slo: {tpot_p90_ms: 100}
+      prefill: {accelerator: furiosa.RNGD, count: 1}
+      decode: {accelerator: furiosa.RNGD, count: 1}
+  extraArgs: []
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {memory: 256Mi}
+  nodeSelector: {}
+  tolerations: []
+
+# airm-placement ConfigMap: created at install, with an empty v0.1 document, only when it does not
+# exist yet. rm-controller owns its contents afterwards; Helm keeps it on upgrade and uninstall.
+placement:
+  create: true

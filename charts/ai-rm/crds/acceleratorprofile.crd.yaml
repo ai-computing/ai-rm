@@ -1,0 +1,50 @@
+# AcceleratorProfile CRD, copied verbatim from rm-core v0.1.1 k8s/acceleratorprofile.crd.yaml; update it
+# with the rm-core pin. Helm installs crds/ before the templates and never upgrades or deletes them.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: acceleratorprofiles.airm.ai-computing.io
+spec:
+  group: airm.ai-computing.io
+  scope: Cluster
+  names:
+    kind: AcceleratorProfile
+    plural: acceleratorprofiles
+    singular: acceleratorprofile
+    shortNames: [accp]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - {name: Node, type: string, jsonPath: .spec.node}
+        - {name: Vendor, type: string, jsonPath: .spec.vendor}
+        - {name: Model, type: string, jsonPath: .spec.model}
+        - {name: Memory, type: integer, jsonPath: .spec.memoryBytes}
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [id, node, vendor, model, memoryBytes, memoryKind]
+              properties:
+                id: {type: string, description: "<node>/<vendor>:<index>"}
+                node: {type: string}
+                vendor: {type: string, enum: [nvidia, furiosa, rebellions, cpu, amd, intel, other]}
+                model: {type: string}
+                memoryBytes: {type: integer, minimum: 1}
+                memoryKind: {type: string, enum: [hbm, gddr, dram, unified, lpddr]}
+                peakTflops:
+                  type: object
+                  description: precision -> dense TFLOPS (as strings to keep exact values)
+                  additionalProperties: {type: string}
+                peakSource: {type: string}
+                powerLimitW: {type: string, nullable: true}
+                interconnect:
+                  type: array
+                  items: {type: string}
+                extra:
+                  type: object
+                  description: vendor details (PCI address, firmware, product name); no addresses or secrets
+                  additionalProperties: {type: string}

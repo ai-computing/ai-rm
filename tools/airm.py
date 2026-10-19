@@ -8,6 +8,7 @@
     python3 tools/airm.py deploy --cluster NAME [--dry-run] [--layer L] [COMPONENT ...]
     python3 tools/airm.py check
     python3 tools/airm.py bump COMPONENT [--ref REF]
+    python3 tools/airm.py up-sim | e2e-sim [--no-cluster] | down-sim     (tools/airm_sim.py)
 
 Components live under components/<layer>/<name> as git submodules, or in-tree under packages/<name>
 (rm-bench, rm-controller) with their layer in the manifest; each declares itself in <name>/ai-rm.yaml
@@ -117,10 +118,11 @@ def cmd_list(args):
 def cmd_doctor(_args):
     ok = True
     for tool, why in [("git", "submodules"), ("python3", "components"), ("kubectl", "deploy"),
-                      ("helm", "llm-d charts"), ("cargo", "lmd-top build"), ("docker", "images")]:
+                      ("helm", "charts"), ("cargo", "lmd-top build"), ("docker", "images"),
+                      ("kind", "simulated cluster")]:
         found = shutil.which(tool)
         print(f"{'ok ' if found else '-- '} {tool:8} {found or 'not found'}  ({why})")
-        ok &= bool(found) or tool in ("cargo", "docker", "helm")
+        ok &= bool(found) or tool in ("cargo", "docker", "helm", "kind")
     missing = [c["name"] for c in components() if not c["fetched"]]
     if missing:
         print("-- submodules not fetched: " + ", ".join(missing) +
@@ -205,6 +207,11 @@ def main():
     s = sub.add_parser("bump")
     s.add_argument("component")
     s.add_argument("--ref")
+    sub.add_parser("up-sim", help="kind cluster with sim accelerators and charts/ai-rm")
+    s = sub.add_parser("e2e-sim", help="placement + rm-bench checks on the simulated cluster")
+    s.add_argument("--no-cluster", action="store_true", help="in-process: sim profiles, rm-controller plan, fake pool")
+    s.add_argument("--out", help="rm-bench result path (default results/sim-e2e.json)")
+    sub.add_parser("down-sim", help="delete the kind cluster")
     args = ap.parse_args()
     if args.cmd == "list":
         return cmd_list(args)
@@ -220,6 +227,9 @@ def main():
         return cmd_check(args)
     if args.cmd == "bump":
         return cmd_bump(args)
+    if args.cmd in ("up-sim", "e2e-sim", "down-sim"):
+        import airm_sim
+        return {"up-sim": airm_sim.cmd_up, "e2e-sim": airm_sim.cmd_e2e, "down-sim": airm_sim.cmd_down}[args.cmd](args)
 
 
 if __name__ == "__main__":

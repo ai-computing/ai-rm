@@ -1,0 +1,15 @@
+apiVersion: v2
+name: ai-rm
+description: ai-rm umbrella - L1 node daemon and AcceleratorProfile CRD, L4 rm-controller and the airm-placement ConfigMap
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/ai-computing/ai-rm
+dependencies:
+  # L1: the rm-accel chart from the pinned submodule (git submodule update --init components/l1-accel/rm-accel;
+  # helm dependency update charts/ai-rm)
+  - name: rm-abstract-node
+    alias: node
+    version: ">=0.5.0"
+    repository: file://../../components/l1-accel/rm-accel/deploy/helm/rm-abstract-node
+    condition: node.enabled
