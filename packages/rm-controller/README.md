@@ -344,7 +344,9 @@ What it shows, with these profiles (RNGD, ATOM and `shm` measured, A100 partly e
   predicted with decode saturated; measured 3.1–3.8) and still makes the conversation move. Replayed in
   `python -m rm_controller.sim --episode` (W5's alternating load, real Azure arrival times), the linear rule moved 8 times
   and averaged 74–76 % on code and 56 % on conversation; the predictive rule held 1P+2D (78 %, 99 %), and from 2P+1D it made
-  the conversation move and nothing else. Live re-check: [baselines](../../docs/baselines.md#the-predictive-rule).
+  the conversation move and nothing else. Live re-check (2026-10-19, same load and cards, 50 min from 2P+1D): one move,
+  2:1 → 1:2 four minutes into conversation ×2, then 1P+2D held through both code ×3 phases, 77–81 % attainment on every code
+  run (the linear rule's move had given 40–45 %). See [baselines](../../docs/baselines.md#the-predictive-rule).
 
 ## 🗺 Roadmap
 
