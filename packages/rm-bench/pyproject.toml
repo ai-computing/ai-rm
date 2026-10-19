@@ -7,7 +7,7 @@ name = "rm-bench"
 version = "0.1.0"
 requires-python = ">=3.9"
 dependencies = [
-    "rm-core @ git+https://github.com/ai-computing/rm-core@v0.1.1",
+    "rm-core>=0.1.1,<0.2",
     "pyyaml",
     "pandas",
     "numpy",
