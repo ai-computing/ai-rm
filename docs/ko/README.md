@@ -1,20 +1,25 @@
-# AI-RM 한국어 문서
+# 문서
 
-[프로젝트 첫 화면](../../README.ko.md) · [English documentation](../README.md)
+[AI-RM 첫 화면](../../README.ko.md) · [English](../README.md)
 
-**「AI 반도체 통합 자원관리 기술 개발」 과제의 버전 관리되는 문서·지식 베이스입니다.** GitHub에서 위키처럼 탐색하고 체크아웃과 함께 읽을 수 있습니다. 별도 GitHub Wiki 초기화는 필요하지 않습니다.
+AI-RM은 이종 자원 연구, 클러스터 통합, 재현 가능한 평가를 연결합니다. **처음 방문했다면** [프로젝트 개요](project-overview.md)에서 시작해 [아키텍처](architecture.md)를 살펴보세요.
 
-**현재 설계 방향:** AI-RM은 자원·클러스터·증빙을 연결하고, `aicomp`의 **[Optimus Prime + FASOP](engine-integration.md)**을 통합 엔진으로 둡니다. [계획 설정](../../config/engine-integration.yaml)은 이전 책임과 전환 기준을 기록하며 새 런타임을 활성화하지 않습니다.
+## 목적별 안내
 
-![AI-RM 5계층 아키텍처](../assets/architecture.svg)
-
-| 읽는 분 | 시작 문서 | 이어서 읽기 |
+| 목적 | 시작 문서 | 이어서 읽기 |
 |---|---|---|
-| 과제 방문자·검토자 | [프로젝트 개요](project-overview.md) | [연구 시나리오](research-scenarios.md) · [성과지표](kpi-map.md) |
-| 연구자 | [아키텍처](architecture.md) | [인터페이스](interfaces.md) · [구성요소](../components/README.md) |
-| 엔진 구현 담당자 | [Optimus Prime 통합 설계](engine-integration.md) | [FASOP 카드](../components/fasop.md) · [엔진 카드](../components/optimus-prime.md) |
-| 통합 개발자 | [시작하기](getting-started.md) | [통합 가이드](integration-guide.md) · [구성요소 계약](component-contract.md) |
-| 운영자 | [현재 상태·접근 권한](status.md) | [배포](../../deploy/README.ko.md) · [보안](security.md) |
-| 문서 기여자 | [기여 방법](../../CONTRIBUTING.md) | [시각 자료·프롬프트](../assets/README.md) · [용어집](glossary.md) |
+| **프로젝트 이해** | [프로젝트 개요](project-overview.md) | [연구 시나리오](research-scenarios.md) · [용어집](glossary.md) |
+| **현재 구성요소 실행** | [시작하기](getting-started.md) | [배포](../../deploy/README.ko.md) · [현재 상태·접근 권한](status.md) |
+| **통합 엔진 구현** | [Optimus Prime + FASOP 설계](engine-integration.md) | [엔진 카드](../components/optimus-prime.md) · [FASOP 카드](../components/fasop.md) |
+| **구현 연결** | [통합 가이드](integration-guide.md) | [인터페이스](interfaces.md) · [구성요소 계약](component-contract.md) |
+| **결과 평가** | [성과지표·증빙](kpi-map.md) | [측정 정의](interfaces.md) |
+| **기여** | [기여 안내](../../CONTRIBUTING.md) | [보안](security.md) · [시각 자료](../assets/README.md) |
 
-인터페이스의 규범 정의는 [rm-core PROTOCOL.md](https://github.com/ai-computing/rm-core/blob/main/PROTOCOL.md)입니다. 구성요소 작업 카드는 통합 요구 사항이며 완료 증빙은 아닙니다. 실제 준비 상태는 고정된 커밋의 구현과 검증 결과를 확인하세요.
+## 참조
+
+- [구성요소 디렉터리](../components/README.md) — 역할, 소스 저장소, 통합 작업 카드.
+- [아키텍처](architecture.md) — 5계층 구조, 요청 흐름, 메모리 경로.
+- [계획 설정](../../config/engine-integration.yaml) — 엔진 소유권과 이전 완료 기준. 실행 설정은 아닙니다.
+- [rm-core 규범 문서](https://github.com/ai-computing/rm-core/blob/main/PROTOCOL.md) — 인터페이스 정의.
+
+엔진 통합은 계획 단계입니다. 현재 구현 경계와 접근 권한은 [상태 문서](status.md)에서 확인하세요. 구성요소 작업 카드는 요구 사항이며 완료 증빙이 아닙니다. 기존 소스별 상세 작업 카드는 한국어로 유지합니다.

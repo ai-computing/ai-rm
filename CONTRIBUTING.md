@@ -18,6 +18,7 @@ For a pointer update, identify old/new component revisions and the validation ac
 - Update both languages when changing setup commands, access rules, architecture or status. Preserve reciprocal language links.
 - Detailed component work cards currently remain in Korean; label their language in navigation.
 - Use repository-relative links for local pages and descriptive alt text for images.
+- Keep the root README focused on purpose, quick start, one overview and navigation. Put detailed diagrams, migration mechanics and environment imagery in the topic guides.
 - Separate intended architecture, implemented behavior and tested results. Keep unreleased KPI numbers and private evidence out of public docs.
 
 ## Visual assets
@@ -28,7 +29,7 @@ Original SVG sources are regenerated with:
 python3 tools/render_docs_assets.py
 ```
 
-Keep diagrams readable at GitHub content width. Retain the captions distinguishing AI-generated conceptual imagery from installation photos. [Asset provenance](docs/assets/README.md) records prompts and ownership boundaries.
+Keep diagrams readable at GitHub content width and on small screens. Check the README's light/dark `<picture>` variants and stacked mobile overview. Retain the captions distinguishing AI-generated conceptual imagery from installation photos. [Asset provenance](docs/assets/README.md) records prompts and ownership boundaries.
 
 ## Before submitting
 
