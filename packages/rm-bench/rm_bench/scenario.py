@@ -8,7 +8,8 @@
       arrival: {kind: poisson, rps: 8}   # poisson | deterministic | none (all at once)
       prompt_tokens: "uniform:16,128"    # const:X | uniform:A,B | normal:MU,SIGMA | lognormal:MU,SIGMA
       max_tokens: "const:32"
-      # trace: {csv: path/to/AzureLLMInferenceTrace.csv, speedup: 10}   (source: trace)
+      # trace: {path: ${RM_BENCH_TRACES}/azure-2023/AzureLLMInferenceTrace_conv.csv, speedup: 1,
+      #         max_total_tokens: 512}   (source: trace; formats and filters in rm_bench/traces.py)
     concurrency: 8
     duration_s: 60              # stop issuing new requests after this
     timeout_s: 30               # per request
@@ -21,11 +22,9 @@ Target addresses never go here; they come from --gateway / LLMD_GATEWAY_URL.
 """
 from __future__ import annotations
 
-import csv
 import os
 import random
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -33,9 +32,11 @@ import yaml
 from rm_core.errors import ContractError
 from rm_core.workload import SLO_KEYS
 
+from . import traces
+
 API_KINDS = ("chat", "completions")
 
-# (offset_s from run start, prompt_tokens, max_tokens)
+# (offset_s from run start, prompt_tokens, max_tokens[, mooncake hash_ids])
 Request = tuple[float, int, int]
 
 
@@ -152,34 +153,6 @@ def _synthetic_schedule(req: dict, rng: random.Random) -> list[Request]:
     return out
 
 
-def _parse_ts_s(ts: str) -> float:
-    dt = datetime.fromisoformat(ts.strip().replace(" ", "T"))
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.timestamp()
-
-
 def _trace_schedule(req: dict, duration_s: float | None = None) -> list[Request]:
-    """Azure LLM inference trace CSV (TIMESTAMP, ContextTokens, GeneratedTokens), time-compressed.
-
-    Reading stops at `count` rows or at the first row past `duration_s`, whichever comes first.
-    """
-    trace = req.get("trace") or {}
-    path = os.path.expanduser(str(trace.get("csv", "")))
-    if not path:
-        raise ValueError("requests.trace.csv is required for source: trace")
-    speedup = float(trace.get("speedup", 1.0))
-    limit = req.get("count")
-    out: list[Request] = []
-    t0 = None
-    with open(path, newline="") as f:
-        for row in csv.DictReader(f):
-            ts = _parse_ts_s(row["TIMESTAMP"])
-            t0 = ts if t0 is None else t0
-            offset = (ts - t0) / speedup
-            if duration_s is not None and offset >= duration_s:
-                break
-            out.append((offset, int(row["ContextTokens"]), int(row["GeneratedTokens"])))
-            if limit and len(out) >= int(limit):
-                break
-    return out
+    """Requests from a real trace (Azure, BurstGPT or Mooncake); see rm_bench/traces.py."""
+    return traces.load(req.get("trace") or {}, count=req.get("count"), duration_s=duration_s).requests

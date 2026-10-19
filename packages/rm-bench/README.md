@@ -77,6 +77,32 @@ TPOT은 `(e2e - TTFT) / (출력 토큰 - 1)`이고 출력 토큰 수는 서버�
 loadgen 도구들은 기존 계산 방식(TPOT `/ 출력 chunk 수`, 출력 토큰 = chunk 수)을 그대로 둡니다. 그래서 한 chunk에 여러 토큰을 보내는
 서버에서는 loadgen `--out`의 `tpot_*`/`tok_s`가 `rm-bench e2e` 값과 같은 정의가 아닙니다. 비교·KPI에는 `rm-bench e2e` 값을 쓰세요.
 
+### 실제 트레이스 재생
+
+공개된 운영 트레이스의 **도착 시각과 입출력 길이**(Mooncake는 **프롬프트 prefix 공유**까지)를 그대로 재생합니다.
+데이터는 저장소에 넣지 않고 `rm-bench traces fetch`로 `$RM_BENCH_TRACES`(기본 `~/.cache/rm-bench/traces`)에 받습니다.
+라이선스·출처는 받은 디렉터리의 `ATTRIBUTION.md`와 `MANIFEST.json`(sha256)에 남습니다.
+
+| 이름 | 출처 | 내용 | 라이선스 |
+|---|---|---|---|
+| `azure-2023-conv`, `azure-2023-code` | Azure LLM inference trace 2023 (Splitwise, ISCA'24) | 도착 시각, 입력·출력 토큰 | CC-BY-4.0 |
+| `burstgpt-1` | BurstGPT v2.0 (실패 제외본 1) | Azure OpenAI GPT-3.5/4 사용 기록, 모델·호출 유형 | CC-BY-4.0 |
+| `mooncake-conversation`, `mooncake-toolagent` | Mooncake (Kimi, FAST'25) | 도착 시각(ms), 입력·출력 토큰, 512토큰 블록 `hash_ids` | Apache-2.0 |
+
+```bash
+rm-bench traces fetch                                   # 전부 (또는 이름 지정)
+rm-bench traces stats trace-azure-conv                  # 요청 수, 평균·피크 rps, 길이 p50/p90/p99, prefix 재사용
+rm-bench traces stats trace-azure-conv --max-total-tokens 512 --no-filter   # 대상 한도에 맞는 비율
+rm-bench e2e --scenario trace-azure-conv --gateway URL --speedup 0.25 --max-total-tokens 512 --duration 300
+```
+
+- 시나리오: `trace-azure-conv`, `trace-azure-code`, `trace-burstgpt`, `trace-mooncake-conversation`. 설정 키는 `rm_bench/traces.py` 맨 위.
+- `speedup`은 시간 축만 늘리거나 줄이므로 burst 모양은 유지됩니다(1보다 작으면 느리게).
+- 대상이 처리할 수 있는 길이 한도(`--max-prompt-tokens`/`--max-output-tokens`/`--max-total-tokens`)를 넘는 요청은
+  `--policy skip`(기본, 원래 분포 유지)이나 `clip`(잘라서 보냄)으로 처리합니다. 얼마나 남는지는 `traces stats`로 먼저 확인하세요.
+- 프롬프트 내용은 공개되지 않았으므로 길이만 맞춘 합성 텍스트입니다. 요청마다 다른 텍스트를 써서 우연한 prefix 공유가 없고,
+  Mooncake는 같은 `hash_id` 블록에 같은 텍스트를 써서 원래 트레이스의 prefix 공유를 재현합니다. 토큰 수는 단어 수로 맞춘 근사입니다.
+
 ### ai-rm adapter: `airm.workloads` / `rm-bench`
 
 ```python
