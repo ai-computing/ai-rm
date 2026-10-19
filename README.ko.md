@@ -190,7 +190,9 @@ transport = registry.load("airm.kv_transports", "p2p")   # kvTransport: p2p | sh
 - [x] 프로토콜 v0.1 구성요소 어댑터, 통합 검증 완료 ([현재 상태](docs/ko/status.md))
 - [ ] Optimus Prime 통합 브랜치: 이전 소스의 PD, KV 전송, 전문가 offload 모듈 통합
 - [ ] FASOP 추론 계획과 검토된 llm-d 배치 어댑터
-- [ ] 통합 차트, 시뮬레이션 클러스터, TTFT / TPOT / 전력 / MFU 증빙을 남기는 end-to-end 시나리오
+- [x] 실제 클러스터 첫 end-to-end 실행: L1 배치 → llm-d → PD 서빙 → 측정 ([결과](docs/ko/e2e.md))
+- [ ] `airm-placement`를 쓰는 배치 컨트롤러, RNGD→ATOM decode와 실제 버퍼 P2P의 end-to-end
+- [ ] 통합 차트, 시뮬레이션 클러스터, 모든 실행의 전력·MFU 증빙
 - [ ] 프로토콜 v0.2: 실제 버퍼(`MemoryRegion`)를 KV 전송에 연결
 
 ## 📚 문서
