@@ -106,7 +106,7 @@ pools:
 
 - [ ] 실시간 부하(`airm_*` 대기열, TPOT)와 워크로드 모양([트레이스](../../docs/ko/workload-traces.md))을 선택에 반영
 - [ ] 결정대로 움직이는 서빙 파드 (지금은 사이트 값이 같은 카드를 고정)
-- [ ] 클러스터에 상주할 이미지와 chart (umbrella chart의 일부)
+- [x] 이미지(`ghcr.io/ai-computing/rm-controller`, [`Dockerfile`](Dockerfile))와 umbrella chart [`charts/ai-rm`](../../charts/ai-rm)의 Deployment
 - [ ] `airm-placement` 형식을 rm-core 프로토콜에 규범화
 
 ## 📄 라이선스

@@ -1,0 +1,22 @@
+{{- /*
+airm-placement (hetero-llm-d deploy/airm/README.md, key decisions.json): an empty v0.1 document so
+readers find a valid one before rm-controller's first placement. Rendered only while the ConfigMap
+does not exist; after that rm-controller owns it, and the keep policy stops Helm deleting it.
+*/ -}}
+{{- if .Values.placement.create }}
+{{- $ns := include "ai-rm.placementNamespace" . }}
+{{- if not (lookup "v1" "ConfigMap" $ns "airm-placement") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: airm-placement
+  namespace: {{ $ns }}
+  labels:
+    {{- include "ai-rm.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+data:
+  decisions.json: |
+    {"protocol": "0.1", "generation": 0, "updatedAt": null, "decisions": []}
+{{- end }}
+{{- end }}

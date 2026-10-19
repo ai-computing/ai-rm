@@ -1,0 +1,69 @@
+name: sim-e2e
+
+# Umbrella chart lint/template, and the simulated cluster end to end on kind:
+# L1 sim provider -> AcceleratorProfiles -> rm-controller -> airm-placement, rm-bench pd-smoke against
+# a fake OpenAI-compatible PD pool (tools/fake_openai.py). Same steps as make up-sim / make e2e-sim.
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Fetch the rm-accel submodule (L1 subchart and node image)
+        run: git submodule update --init components/l1-accel/rm-accel
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
+      - name: helm lint / template (default, example site, sim)
+        run: |
+          make chart
+          helm lint charts/ai-rm -f deploy/clusters/example/ai-rm.values.yaml
+          helm template airm charts/ai-rm -n airm-system -f deploy/clusters/example/ai-rm.values.yaml > /dev/null
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Fetch the rm-accel submodule (L1 subchart and node image)
+        run: git submodule update --init components/l1-accel/rm-accel
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install rm-controller, rm-bench
+        run: python -m pip install pyyaml pytest -e packages/rm-controller -e packages/rm-bench
+      - name: Unit tests (fake PD pool, checks, e2e-sim --no-cluster)
+        run: python -m pytest -q tools/tests
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
+      - uses: helm/kind-action@v1
+        with:
+          install_only: true
+      - name: make up-sim (kind, images, charts/ai-rm with sim values)
+        run: make up-sim PY=python
+      - name: make e2e-sim (rm-controller once, airm-placement, rm-bench pd-smoke)
+        run: make e2e-sim PY=python
+      - name: Cluster state on failure
+        if: failure()
+        run: |
+          kubectl --context kind-airm-sim get nodes,pods -A -o wide || true
+          kubectl --context kind-airm-sim get acceleratorprofiles || true
+          kubectl --context kind-airm-sim -n airm describe pods || true
+          kubectl --context kind-airm-sim -n airm logs -l app.kubernetes.io/name=rm-controller --tail=100 || true
+          kubectl --context kind-airm-sim -n airm logs -l app.kubernetes.io/component=node-daemon --tail=50 --prefix || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sim-e2e-results
+          path: results/
+          if-no-files-found: ignore
