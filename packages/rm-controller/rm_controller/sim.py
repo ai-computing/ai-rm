@@ -359,23 +359,29 @@ def layouts_for(cards: List[Accelerator], m: mixes.Mix, slo: Dict[str, float],
         rows.append((lay, estimate_layout(lay, m, slo, profiles)))
     multi = len({a.node for a in cards}) > 1
     variants = [("optimal, per card", "per_card", False), ("optimal, max goodput", "goodput", False)]
-    if multi:
-        variants.append(("optimal, max goodput + planned tcp", "goodput", True))
+    cross = sorted(n for n, l in profiles.links.items() if l.scope == "cluster")
+    planned = [n for n in cross if not profiles.links[n].implemented]
+    if multi and planned:   # what a cross-node link that does not exist yet would buy
+        variants.append((f"optimal, max goodput + planned {', '.join(planned)}", "goodput", True))
+    for n in cross if multi else ():   # the best layout on each cross-node link, chosen or not
+        if profiles.links[n].implemented:
+            variants.append((f"optimal, max goodput, {n} only", "goodput", False, n))
     return rows + optimal_rows(cards, m, slo, profiles, variants)
 
 
 def optimal_rows(cards: List[Accelerator], m: mixes.Mix, slo: Dict[str, float], profiles: prof.Profiles,
-                 variants: Sequence[Tuple[str, str, bool]]) -> List[Tuple[Layout, Optional[float]]]:
+                 variants: Sequence[tuple]) -> List[Tuple[Layout, Optional[float]]]:
     """`optimal` rows (mixed roles on, the default), each followed by a "one type per role" row (mixed roles
     off, the policy before mixed roles) when that chooses a different layout."""
     p, d = Workload(kind="prefill", model="m", slo=slo), Workload(kind="decode", model="m", slo=slo)
     rows = []
-    for name, objective, planned in variants:
+    for name, objective, planned, *only in variants:   # (name, objective, planned links[, kv_transport])
+        transport = only[0] if only else "auto"
         got = []
         for mixed in (True, False):
             o = OptimalPlacement(profiles=profiles, mix=m.with_rate(None), objective=objective,
                                  allow_planned_links=planned, mixed_roles=mixed)
-            dp, dd = o.place_pd(p, d, cards, kv_transport="auto")
+            dp, dd = o.place_pd(p, d, cards, kv_transport=transport)
             lay = layout(name if mixed else f"{name}, one type per role", dp.accelerator_ids, dd.accelerator_ids,
                          dp.kv_transport or "shm", cards, profiles, o.last_plan)
             got.append((lay, o.last_plan.estimate.goodput_rps if o.last_plan else None))

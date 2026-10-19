@@ -5,7 +5,8 @@
 Live evidence for roadmap items W5 (the controller places and moves the serving pods, and the P:D rebalancer), W6
 (measured profiles for the `optimal` policy) and W7 (same-budget baselines with energy, including the vendor's own
 engine), run on 2026-10-19 on the node that carries both RNGD and ATOM cards (3 RNGD and 4 ATOM free at the start; a
-second RNGD node was cordoned).
+second RNGD node was cordoned). The W2 sections (two model pools at once; KV across nodes over `tcp`) ran the same evening
+on the same node, the second RNGD node still cordoned.
 
 **Scope.** Llama-3.1-8B-Instruct, the graphs rngd-pd has compiled today (S=512), one node, KV over `shm`. Two real
 traces clipped to what S=512 can serve, a few hundred requests per run, one run per cell. These are baselines for this
@@ -20,6 +21,8 @@ engine generation, not a performance claim for the hardware.
 | W6 | The profile table was off by 2× and more: RNGD prefill of a 400-token prompt takes 100 ms, not the 220 ms the old derived numbers gave, RNGD decode on the batched graph is 30 ms per token at any batch (not 17–24), ATOM decode is 108 ms on one card (not 40–52 on two). `profiles.yaml` now carries the measured values; `optimal` changes its choice from 2P+1D to 1P+2D, and 1P+2D did better on the cluster (100 % against 93.6 % and 77.5 %). |
 | W7 vendor | **furiosa-llm 2026.3.0 aggregated** (one card per replica, FuriosaAI's pre-compiled Llama-3.1-8B) met the SLO for every request on both traces with 2 and 3 cards. It tied `solo` on goodput per card (offered-load bound) and on tokens per joule (0.74 against 0.76), with TPOT p90 17–19 ms against rngd-pd's 30–69 ms. **furiosa-llm has no PD mode** (no disaggregation option, no KV-transfer code, and FuriosaAI's llm-d guide lists it as unsupported), so there is no vendor PD row. |
 | W5 rebalancer | `rm-controller --rebalance --apply` on the gateway's `airm_*` gauges moved P:D three times in an hour, each time toward the role under pressure (generations 5–7). Moving a card to decode for conversation ×2 raised attainment from ~10 % to 85 %. Moving one to prefill for code ×3 lowered it from 63–68 % to 45 %, because the rule does not model what the donor role loses. The predictive rule (both roles predicted after a move) made only the conversation move in a 50-minute live re-check and held 1P+2D through code ×3: 77–81 % there. |
+| W2 multi-pool | Two models at once on disjoint cards, both placed by `rm-controller` (`--apply`, a PD pool and an aggregated `serve` pool): Llama-3.1-8B rngd-pd 1P+1D met the SLO for 97.6 % of Azure conversation ×1 with Qwen3-4B (furiosa-llm, one card) under the same load next to it, 98.0 % alone; Qwen 100 % in both. A re-run with one pool's spec changed (Llama decode RNGD → ATOM) patched only that pool's Deployments; the Qwen pod kept running untouched. |
+| W2 cross-node KV | rngd-pd's new `tcp` transport carried real prefill KV (67 MB per request) from the RNGD prefill pod to a relay pod on a CPU node and back to the RNGD decode pod: 2,112/2,112 blobs byte-identical, 32/32 outputs identical to `shm`. The NPU node's 1 GbE link sets the speed: 0.08–0.09 GB/s per request, 0.117 GB/s per direction with 8 in flight, ~0.8 s per 67 MB leg. `profiles.yaml` `tcp` is now measured (0.08 GB/s, implemented); with it the two-node simulator rows no longer gain over one node (they would from 0.15–0.25 GB/s). NPU to NPU across two NPU nodes is unverified: the second NPU node stayed cordoned. |
 | Found | rngd-pd's gateway `airm_tpot_p90_ms` was the engine step and did not see decode queueing ([rngd-pd#7](https://github.com/ai-computing/rngd-pd/pull/7)). rm-bench's trace prompts shared prefixes by accident (72 distinct texts), which a prefix cache exploits (fixed here). rngd-pd addressed an allocated card by its host index (`npu3` → `rngd:3`, out of range): fixed in [rngd-pd#5](https://github.com/ai-computing/rngd-pd/pull/5). The continuous decode worker stops serving for good once more than 8 requests wait with `PD_PREFETCH=1`: [rngd-pd#4](https://github.com/ai-computing/rngd-pd/issues/4). A process outside Kubernetes held one RNGD card, so a pod allocated that card failed with `EBUSY`. |
 
 ## Setup
@@ -376,6 +379,158 @@ admission, and it has no model of single-card (`solo`) serving, which won here. 
 [component card](components/rm-controller.md)'s list. The sim tables in the [rm-controller README](../packages/rm-controller/README.md)
 were rerun with the calibrated profiles.
 
+## W2: two model pools on one node (HUB-35)
+
+Two models served at once on the RNGD+ATOM node, each pool placed by `rm-controller` on its own cards (2026-10-19,
+19:10–19:50 UTC): **Llama-3.1-8B-Instruct** as rngd-pd PD 1P+1D on RNGD (`llama8b-pd-pool`, the `airm-e2e` release,
+reached through the llm-d gateway) and **Qwen3-4B-FP8** on furiosa-llm 2026.3.0, aggregated, one RNGD card
+(`qwen3-4b-pool`, Deployment `airm-exp-qwen`, reached through its Service). The Qwen Deployment copies the cluster's
+`serve-furiosa-ai-qwen3-4b-fp8` (read only, left at 0 replicas): same image and arguments, FuriosaAI's pre-compiled
+artifact (`max_model_len` 40,960), plus the pool/role annotations and a hostPath model cache.
+
+The spec is [`examples/multi-pool.yaml`](../packages/rm-controller/examples/multi-pool.yaml) (topology; a `serve` pool is
+the aggregated kind added in this change):
+
+```
+rm-controller --spec multi-pool.yaml --once --apply
+rm-controller: 9 profiles, 3 decisions, generation 4 written; 3 deployment patch(es) applied
+#  llama8b-pd-pool prefill  <npu-node>/furiosa:0   topology: ... highest peak ... shm keeps prefill and decode on one node
+#  llama8b-pd-pool decode   <npu-node>/furiosa:1   topology: ... most memory ...
+#  qwen3-4b-pool   serve    <npu-node>/furiosa:3   topology: serve ... (furiosa.RNGD, 1 replica(s), aggregated)
+```
+
+**No card shared.** The patches set replicas 1/1/1 and the node affinity; the device plugin gave the Llama prefill and
+decode pods `npu1` and `npu0` and the Qwen pod `npu3` (its container sees only `/dev/rngd/npu3*`). Two minutes into the
+concurrent run `furiosa-smi` showed `npu0` at 116 W / 57 % utilisation, `npu1` 56 W, `npu3` 82 W with 46.7 of 47.5 GiB
+in use (furiosa-llm's KV pool); the decision's card names are not the device plugin's, as in W5.
+
+**Both pools under load at once.** Azure conversation ×1 (455 requests, 1.52 req/s, input + output ≤ 511 tokens, 300 s)
+replayed to each pool concurrently, then to each pool alone; SLO TTFT p90 ≤ 2 s, TPOT p90 ≤ 100 ms; power per pool
+from its own cards (`--power prom`, `device=~"npu0|npu1"` and `"npu3"`). Llama through the llm-d gateway with
+`--api completions`, Qwen through its Service with `--api completions-stream` (as the W7 vendor rows):
+
+| Pool | Run | Cards | SLO attainment | TTFT p90 | TPOT p90 | Goodput req/s | per card | Power W (peak) | tok/J |
+|---|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| Llama-3.1-8B, rngd-pd PD 1P+1D | **both pools at once** | 2 | 97.6 % | 243 ms | 61.8 ms | 1.47 | 0.74 | 162.8 (182) | 1.10 |
+| Llama-3.1-8B, rngd-pd PD 1P+1D | alone (pods restarted) | 2 | 98.0 % | 198 ms | 61.4 ms | 1.48 | 0.74 | 162.1 (178) | 1.11 |
+| Qwen3-4B-FP8, furiosa-llm ×1 | **both pools at once** | 1 | 100.0 % | 120 ms¹ | 24.3 ms¹ | 1.51 | 1.51 | 80.8 (95) | 2.23 |
+| Qwen3-4B-FP8, furiosa-llm ×1 | alone | 1 | 100.0 % | 64 ms¹ | 20.4 ms¹ | 1.51 | 1.51 | 74.2 (81) | 2.43 |
+
+¹ streaming, measured at the client (see the W7 footnote). All 455 requests of every run completed, none failed.
+
+- **Each pool keeps its SLO next to the other.** Llama's attainment, TPOT and goodput are the same within run-to-run
+  noise with and without the Qwen load (97.6 % / 98.0 %); Qwen meets the SLO for every request either way. The W7 cell for
+  the same Llama layout and load read 87.7 % (an earlier day's pods); today's 98 % is within the spread of single runs.
+- **What is shared is the host.** Qwen's client TTFT p90 doubled (64 → 120 ms) and its TPOT p90 rose by 4 ms while Llama
+  ran; the cards are disjoint, so the likely cause is the host they share (CPU, PCIe root, the client machine), not the
+  accelerators. Both stay far inside the SLO.
+- One card of Qwen3-4B carries the same request stream as two cards of Llama-3.1-8B PD at about half the power per
+  pool (81 W against 163 W); the models differ, so this is not a comparison of engines.
+
+**A changed spec moves only that pool.** The spec was changed to decode Llama on ATOM (`decode: {accelerator:
+rebellions.ATOM}`) and the controller re-run once; the Llama decode role had one Deployment per device type
+(`airm-e2e-decode` annotated `accelerator: furiosa.RNGD`, `airm-exp-decode-atom` with the ATOM decode configuration of
+the W7 RNGD → ATOM release, both behind the `airm-e2e-decode` Service):
+
+```
+rm-controller: 9 profiles, 3 decisions, generation 5 written; 2 deployment patch(es) applied
+#  patch airm-e2e-decode       replicas 1 -> 0   decode of llama8b-pd-pool: no furiosa.RNGD cards in the decision
+#  patch airm-exp-decode-atom  replicas 0 -> 1   decode of llama8b-pd-pool: 1 replica(s) on <npu-node>
+#  airm-e2e-prefill            up to date
+#  airm-exp-qwen               up to date
+```
+
+| Deployment | generation 4 | generation 5 |
+|---|---|---|
+| `airm-e2e-prefill` (Llama prefill) | 1 × `furiosa:0` | unchanged (no patch) |
+| `airm-e2e-decode` (Llama decode, RNGD) | 1 × `furiosa:1` | 0 replicas |
+| `airm-exp-decode-atom` (Llama decode, ATOM) | 0 replicas | 1 × `rebellions:0`, ready 51 s after the patch |
+| `airm-exp-qwen` (Qwen) | 1 × `furiosa:3` | unchanged: same pod, started 19:11:43 UTC, 0 restarts before and after |
+
+During the move a `pd-smoke` to each pool ran at the same time: Qwen 32/32 within the SLO; Llama 32/32 served by the ATOM
+decode pod (same text as on RNGD for a fixed prompt), but outside the smoke SLO (TPOT p90 377 ms: the ATOM S=512 graph,
+108 ms per token, with 8 requests on 4 lanes, as in W7). Here the changed role moved to a device type the other pool
+does not use; the case where the new rule matters (decode moving ATOM → RNGD while the Qwen pool holds an RNGD card,
+which a fresh placement would take) is covered by `test_changed_spec_moves_only_that_pool`.
+
+## W2: cross-node KV over tcp (HUB-34)
+
+**Setup.** rngd-pd's `tcp` transport (this change, [rngd-pd#9](https://github.com/ai-computing/rngd-pd/pull/9)):
+the prefill worker pushes each layer's K and V (bf16 wire, 64 blobs of 1 MiB, 67.1 MB per request at S=512) to a
+`TcpKVServer` over pooled TCP connections, the decode worker takes them from it; every blob carries a CRC-32 checked by
+the server and by the receiver. The server ran as a **relay pod on a CPU-only node** (chart option `kvRelay`, image
+`python:3.11-slim`, the standard-library `tcpkv.py` from a ConfigMap); the prefill (RNGD) and decode (RNGD) pods ran on
+the NPU node, so **every KV byte crossed the network twice**: NPU node → relay node → NPU node. Release
+`airm-exp-xnode` (rngd-pd chart, the `airm-e2e` values with `airm.kvTransport: tcp`, decode `--B 8 --sched continuous`,
+`PD_PREFETCH=0`), its own gateway Service (not in the llama8b-pd InferencePool). The NPU node reaches the other nodes
+over a **1 GbE** interface (node-to-node RTT 0.22 ms); that link, not the transport, bounds every number below.
+
+**Byte-exact.** With `AIRM_KV_TCP_LOG=1` each worker logs size and SHA-256 of every blob it pushes or pulls. 33 requests
+(1 + 16 sequential + 16 at concurrency 8): **2,112 of 2,112 blobs identical** (2.215 GB) between the prefill's push and
+the decode's pull; the relay counted 0 CRC errors over the whole session (26,112 blobs, 27.4 GB, benchmarks included).
+
+**Token-exact.** 16 fixed prompts (8–479 tokens, 32 output tokens, greedy), sequential and at concurrency 8, through the
+same release with `airm.kvTransport` switched between `tcp` and `shm` (pods restarted, same cards): **32 of 32 outputs
+identical** (text and token count), twice (with and without the audit log).
+
+**Per request, in serving** (rngd-pd gateway `pd` timings, 16 prompts; save = the push still running after prefill
+compute, load = the pull at decode admission):
+
+| | `tcp` sequential | `shm` sequential | `tcp` 8 concurrent | `shm` 8 concurrent |
+|---|--:|--:|--:|--:|
+| KV save, p50 / p90 | 678 / 724 ms | 1.4 / 4.6 ms | 3,266 / 4,304 ms | 1.7 / 4.0 ms |
+| KV load at admission, p50 / p90 | 816 / 896 ms | 31 / 45 ms | 1,305 / 1,378 ms | 30 / 36 ms |
+| server TTFT, p50 / p90 | 778 / 839 ms | 104 / 112 ms | 3,330 / 4,766 ms | 318 / 782 ms |
+
+**Link, measured** (`bench/kv_tcp_bench.py` inside the prefill pod, S=512-shaped bf16 KV, push to the relay then pull
+back, N requests in flight; one-way time per request and its GB/s):
+
+| In flight | Push p50 (GB/s) | Pull p50 (GB/s) | Both directions, GB/s | Byte-exact |
+|--:|--:|--:|--:|---|
+| 1 | 758 ms (0.089) | 832 ms (0.081) | 0.084 | yes |
+| 2 | 1,182 ms (0.057) | 1,243 ms (0.054) | 0.111 | yes |
+| 4 | 2,330 ms (0.029) | 2,290 ms (0.029) | 0.115 | yes |
+| 8 | 4,427 ms (0.015) | 4,515 ms (0.015) | 0.117 | yes |
+| 1, CRC off | 622 ms (0.108) | 707 ms (0.095) | 0.101 | yes |
+| 8, CRC off | 4,592 ms (0.015) | 4,472 ms (0.015) | 0.117 | yes |
+
+One request moves at 0.08–0.09 GB/s each way; with several in flight the 1 GbE interface saturates at 0.117 GB/s
+(940 Mbit/s) and the per-request time grows linearly. The CRC costs ~15 % on a single stream and nothing once the
+link is full.
+
+**A live trace over it.** Azure conversation ×0.5 (212 requests, 0.71 req/s) through `airm-exp-xnode` with the KV over the
+relay, pods restarted first, against the W7 `shm` cell of the same layout:
+
+| Deployment | Cards | SLO attainment | TTFT p90 | TPOT p90 | Goodput req/s | per card | Power W (peak) | tok/J |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| PD 1P+1D RNGD, KV `tcp` via a relay node | 2 | 89.2 % | 1,727 ms | 83.3 ms | 0.62 | 0.31 | 151.7 (165) | 0.59 |
+| PD 1P+1D RNGD, KV `shm` (W7) | 2 | 100.0 % | 246 ms | 33.1 ms | 0.70 | 0.35 | 155.9 (176) | 0.57 |
+
+All 212 requests completed. The ~0.8 s pull at each admission stalls the decode loop (`PD_PREFETCH=0`), which shows in
+TPOT; the push tail lands in TTFT. A `pd-smoke` (32 requests in 4 s) served all 32 but with TTFT p90 17.9 s: 8 req/s
+× 67 MB is 4.6× what the link carries. The simulator, given the measured link, predicts this layout at 100 % (TTFT p90
+983 ms, TPOT 30 ms): its replay does not charge the admission load to TPOT (the episode replay does), so it is optimistic
+here, as it was for `shm` on short answers.
+
+**Profiles and the two-node rows.** `profiles.yaml` `tcp`: `gb_s` 0.08 (was an estimate of 0.5), `latency_ms` 14 (64
+round trips × 0.22 ms), `min_bytes` 67,108,864 (the whole S=512 buffer is sent), `admit_blocking: true`,
+`implemented: true`, `source: measured`, scope `cluster`. Re-running `python -m rm_controller.sim --compare --requests
+4000`: on two nodes `optimal` (per card and max goodput) now stays on one node over `shm` for every trace (0.813 req/s
+Azure conversation, 0.943 code, as one node), and the best plan restricted to `tcp` has no SLO-feasible layout (goodput
+0). With the 0.5 GB/s estimate the two-node column read 0.087–2.724 req/s (2.0–3.5× one node). Sweeping the bandwidth,
+the two-node layouts come back between 0.15 and 0.25 GB/s and reach 2.73 (conversation, P 1 / D 3 RNGD) and 2.39 req/s
+(code, P 3 / D 1) at 0.8 GB/s, so a 2.5 GbE or faster link between NPU nodes is what the two-node gain needs.
+`python -m rm_controller.baselines --compare --requests 4000` is unchanged (its card sets are single nodes). Tables:
+[rm-controller README](../packages/rm-controller/README.md#-simulation-topology-vs-optimal),
+[component card](components/rm-controller.md).
+
+**Not verified: NPU to NPU across two nodes.** The second RNGD node was cordoned and stayed so; both workers ran on the
+one NPU node, and the cross-node hops were NPU node ↔ CPU relay node. A prefill on one NPU node with decode on another
+(and the server beside the decode, one network leg instead of two) has not run. NIXL: the installed `nixl_cu12` wheel on
+the NPU node ships `libplugin_UCX.so` and a UCX agent instantiates there with `UCX_TLS=tcp`, but no NIXL-over-UCX KV
+path was built or measured here; rngd-pd's `nixl` transport stays the same-host HETERO_NPU path
+([rngd-pd#8](https://github.com/ai-computing/rngd-pd/pull/8)).
+
 ## Caveats
 
 - **One node, one engine generation.** Three RNGD and four ATOM cards, S=512 graphs, batch at most 8 (RNGD) and 4 (ATOM).
@@ -396,6 +551,9 @@ were rerun with the calibrated profiles.
   token-exact outside serving, [rngd-pd#8](https://github.com/ai-computing/rngd-pd/pull/8)), RNGD decode at B > 8, GPUs.
 - **Vendor rows** differ in client API (streaming completions) and engine defaults (prefix caching on); see the
   footnote to the tables. They ran after the rngd-pd rows, on the same cards, the same afternoon.
+- **W2 runs** are single runs too. The multi-pool load came from one client host for both pools; the cross-node path had a
+  relay on a third node (two network legs per request, one where the server sits beside decode), on a 1 GbE link, and both
+  NPU workers on one NPU node because the second NPU node is cordoned.
 - **Rebalancer run** is one sequence (code ×3, conversation ×2, code ×3), above capacity on purpose; the first
   conversation phase ran with the old TPOT gauge and is reported only for that finding.
 
@@ -413,8 +571,13 @@ were rerun with the calibrated profiles.
 | `llm-serving/airm-placement` | generations 4–7 written by the rebalancer | generation 3 document restored byte for byte |
 | `llm-serving/airm-e2e`, `airm-placement` (predictive rule re-check, 17:37–18:30 UTC) | as the rebalancer run: gateway scaled to 1 with `PD_PREFETCH=0` and the rngd-pd#7 checkout at `/app`; generation 4 (2P+1D) then 5 (1P+2D) by `--apply` | Deployments and ConfigMap replaced with the saved objects (all at 0 replicas, generation 3 document byte for byte) |
 | `airm-exp-nixl-check` (Pod) | 2 RNGD + 1 ATOM for the `nixl` transport check (rngd-pd#8) | deleted |
+| `llm-serving/airm-e2e` (W2 multi-pool, 19:10–19:50 UTC) | gateway scaled to 1 with `PD_PREFETCH=0`; decode annotated `accelerator: furiosa.RNGD`; prefill/decode replicas, affinity and annotations patched by `--apply` (generations 4, 5); prefill/decode pods restarted once | Deployments and `airm-placement` replaced with the saved objects (all at 0 replicas, generation 3 document byte for byte) |
+| `airm-exp-qwen` (Deployment, Service) | furiosa-llm Qwen3-4B-FP8 for the second pool, a copy of `serve-furiosa-ai-qwen3-4b-fp8` (which was only read); model cache on a hostPath under `/var/tmp` (5.4 GB) | deleted; cache removed (`airm-exp-cleanup` Pod, deleted) |
+| `airm-exp-decode-atom` (Deployment) | ATOM decode for the Llama pool, the move to generation 5 | deleted |
+| `llm-serving/airm-exp-xnode` (Helm) | rngd-pd chart from rngd-pd#9: RNGD prefill + RNGD decode on the NPU node, `kvRelay` pod on a CPU-only node, own gateway Service; switched between `tcp` and `shm`, restarts between runs | uninstalled |
 
-No other Deployment or EPP was touched. Raw results (`results/` is not tracked in this repository) stay with the
+No other Deployment or EPP was touched, and no node was cordoned, uncordoned or targeted by name: the cordoned RNGD
+node stayed cordoned and nothing was scheduled on it. Raw results (`results/` is not tracked in this repository) stay with the
 experiment logs on the node.
 
 ## Reproduce
@@ -442,4 +605,14 @@ python -m rm_controller.sim --episode     # the same episode replayed, linear vs
 
 # W6: sim against the runs, and the README tables
 python -m rm_controller.sim --compare --requests 4000
+
+# W2 multi-pool: two pools (PD + aggregated serve), Deployments annotated pool/role; then change one pool and re-run
+rm-controller --spec packages/rm-controller/examples/multi-pool.yaml --once --apply
+rm-bench e2e ... --gateway http://<llm-d gateway>/rngd/llama8b-pd/completions --api completions &        # both at once
+rm-bench e2e ... --gateway http://<qwen service>:8000 --model furiosa-ai/Qwen3-4B-FP8 --api completions-stream &
+
+# W2 cross-node KV: rngd-pd chart (rngd-pd#9) with the relay on a CPU node
+helm install <release> deploy/helm/rngd-pd -f <site values> --set airm.kvTransport=tcp --set kvRelay.enabled=true \
+  --set kvRelay.nodeSelector.kubernetes\\.io/hostname=<cpu node> --set env.AIRM_KV_TCP_LOG=1    # audit log: size + sha256 per blob
+python bench/kv_tcp_bench.py --server <release>-kv-relay:5577 --concurrency 1,2,4,8     # inside the prefill pod
 ```
