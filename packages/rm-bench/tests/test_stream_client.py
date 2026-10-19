@@ -47,6 +47,7 @@ class SSE(BaseHTTPRequestHandler):
 
     def do_POST(self):
         req = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        type(self).last_request = req
         n = req["max_tokens"]
         if self.json_body:
             time.sleep(FIRST_S)
@@ -77,8 +78,9 @@ class SSE(BaseHTTPRequestHandler):
             if self.keepalive:
                 self._write(b": ping\n\n")
             last = i == chunks - 1
-            choice = {"index": 0, "delta": {self.field: "tok " * self.tokens_per_chunk},
-                      "finish_reason": "length" if last and self.send_finish else None}
+            text = "tok " * self.tokens_per_chunk
+            choice = {"index": 0, "text": text} if self.field == "text" else                 {"index": 0, "delta": {self.field: text}}
+            choice["finish_reason"] = "length" if last and self.send_finish else None
             self._event({"choices": [choice]})
         time.sleep(0.15)        # tail after the last token (not decode time)
         if self.send_usage:
@@ -170,3 +172,13 @@ def test_json_body_fallback(sse):
 def test_http_error_fails():
     rec = client.stream_chat("http://127.0.0.1:9/v1/chat/completions", "m", 4, 4, timeout_s=2)
     assert not rec.ok
+
+
+def test_streaming_completions(sse):
+    url, handler = sse
+    handler.field = "text"                     # completions chunks: choices[].text
+    url = client.completions_url(url.rsplit("/v1/", 1)[0])
+    rec = client.stream_completions(url, "m", prompt_tokens=4, max_tokens=8, timeout_s=10, prompt="a b c")
+    _assert_timing(rec, 8, 8)
+    assert handler.last_request["prompt"] == "a b c" and handler.last_request["stream"] is True
+    assert "messages" not in handler.last_request

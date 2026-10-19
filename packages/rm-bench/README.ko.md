@@ -68,7 +68,7 @@ python -m pytest -q packages/rm-bench/tests   # 가짜 OpenAI 호환 서버, 클
 ## 🎯 end-to-end 시나리오
 
 ```bash
-rm-bench e2e --scenario pd-smoke [--gateway URL] [--model M] [--out results/<run>.json] [--kv-transport NAME] [--api chat|completions]
+rm-bench e2e --scenario pd-smoke [--gateway URL] [--model M] [--out results/<run>.json] [--kv-transport NAME] [--api chat|completions|completions-stream]
          [--deployment LABEL] [--cards N] [--power prom|cmd|none ...]
 ```
 
@@ -96,6 +96,8 @@ rm-bench e2e --scenario pd-smoke [--gateway URL] [--model M] [--out results/<run
   없으므로 응답에 서버 측 시간(`pd.ttft_ms`, `pd.wall_ms`, rngd-pd 게이트웨이가 보냄)이 있으면 TTFT = (e2e − wall_ms) + ttft_ms,
   없으면 TTFT = e2e(상한)입니다. `--gateway`에 `/completions`로 끝나는 전체 URL을 주면 그대로 씁니다(접두사를 `/v1`로 바꾸는
   route 뒤).
+- **`--api completions-stream`**은 `--api completions`와 같은 프롬프트 문장(chat template 없음)을 `stream: true`로 보내고 스트리밍
+  chat처럼 SSE chunk로 잽니다. TTFT가 클라이언트가 받은 첫 토큰입니다. completions를 스트리밍하는 서버(vLLM, furiosa-llm)용입니다.
 - `--model`이 없으면 시나리오의 `model`, 그것도 없으면 게이트웨이 `/v1/models`의 첫 모델을 씁니다. `LLMD_API_KEY`가 있으면 보냅니다.
 - `loadgen/` 도구들은 기존 정의(TPOT을 출력 chunk 수로 나눔, 토큰 = chunk)를 그대로 둡니다. 한 chunk에 여러 토큰을 보내는 서버에서는
   `tpot_*`/`tok_s`가 `rm-bench e2e`와 다르므로, 비교와 KPI에는 `rm-bench e2e` 값을 쓰세요.

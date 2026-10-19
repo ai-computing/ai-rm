@@ -305,7 +305,7 @@ What it shows, with these profiles (RNGD, ATOM and `shm` measured, A100 partly e
 
 ## ✅ Verified
 
-- 73 tests (topology, optimal and mixed roles, rebalancer, health and re-placement, apply, simulator, baselines, document bytes identical to 0.1's);
+- 74 tests (topology, optimal and mixed roles, rebalancer, health and re-placement, apply, simulator, baselines, document bytes identical to 0.1's);
   `rm_core.conformance airm.placements topology optimal` PASS with rm-core v0.1.2; CI runs both.
 - Read-only dry run on the live cluster (2026-10-19, topology): the shm pool went to `npu-node-1/furiosa:0` + `furiosa:1`, the
   placement the end-to-end run had pinned by hand, with the cordoned node skipped; the p2p pool went to RNGD 0 + ATOM 0, 1.
@@ -315,7 +315,9 @@ What it shows, with these profiles (RNGD, ATOM and `shm` measured, A100 partly e
   number of cards, and the PD path passed `pd-smoke` through the llm-d gateway. Which cards a pod gets is still the
   device plugin's choice. With the calibrated profiles it chose prefill 1× / decode 2× RNGD (generation 3), `--apply`
   moved the Deployments to it, and that layout met the SLO for every request on both traces.
-- Not yet run on the cluster: `--rebalance` (needs the vLLM metrics of aicomp #45 or the gateway's `airm_*`).
+- `--rebalance --apply` live on the RNGD+ATOM node (2026-10-19) from the rngd-pd gateway's `airm_*` gauges: three P:D changes in
+  an hour, each toward the role under pressure; right for conversation (attainment ~10 % → 85 %), wrong for code ×3 (63–68 %
+  → 45 %, the donor role's loss is not modelled). See [baselines](../../docs/baselines.md#w5-the-pd-rebalancer-live).
 
 ## 🗺 Roadmap
 
@@ -329,7 +331,8 @@ What it shows, with these profiles (RNGD, ATOM and `shm` measured, A100 partly e
 - [ ] Pooled (work-conserving) prefill routing across types in the model and the gateway; a KV link per type pair
 - [ ] A cross-node KV transport, so that `optimal` can span nodes
 - [x] Run `optimal` and `--apply` on the live cluster
-- [ ] Run `--rebalance` on the live cluster
+- [x] Run `--rebalance` on the live cluster ([baselines](../../docs/baselines.md#w5-the-pd-rebalancer-live))
+- [ ] Rebalancer: predict the donor role's pressure after a move (profiles or admission cost) and check moves against measured attainment
 
 ## 📄 License
 

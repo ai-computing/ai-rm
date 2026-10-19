@@ -104,3 +104,16 @@ def test_controller_rebalances_once_then_holds(tmp_path):
     assert run() == 0 and document.parse(io.cm).generation == 2       # same pressure, already 2:1
     m.write_text("vllm:num_requests_waiting{role=\"prefill\"} 0\n", encoding="utf-8")
     assert run() == 0 and document.parse(io.cm).generation == 2       # calm: no move back either
+
+
+def test_unreadable_metrics_hold_the_split_and_still_place(tmp_path, capsys):
+    spec, m = _spec(tmp_path, METRICS)
+    m.unlink()                                       # the gateway is not up yet
+    io = FakeIO()
+    perf = profiles.load()
+    rebal = controller.Rebalancing(spec, perf, once=True)
+    assert controller.run_once(spec, io, namespace="llm-serving", dry_run=False, perf=perf,
+                               rebalancing=rebal) == 0
+    doc = document.parse(io.cm)
+    assert [len(d.accelerator_ids) for d in doc.decisions] == [1, 1]   # placed, split unchanged
+    assert "unreadable" in capsys.readouterr().err
