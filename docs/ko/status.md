@@ -30,7 +30,7 @@
 | 영역 | 현재 기능 | 한계 |
 |---|---|---|
 | 구조 | 5계층 서브모듈과 문서 | 실제 동작은 각 저장소에서 구현 |
-| in-tree 패키지 | `packages/rm-bench`(측정, 트레이스 재생), `packages/rm-controller`(토폴로지·최적 배치, P:D 재조정, 재배치, `--apply`), CI에서 테스트·계약 검사 | `optimal`·`--rebalance`·`--apply`는 시뮬레이션과 가짜 클러스터 IO로만 검증, 처리량 프로파일 일부 추정치 |
+| in-tree 패키지 | `packages/rm-bench`(측정, 트레이스 재생), `packages/rm-controller`(토폴로지·최적 배치, P:D 재조정, 재배치, `--apply`), CI에서 테스트·계약 검사 | `optimal`·`--apply`·`--rebalance`를 RNGD+ATOM 노드에서 실제 실행([기준선](baselines.md)), 재조정기는 부하 구성을 따라가지만 카드를 내주는 역할을 잘못 예측, ATOM prefill 프로파일은 아직 추정치 |
 | 탐색 | `list`, `doctor`, 매니페스트 읽기 | 매니페스트가 없어 0 steps여도 검증 완료가 아님 |
 | 설치·테스트 | 구성요소가 선언한 명령 실행 | 받은 커밋과 로컬 요구 사항에 의존 |
 | 배포 | `deploy.manifests`를 kubectl로 적용, 사이트 Kustomize overlay | `deploy.chart`를 자동 Helm 배포하지 않음 |

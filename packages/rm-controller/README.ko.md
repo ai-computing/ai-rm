@@ -290,7 +290,7 @@ A100 수치는 일부 추정입니다(prefill 속도와 batch 1 TPOT는 데이�
 
 ## ✅ 검증
 
-- 테스트 73개(topology, optimal과 역할 내 혼합, 재조정, 상태·재배치, 적용, 시뮬레이터, 기준선, 0.1과 같은 바이트의 문서), rm-core v0.1.2로
+- 테스트 74개(topology, optimal과 역할 내 혼합, 재조정, 상태·재배치, 적용, 시뮬레이터, 기준선, 0.1과 같은 바이트의 문서), rm-core v0.1.2로
   `rm_core.conformance airm.placements topology optimal` PASS, CI에서 둘 다 실행.
 - 실제 클러스터 읽기 전용 dry-run(2026-10-19, topology): shm 풀은 `npu-node-1/furiosa:0` + `furiosa:1`(end-to-end 실행에서 손으로 고정했던 배치와
   같음, cordon된 노드는 제외), p2p 풀은 RNGD 0 + ATOM 0, 1.
@@ -299,7 +299,9 @@ A100 수치는 일부 추정입니다(prefill 속도와 batch 1 TPOT는 데이�
   2와 1, node affinity, `accelerator-ids`). 파드는 결정한 노드에 결정한 카드 수로 올라왔고, PD 경로는 llm-d 게이트웨이를 거쳐
   `pd-smoke`를 통과했습니다. 어느 카드를 받는지는 여전히 device plugin이 정합니다. 보정한 프로파일로는 prefill 1장 / decode 2장을
   골랐고(generation 3), `--apply`가 Deployment를 그에 맞췄으며, 이 배치는 두 트레이스 모두 모든 요청에서 SLO를 지켰습니다.
-- 아직 클러스터에서 돌리지 않음: `--rebalance`(aicomp #45의 vLLM 지표나 게이트웨이 `airm_*` 필요).
+- RNGD+ATOM 노드에서 rngd-pd 게이트웨이의 `airm_*` 지표로 `--rebalance --apply`를 실제로 돌림(2026-10-19): 한 시간에 P:D가 세 번
+  바뀌었고 매번 부하가 걸린 역할 쪽으로 움직였습니다. 대화에서는 옳았고(달성률 약 10 % → 85 %) 코드 ×3에서는 틀렸습니다(63–68 % →
+  45 %, 카드를 내준 역할의 손실을 모델링하지 않음). [기준선](../../docs/ko/baselines.md#w5-pd-재조정기-실제-실행) 참고.
 
 ## 🗺 로드맵
 
@@ -313,7 +315,8 @@ A100 수치는 일부 추정입니다(prefill 속도와 batch 1 TPOT는 데이�
 - [ ] 종류를 넘는 공유(작업 보존) prefill 라우팅을 모델과 게이트웨이에, 종류 쌍마다 KV 링크
 - [ ] `optimal`이 노드를 넘을 수 있도록 노드 간 KV 전송
 - [x] `optimal`, `--apply`를 실제 클러스터에서 실행
-- [ ] `--rebalance`를 실제 클러스터에서 실행
+- [x] `--rebalance`를 실제 클러스터에서 실행 ([기준선](../../docs/ko/baselines.md#w5-pd-재조정기-실제-실행))
+- [ ] 재조정기: 이동 뒤 카드를 내준 역할의 압력을 예측(프로파일이나 admission 비용)하고, 측정한 달성률로 이동을 검증
 
 ## 📄 라이선스
 
