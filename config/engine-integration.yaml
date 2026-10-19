@@ -1,0 +1,88 @@
+# Declarative architecture/migration plan. NOT consumed by tools/airm.py.
+# Do not use this file as a runtime/deployment configuration.
+schema_version: 1
+kind: EngineIntegrationPlan
+status: planned
+runtime_consumed: false
+
+hub:
+  repository: https://github.com/ai-computing/ai-rm
+  responsibilities: [resource-integration, cluster-integration, observability, evidence]
+  contracts: https://github.com/ai-computing/rm-core
+  platform: kubernetes-llm-d
+
+engine:
+  id: optimus-prime
+  display_name: Optimus Prime
+  repository: https://github.com/ai-computing/aicomp.git
+  inspected_source:
+    branch: main
+    revision: 62a783114afa3531beeb7955c66da2e6aaf4ba65
+  integration_target:
+    branch: optimus-prime
+    branch_created: false
+    revision: null
+    activation: blocked-until-implementation-and-validation
+  runtime:
+    source_directory: opt_prime
+    observed_features: [pp-tp-inference, explicit-prefill-decode, kv-cache-management]
+    planned_modules: [npu-backends, pd-serving, kv-transport, expert-offload]
+  planner:
+    id: fasop
+    source_directory: fasop
+    product_owner: optimus-prime
+    logical_layer: l4-cluster
+    observed_scope: heterogeneous-gpu-training-cost-search
+    planned_scope: inference-planning-with-calibrated-cost-and-slo-models
+    inference_adapter_status: planned
+  proposed_adapters:
+    - {group: airm.workloads, name: optimus-prime, status: planned}
+    - {group: airm.placements, name: fasop, status: planned}
+
+# Paths are existing umbrella source submodules. Target areas are ownership
+# labels, not claims that Python packages or new adapters already exist.
+migration_sources:
+  - id: rm_abstract_layer
+    path: components/l1-accel/rm_abstract_layer
+    retain_role: resource-discovery-and-capabilities
+    planned_engine_area: engine-facing-backend-adapters-only
+  - id: hetero-npu-p2p
+    path: components/l2-memory/hetero-npu-p2p
+    planned_engine_area: kv-transport
+    constraints: [compatible-devices, same-host, completion-fencing, explicit-path]
+  - id: npu-offload
+    path: components/l2-memory/npu-offload
+    planned_engine_area: expert-offload
+    contract: workload-and-memory-tier-not-kvtransport
+  - id: rngd-pd
+    path: components/l3-serving/rngd-pd
+    planned_engine_area: pd-serving-and-npu-backends
+
+external_workloads:
+  - id: npu-lora
+    path: components/l3-serving/npu-lora
+    role: training-workload
+    future_engine_adapter: planned
+  - id: duet
+    path: components/l2-memory/duet
+    role: optional-private-search-workload
+    visibility: private
+    copy_into_public_engine: false
+
+cluster:
+  owner: llm-d-setup
+  routing: [gateway, inferencepool, epp]
+  fasop_output: reviewed-placement-proposal
+  automatic_live_reconfiguration: false
+
+migration:
+  mode: parallel-until-accepted
+  retain_existing_submodules: true
+  engine_submodule_active: false
+  acceptance:
+    - integration-branch-and-reviewed-commit-exist
+    - component-manifest-and-adapters-implemented
+    - conformance-pass-or-explicit-hardware-skip
+    - correctness-and-performance-scenarios-reviewed
+    - manifests-and-cluster-boundary-validated
+    - exact-engine-revision-pinned-in-umbrella

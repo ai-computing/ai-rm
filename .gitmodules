@@ -1,3 +1,6 @@
+# Engine consolidation plan: config/engine-integration.yaml
+# Keep existing submodules as migration sources until Optimus Prime is validated.
+# The planned aicomp/optimus-prime branch is not created or activated here.
 [submodule "rm_abstract_layer"]
 	path = components/l1-accel/rm_abstract_layer
 	url = https://github.com/ai-computing/rm_abstract_layer.git

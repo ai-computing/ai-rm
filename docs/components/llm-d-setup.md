@@ -1,5 +1,7 @@
 # llm-d-setup — L4 카드
 
+> **Optimus Prime 전환 안내:** 클러스터·Gateway/EPP·모니터링 책임은 유지합니다. 엔진 내부 FASOP의 검토된 계획 제안은 후속 adapter로 연결하며 자동 운영 변경은 활성화하지 않습니다. 구현 완료를 뜻하지 않습니다. [통합 설계](../ko/engine-integration.md) · [English design](../engine-integration.md) · [계획 설정](../../config/engine-integration.yaml)
+
 클러스터 쪽에서 계약이 "돌 자리"를 만듭니다.
 
 ## 이번에 할 일

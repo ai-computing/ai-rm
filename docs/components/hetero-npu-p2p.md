@@ -1,5 +1,7 @@
 # hetero-npu-p2p — L2 카드
 
+> **Optimus Prime 전환 안내:** KV 전송 기술은 Optimus Prime의 모듈·연동으로 통합하는 방향이며 같은 호스트·ABI·완료 fence·명시적 경로를 유지합니다. 구현 완료를 뜻하지 않습니다. [통합 설계](../ko/engine-integration.md) · [English design](../engine-integration.md) · [계획 설정](../../config/engine-integration.yaml)
+
 ## 이번에 할 일
 1. **`KVTransport` adapter** `hetero_p2p.airm:P2PTransport` (entry point `airm.kv_transports` 이름 `p2p`).
    - `supports`: RNGD 장치 메모리 → ATOM 장치 메모리(현재 검증된 ABI 범위)만 True.
