@@ -89,3 +89,19 @@ def test_empty_decision_leaves_deployment_alone():
     doc, _ = document.build(entries, document.parse(None), "topology")
     out = apply.patches(doc, [dep("dec", "decode")], POOL)
     assert unplaced and out[0]["patch"] is None and out[0]["note"].startswith("left alone")
+
+
+def test_serve_pool_deployment_follows_its_decision(tmp_path):
+    """Two pools, two models: the aggregated pool's `serve` Deployment gets its card count and node."""
+    from test_controller import _two_pools
+    spec, perf = _two_pools(tmp_path, decode="furiosa.RNGD"), profiles.load()
+    qwen = {"metadata": {"name": "qwen", "annotations": {apply.POOL_ANNOTATION: "qwen3-4b-pool",
+                                                        apply.ROLE_ANNOTATION: "serve"}}, "spec": {"replicas": 0}}
+    pd = [{"metadata": {"name": n, "annotations": {apply.POOL_ANNOTATION: "llama8b-pd-pool",
+                                                  apply.ROLE_ANNOTATION: r}}, "spec": {"replicas": 0}}
+          for n, r in (("pre", "prefill"), ("dec", "decode"))]
+    io = ApplyIO([qwen] + pd)
+    assert controller.run_once(spec, io, namespace="llm-serving", dry_run=False, apply=True, perf=perf) == 0
+    got = dict(io.patched)
+    assert {n: p["spec"]["replicas"] for n, p in got.items()} == {"qwen": 1, "pre": 1, "dec": 1}
+    assert got["qwen"]["spec"]["template"]["metadata"]["annotations"][apply.IDS_ANNOTATION] == "etri-001/furiosa:3"

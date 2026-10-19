@@ -487,6 +487,12 @@ class OptimalPlacement:
         p = tuple(i for k, n in prefill_counts for i in take(k, groups[k], n))
         return p, tuple(i for k, n in decode_counts for i in take(k, groups[k], n))
 
+    def place_serve(self, workload: Workload, pool: Sequence[Accelerator], *, spec: RoleSpec = ANY,
+                    used: Iterable[str] = ()) -> PlacementDecision:
+        """Aggregated pools are placed by count, as topology does: the profiles describe the
+        prefill/decode serving path, not single-card serving of another model."""
+        return self.topology.place_serve(workload, pool, spec=spec, used=used)
+
     def place_pd(self, prefill: Workload, decode: Workload, pool: Sequence[Accelerator], *,
                  kv_transport: str, prefill_spec: RoleSpec = ANY, decode_spec: RoleSpec = ANY,
                  used: Iterable[str] = (), mix: Optional[mixes.Mix] = None, budget: Optional[int] = None,

@@ -4,7 +4,8 @@
 
 로드맵 W5(컨트롤러가 서빙 파드를 배치하고 옮김, P:D 재조정기), W6(`optimal` 정책의 측정 프로파일), W7(벤더 엔진을 포함해 에너지까지 잰
 같은 예산 기준선)의 실제 증빙입니다. 2026-10-19, RNGD와 ATOM 카드를 함께 가진 노드에서 실행했습니다(시작 시 RNGD 3장·ATOM 4장이 비어 있었고, RNGD가
-있는 다른 노드는 cordon 상태).
+있는 다른 노드는 cordon 상태). W2 절(두 모델 풀 동시 서빙, `tcp`로 노드 간 KV)은 같은 날 저녁 같은 노드에서 돌렸고, 두 번째
+RNGD 노드는 여전히 cordon 상태였습니다.
 
 **범위.** Llama-3.1-8B-Instruct, 현재 rngd-pd가 컴파일한 그래프(S=512), 노드 하나, KV는 `shm`. 실제 트레이스 두 개를 S=512가 처리할
 수 있는 요청으로 잘랐고, 실행당 요청 수백 개, 칸마다 한 번씩 실행했습니다. 이 엔진 세대의 기준선이며 하드웨어 성능 주장이
@@ -19,6 +20,8 @@
 | W6 | 프로파일 표가 2배 이상 틀렸습니다. 400 토큰 프롬프트의 RNGD prefill은 예전 유도값의 220 ms가 아니라 100 ms, batch 그래프의 RNGD decode는 batch와 무관하게 토큰당 30 ms(17–24 아님), ATOM decode는 카드 한 장에서 108 ms(두 장에서 40–52 아님). `profiles.yaml`을 측정값으로 바꾸자 `optimal`의 선택이 2P+1D에서 1P+2D로 바뀌었고, 클러스터에서도 1P+2D가 더 좋았습니다(100 % 대 93.6 %, 77.5 %). |
 | W7 벤더 | **furiosa-llm 2026.3.0 집약 서빙**(replica 하나에 카드 한 장, FuriosaAI가 미리 컴파일한 Llama-3.1-8B)이 카드 2장과 3장 모두 두 트레이스의 모든 요청에서 SLO를 지켰습니다. 카드당 goodput(제공 부하에 묶임)과 tok/J(0.74 대 0.76)는 `solo`와 같고, TPOT p90은 17–19 ms로 rngd-pd의 30–69 ms보다 낮습니다. **furiosa-llm에는 PD 모드가 없습니다**(disaggregation 옵션도, KV 전송 코드도 없고 FuriosaAI llm-d 가이드도 미지원으로 적음). 그래서 벤더 PD 행은 없습니다. |
 | W5 재조정기 | 게이트웨이 `airm_*` 지표를 읽는 `rm-controller --rebalance --apply`가 한 시간에 P:D를 세 번 바꿨고, 매번 부하가 걸린 역할 쪽이었습니다(generation 5–7). 대화 ×2에서 decode로 카드를 옮기자 달성률이 약 10 %에서 85 %로 올랐습니다. 코드 ×3에서 prefill로 옮기자 63–68 %에서 45 %로 내려갔습니다. 규칙이 카드를 내준 역할의 손실을 모델링하지 않기 때문입니다. 예측 규칙(이동 뒤 두 역할을 예측)은 50분 실제 재확인에서 대화 이동만 하고 코드 ×3 동안 1P+2D를 유지했습니다(77–81 %). |
+| W2 멀티 풀 | 두 모델을 겹치지 않는 카드에서 동시에 서빙하고 둘 다 `rm-controller`가 배치했습니다(`--apply`, PD 풀과 aggregated `serve` 풀). Llama-3.1-8B rngd-pd 1P+1D는 옆에서 Qwen3-4B(furiosa-llm, 카드 한 장)가 같은 부하를 받는 동안 Azure 대화 ×1의 97.6 %, 단독으로 98.0 %에서 SLO를 지켰고 Qwen은 둘 다 100 %. 한 풀의 spec만 바꿔(Llama decode RNGD → ATOM) 다시 실행하자 그 풀의 Deployment만 patch됐고 Qwen 파드는 손대지 않은 채 계속 돌았습니다. |
+| W2 노드 간 KV | rngd-pd의 새 `tcp` 전송이 실제 prefill KV(요청당 67 MB)를 RNGD prefill 파드에서 CPU 노드의 relay 파드를 거쳐 RNGD decode 파드로 옮겼습니다. blob 2,112/2,112개가 바이트 단위로 같고, 출력 32/32개가 `shm`과 같습니다. 속도는 NPU 노드의 1 GbE 링크가 정합니다: 요청당 0.08–0.09 GB/s, 동시 8개면 방향마다 0.117 GB/s, 67 MB 구간마다 약 0.8초. `profiles.yaml`의 `tcp`는 이제 측정값(0.08 GB/s, 구현됨)이고, 그 값으로는 2노드 시뮬레이터 행이 한 노드보다 나아지지 않습니다(0.15–0.25 GB/s부터 나아짐). 두 NPU 노드 사이의 NPU 간 전송은 검증하지 못했습니다. 두 번째 NPU 노드가 cordon 상태로 남았습니다. |
 | 발견 | rngd-pd 게이트웨이의 `airm_tpot_p90_ms`는 엔진 step이라 decode 대기를 보지 못했습니다([rngd-pd#7](https://github.com/ai-computing/rngd-pd/pull/7)). rm-bench 트레이스 프롬프트는 우연히 prefix를 공유했고(서로 다른 문장 72개), prefix cache가 이를 이용했습니다(여기서 고침). rngd-pd가 할당받은 카드를 호스트 번호로 불렀습니다(`npu3` → `rngd:3`, 범위 밖): [rngd-pd#5](https://github.com/ai-computing/rngd-pd/pull/5)에서 고침. `PD_PREFETCH=1`에서 continuous decode 워커는 대기 요청이 8개를 넘으면 영영 멈춥니다: [rngd-pd#4](https://github.com/ai-computing/rngd-pd/issues/4). Kubernetes 밖의 프로세스가 RNGD 카드 하나를 쓰고 있어, 그 카드를 할당받은 파드가 `EBUSY`로 실패했습니다. |
 
 ## 구성
@@ -357,6 +360,153 @@ decode 로그에 `TimeoutError: pull timeout: <req>/layer.0/k`가 남습니다. 
 없습니다. 둘 다 [컴포넌트 카드](../components/rm-controller.md)의 할 일입니다. [rm-controller README](../../packages/rm-controller/README.ko.md)의
 시뮬레이션 표는 보정한 프로파일로 다시 돌렸습니다.
 
+## W2: 한 노드의 두 모델 풀 (HUB-35)
+
+RNGD+ATOM 노드에서 두 모델을 동시에 서빙하고, 풀마다 `rm-controller`가 따로 카드를 배치했습니다(2026-10-19,
+19:10–19:50 UTC). **Llama-3.1-8B-Instruct**는 RNGD 위 rngd-pd PD 1P+1D(`llama8b-pd-pool`, `airm-e2e` 릴리스, llm-d
+게이트웨이로 접근), **Qwen3-4B-FP8**은 furiosa-llm 2026.3.0 aggregated, RNGD 카드 한 장(`qwen3-4b-pool`, Deployment
+`airm-exp-qwen`, 자체 Service로 접근)입니다. Qwen Deployment는 클러스터의 `serve-furiosa-ai-qwen3-4b-fp8`(읽기만 했고
+replicas 0 그대로)을 복사했습니다. 이미지와 인자가 같고 FuriosaAI가 미리 컴파일한 아티팩트(`max_model_len` 40,960)를 쓰며,
+풀/역할 annotation과 hostPath 모델 캐시만 더했습니다.
+
+spec은 [`examples/multi-pool.yaml`](../../packages/rm-controller/examples/multi-pool.yaml)입니다(topology; `serve` 풀은 이
+변경에서 더한 aggregated 종류):
+
+```
+rm-controller --spec multi-pool.yaml --once --apply
+rm-controller: 9 profiles, 3 decisions, generation 4 written; 3 deployment patch(es) applied
+#  llama8b-pd-pool prefill  <npu-node>/furiosa:0   topology: ... highest peak ... shm keeps prefill and decode on one node
+#  llama8b-pd-pool decode   <npu-node>/furiosa:1   topology: ... most memory ...
+#  qwen3-4b-pool   serve    <npu-node>/furiosa:3   topology: serve ... (furiosa.RNGD, 1 replica(s), aggregated)
+```
+
+**카드를 공유하지 않음.** patch가 replicas 1/1/1과 node affinity를 넣었고, device plugin은 Llama prefill·decode 파드에
+`npu1`·`npu0`, Qwen 파드에 `npu3`을 줬습니다(컨테이너에는 `/dev/rngd/npu3*`만 보임). 동시 실행 2분째 `furiosa-smi`는
+`npu0` 116 W / 사용률 57 %, `npu1` 56 W, `npu3` 82 W, 메모리 47.5 GiB 중 46.7 GiB 사용(furiosa-llm의 KV 풀)이었습니다. W5처럼
+결정의 카드 이름은 device plugin의 이름과 다릅니다.
+
+**두 풀에 동시에 부하.** Azure 대화 ×1(요청 455개, 1.52 req/s, 입력+출력 ≤ 511 토큰, 300초)을 두 풀에 동시에 재생하고,
+이어서 각 풀에 따로 재생했습니다. SLO TTFT p90 ≤ 2초, TPOT p90 ≤ 100 ms. 전력은 풀마다 자기 카드만(`--power prom`,
+`device=~"npu0|npu1"`, `"npu3"`). Llama는 llm-d 게이트웨이로 `--api completions`, Qwen은 Service로 `--api completions-stream`
+(W7 벤더 행과 같음):
+
+| 풀 | 실행 | 카드 | SLO 달성 | TTFT p90 | TPOT p90 | Goodput req/s | 카드당 | 전력 W (최대) | tok/J |
+|---|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| Llama-3.1-8B, rngd-pd PD 1P+1D | **두 풀 동시** | 2 | 97.6 % | 243 ms | 61.8 ms | 1.47 | 0.74 | 162.8 (182) | 1.10 |
+| Llama-3.1-8B, rngd-pd PD 1P+1D | 단독 (파드 재시작) | 2 | 98.0 % | 198 ms | 61.4 ms | 1.48 | 0.74 | 162.1 (178) | 1.11 |
+| Qwen3-4B-FP8, furiosa-llm ×1 | **두 풀 동시** | 1 | 100.0 % | 120 ms¹ | 24.3 ms¹ | 1.51 | 1.51 | 80.8 (95) | 2.23 |
+| Qwen3-4B-FP8, furiosa-llm ×1 | 단독 | 1 | 100.0 % | 64 ms¹ | 20.4 ms¹ | 1.51 | 1.51 | 74.2 (81) | 2.43 |
+
+¹ 스트리밍, 클라이언트에서 측정(W7 각주 참고). 모든 실행에서 요청 455개가 모두 끝났고 실패는 없었습니다.
+
+- **두 풀 모두 옆 풀이 있어도 SLO를 지킵니다.** Llama의 달성률·TPOT·goodput은 Qwen 부하가 있든 없든 실행 간 잡음 안에서
+  같습니다(97.6 % / 98.0 %). Qwen은 어느 쪽이든 모든 요청이 SLO를 지켰습니다. 같은 Llama 배치·부하의 W7 칸은 87.7 %였습니다(다른
+  날의 파드). 오늘의 98 %는 단일 실행의 편차 안입니다.
+- **공유하는 것은 호스트입니다.** Llama가 돌 때 Qwen의 클라이언트 TTFT p90이 두 배(64 → 120 ms), TPOT p90이 4 ms 늘었습니다.
+  카드는 겹치지 않으므로 가속기가 아니라 함께 쓰는 호스트(CPU, PCIe root, 클라이언트 머신)가 원인일 가능성이 큽니다. 둘 다
+  SLO 안쪽에 넉넉히 있습니다.
+- Qwen3-4B 카드 한 장이 Llama-3.1-8B PD 카드 두 장과 같은 요청 흐름을 풀당 전력 절반 정도(81 W 대 163 W)로 처리합니다. 모델이
+  다르므로 엔진 비교는 아닙니다.
+
+**spec을 바꾸면 그 풀만 움직입니다.** spec을 Llama decode를 ATOM에서 하도록 바꾸고(`decode: {accelerator: rebellions.ATOM}`)
+컨트롤러를 한 번 다시 실행했습니다. Llama decode 역할은 장치 종류마다 Deployment를 하나씩 두었습니다(`accelerator:
+furiosa.RNGD` annotation을 단 `airm-e2e-decode`, W7 RNGD → ATOM 릴리스의 ATOM decode 설정을 쓴 `airm-exp-decode-atom`, 둘 다
+`airm-e2e-decode` Service 뒤):
+
+```
+rm-controller: 9 profiles, 3 decisions, generation 5 written; 2 deployment patch(es) applied
+#  patch airm-e2e-decode       replicas 1 -> 0   decode of llama8b-pd-pool: no furiosa.RNGD cards in the decision
+#  patch airm-exp-decode-atom  replicas 0 -> 1   decode of llama8b-pd-pool: 1 replica(s) on <npu-node>
+#  airm-e2e-prefill            up to date
+#  airm-exp-qwen               up to date
+```
+
+| Deployment | generation 4 | generation 5 |
+|---|---|---|
+| `airm-e2e-prefill` (Llama prefill) | 1 × `furiosa:0` | 그대로 (patch 없음) |
+| `airm-e2e-decode` (Llama decode, RNGD) | 1 × `furiosa:1` | replicas 0 |
+| `airm-exp-decode-atom` (Llama decode, ATOM) | replicas 0 | 1 × `rebellions:0`, patch 51초 뒤 ready |
+| `airm-exp-qwen` (Qwen) | 1 × `furiosa:3` | 그대로: 같은 파드, 19:11:43 UTC 시작, 전후 모두 재시작 0 |
+
+이동 중에 두 풀에 `pd-smoke`를 동시에 걸었습니다. Qwen은 32/32 SLO 안. Llama는 ATOM decode 파드가 32/32를 처리했고(고정
+프롬프트에서 RNGD와 같은 텍스트) smoke SLO는 넘었습니다(TPOT p90 377 ms: ATOM S=512 그래프 토큰당 108 ms에 lane 4개로 요청
+8개, W7과 같음). 여기서는 바뀐 역할이 다른 풀이 쓰지 않는 장치 종류로 갔습니다. 새 규칙이 실제로 필요한 경우(decode가
+ATOM → RNGD로 옮기는데 Qwen 풀이 RNGD 카드를 쥐고 있어서 새로 배치하면 그 카드를 가져갈 때)는
+`test_changed_spec_moves_only_that_pool`이 다룹니다.
+
+## W2: tcp를 통한 노드 간 KV (HUB-34)
+
+**구성.** rngd-pd의 `tcp` 전송(이 변경, [rngd-pd#9](https://github.com/ai-computing/rngd-pd/pull/9)): prefill 워커가 층마다
+K와 V(bf16 wire, 1 MiB blob 64개, S=512에서 요청당 67.1 MB)를 연결을 재사용하는 TCP로 `TcpKVServer`에 밀어 넣고 decode
+워커가 거기서 가져갑니다. blob마다 CRC-32를 달아 서버와 수신 측이 확인합니다. 서버는 **CPU만 있는 노드의 relay 파드**로
+돌렸고(chart 옵션 `kvRelay`, 이미지 `python:3.11-slim`, ConfigMap으로 넣은 표준 라이브러리 전용 `tcpkv.py`), prefill(RNGD)과
+decode(RNGD) 파드는 NPU 노드에 있었으므로 **KV의 모든 바이트가 네트워크를 두 번 건넜습니다**: NPU 노드 → relay 노드 → NPU
+노드. 릴리스 `airm-exp-xnode`(rngd-pd chart, `airm-e2e` values에 `airm.kvTransport: tcp`, decode `--B 8 --sched continuous`,
+`PD_PREFETCH=0`), 자체 게이트웨이 Service(llama8b-pd InferencePool에는 넣지 않음). NPU 노드는 다른 노드와 **1 GbE**
+인터페이스로 연결되며(노드 간 RTT 0.22 ms), 아래 모든 수치의 한계는 전송이 아니라 이 링크입니다.
+
+**바이트 단위 일치.** `AIRM_KV_TCP_LOG=1`이면 워커가 밀어 넣거나 가져간 blob마다 크기와 SHA-256을 남깁니다. 요청 33개(1 +
+순차 16 + 동시 8로 16): prefill의 push와 decode의 pull 사이에서 **blob 2,112개 중 2,112개가 같았고**(2.215 GB), relay는
+세션 전체(벤치마크 포함 blob 26,112개, 27.4 GB)에서 CRC 오류 0을 셌습니다.
+
+**토큰 단위 일치.** 고정 프롬프트 16개(8–479 토큰, 출력 32 토큰, greedy)를 순차로, 그리고 동시 8로 같은 릴리스에 보내고
+`airm.kvTransport`만 `tcp`와 `shm`으로 바꿨습니다(파드 재시작, 같은 카드): **출력 32개 중 32개가 같았습니다**(텍스트와 토큰
+수). 감사 로그를 켜고 끄고 두 번 했습니다.
+
+**서빙에서의 요청당 시간** (rngd-pd 게이트웨이의 `pd` 시간, 프롬프트 16개. save = prefill 계산이 끝난 뒤에도 남은 push,
+load = decode admission 때의 pull):
+
+| | `tcp` 순차 | `shm` 순차 | `tcp` 동시 8 | `shm` 동시 8 |
+|---|--:|--:|--:|--:|
+| KV save, p50 / p90 | 678 / 724 ms | 1.4 / 4.6 ms | 3,266 / 4,304 ms | 1.7 / 4.0 ms |
+| admission 때 KV load, p50 / p90 | 816 / 896 ms | 31 / 45 ms | 1,305 / 1,378 ms | 30 / 36 ms |
+| 서버 TTFT, p50 / p90 | 778 / 839 ms | 104 / 112 ms | 3,330 / 4,766 ms | 318 / 782 ms |
+
+**링크 측정** (prefill 파드 안에서 `bench/kv_tcp_bench.py`, S=512 모양의 bf16 KV를 relay로 push한 뒤 다시 pull, 동시 요청 N개.
+요청당 한 방향 시간과 GB/s):
+
+| 동시 요청 | Push p50 (GB/s) | Pull p50 (GB/s) | 양방향 합, GB/s | 바이트 일치 |
+|--:|--:|--:|--:|---|
+| 1 | 758 ms (0.089) | 832 ms (0.081) | 0.084 | 예 |
+| 2 | 1,182 ms (0.057) | 1,243 ms (0.054) | 0.111 | 예 |
+| 4 | 2,330 ms (0.029) | 2,290 ms (0.029) | 0.115 | 예 |
+| 8 | 4,427 ms (0.015) | 4,515 ms (0.015) | 0.117 | 예 |
+| 1, CRC 끔 | 622 ms (0.108) | 707 ms (0.095) | 0.101 | 예 |
+| 8, CRC 끔 | 4,592 ms (0.015) | 4,472 ms (0.015) | 0.117 | 예 |
+
+요청 하나는 방향마다 0.08–0.09 GB/s로 움직입니다. 여러 개가 동시에 있으면 1 GbE 인터페이스가 0.117 GB/s(940 Mbit/s)에서
+포화되고 요청당 시간이 선형으로 늘어납니다. CRC는 단일 흐름에서 약 15 %, 링크가 꽉 차면 비용이 없습니다.
+
+**그 위의 실제 트레이스.** Azure 대화 ×0.5(요청 212개, 0.71 req/s)를 relay를 거치는 KV로 `airm-exp-xnode`에 보냈고(먼저
+파드 재시작), 같은 배치의 W7 `shm` 칸과 비교했습니다:
+
+| 배포 | 카드 | SLO 달성 | TTFT p90 | TPOT p90 | Goodput req/s | 카드당 | 전력 W (최대) | tok/J |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| PD 1P+1D RNGD, relay 노드를 거치는 KV `tcp` | 2 | 89.2 % | 1,727 ms | 83.3 ms | 0.62 | 0.31 | 151.7 (165) | 0.59 |
+| PD 1P+1D RNGD, KV `shm` (W7) | 2 | 100.0 % | 246 ms | 33.1 ms | 0.70 | 0.35 | 155.9 (176) | 0.57 |
+
+요청 212개가 모두 끝났습니다. admission마다 약 0.8초 걸리는 pull이 decode 루프를 멈추고(`PD_PREFETCH=0`) TPOT에 드러나며,
+push의 꼬리는 TTFT에 들어갑니다. `pd-smoke`(4초에 요청 32개)는 32개를 모두 처리했지만 TTFT p90이 17.9초였습니다. 8 req/s ×
+67 MB는 링크가 나르는 양의 4.6배입니다. 측정한 링크를 넣은 시뮬레이터는 이 배치를 100 %(TTFT p90 983 ms, TPOT 30 ms)로
+예측합니다. 재생이 admission 때의 로드를 TPOT에 넣지 않기 때문에(에피소드 재생은 넣음) 여기서는 낙관적이며, 짧은 답의
+`shm`에서와 같습니다.
+
+**프로파일과 2노드 행.** `profiles.yaml`의 `tcp`: `gb_s` 0.08(추정 0.5였음), `latency_ms` 14(왕복 64번 × 0.22 ms),
+`min_bytes` 67,108,864(S=512 버퍼 전체를 보냄), `admit_blocking: true`, `implemented: true`, `source: measured`, scope
+`cluster`. `python -m rm_controller.sim --compare --requests 4000`을 다시 돌리면 2노드에서 `optimal`(카드당, 최대 goodput)은
+이제 모든 트레이스에서 `shm`으로 한 노드에 머물고(Azure 대화 0.813 req/s, 코드 0.943, 한 노드와 같음), `tcp`로 제한한 최선의
+계획에는 SLO를 지키는 배치가 없습니다(goodput 0). 0.5 GB/s 추정일 때 2노드 열은 0.087–2.724 req/s(한 노드의 2.0–3.5배)였습니다.
+대역폭을 바꿔 보면 2노드 배치는 0.15–0.25 GB/s 사이에서 돌아오고, 0.8 GB/s에서 2.73(대화, P 1 / D 3 RNGD)과 2.39 req/s(코드,
+P 3 / D 1)에 이릅니다. 즉 2노드 이득에는 NPU 노드 사이에 2.5 GbE 이상의 링크가 필요합니다. `python -m rm_controller.baselines
+--compare --requests 4000`은 그대로입니다(카드 집합이 모두 단일 노드). 표: [rm-controller README](../../packages/rm-controller/README.ko.md#-시뮬레이션-topology-대-optimal),
+[컴포넌트 카드](../components/rm-controller.md).
+
+**검증하지 못한 것: 두 노드 사이 NPU 간 전송.** RNGD가 있는 두 번째 노드는 cordon 상태였고 그대로 두었습니다. 두 워커 모두
+NPU 노드 하나에서 돌았고 노드 간 구간은 NPU 노드 ↔ CPU relay 노드였습니다. 한 NPU 노드의 prefill과 다른 NPU 노드의 decode(그리고
+decode 옆의 서버로 네트워크 구간이 둘이 아니라 하나)는 실행하지 않았습니다. NIXL: NPU 노드에 설치된 `nixl_cu12` wheel에는
+`libplugin_UCX.so`가 있고 `UCX_TLS=tcp`로 UCX agent가 생성되지만, 여기서 NIXL-over-UCX KV 경로를 만들거나 재지는 않았습니다.
+rngd-pd의 `nixl` 전송은 같은 호스트의 HETERO_NPU 경로 그대로입니다([rngd-pd#8](https://github.com/ai-computing/rngd-pd/pull/8)).
+
 ## 주의할 점
 
 - **노드 하나, 엔진 한 세대.** RNGD 3장과 ATOM 4장, S=512 그래프, batch 최대 8(RNGD)과 4(ATOM). 트레이스는 511 토큰에 들어가는
@@ -375,6 +525,9 @@ decode 로그에 `TimeoutError: pull timeout: <req>/layer.0/k`가 남습니다. 
   [rngd-pd#8](https://github.com/ai-computing/rngd-pd/pull/8)), B > 8 RNGD decode, GPU.
 - **벤더 행**은 클라이언트 API(스트리밍 completions)와 엔진 기본값(prefix caching 켜짐)이 다릅니다. 표의 각주 참고. rngd-pd 행 뒤에 같은
   카드에서 같은 날 오후에 돌렸습니다.
+- **W2 실행**도 한 번씩입니다. 멀티 풀 부하는 두 풀 모두 클라이언트 호스트 하나에서 보냈습니다. 노드 간 경로는 세 번째 노드의
+  relay를 거쳤고(요청마다 네트워크 구간 둘, 서버가 decode 옆이면 하나), 링크는 1 GbE, 두 NPU 워커는 한 NPU 노드에 있었습니다.
+  두 번째 NPU 노드가 cordon 상태이기 때문입니다.
 - **재조정기 실행**은 한 번의 순서(코드 ×3, 대화 ×2, 코드 ×3)이고 일부러 용량을 넘겼습니다. 첫 대화 구간은 옛 TPOT 지표로 돌았으며
   그 발견을 위해서만 보고합니다.
 
@@ -392,8 +545,13 @@ decode 로그에 `TimeoutError: pull timeout: <req>/layer.0/k`가 남습니다. 
 | `llm-serving/airm-placement` | 재조정기가 generation 4–7 기록 | generation 3 문서를 바이트 그대로 복원 |
 | `llm-serving/airm-e2e`, `airm-placement` (예측 규칙 재확인, 17:37–18:30 UTC) | 재조정기 실행과 같음: 게이트웨이 1, `PD_PREFETCH=0`, rngd-pd#7 체크아웃을 `/app`에. `--apply`로 generation 4(2P+1D), 5(1P+2D) | 저장한 객체로 Deployment와 ConfigMap을 replace(모두 0 replicas, generation 3 문서 바이트 그대로) |
 | `airm-exp-nixl-check` (Pod) | `nixl` 전송 검사용 RNGD 2장 + ATOM 1장(rngd-pd#8) | 삭제 |
+| `llm-serving/airm-e2e` (W2 멀티 풀, 19:10–19:50 UTC) | 게이트웨이를 1로 scale, `PD_PREFETCH=0`. decode에 `accelerator: furiosa.RNGD` annotation. prefill·decode replica, affinity, annotation은 `--apply`가 patch(generation 4, 5), prefill·decode 파드 한 번 재시작 | 저장한 객체로 Deployment와 `airm-placement`를 replace(모두 0 replicas, generation 3 문서 바이트 그대로) |
+| `airm-exp-qwen` (Deployment, Service) | 두 번째 풀의 furiosa-llm Qwen3-4B-FP8, `serve-furiosa-ai-qwen3-4b-fp8`(읽기만 함)의 복사본. 모델 캐시는 `/var/tmp` 아래 hostPath(5.4 GB) | 삭제, 캐시 제거(`airm-exp-cleanup` Pod, 삭제) |
+| `airm-exp-decode-atom` (Deployment) | Llama 풀의 ATOM decode, generation 5로의 이동 | 삭제 |
+| `llm-serving/airm-exp-xnode` (Helm) | rngd-pd#9의 rngd-pd chart: NPU 노드의 RNGD prefill + RNGD decode, CPU 전용 노드의 `kvRelay` 파드, 자체 게이트웨이 Service. `tcp`와 `shm` 사이를 바꾸고 실행 사이 재시작 | uninstall |
 
-다른 Deployment나 EPP는 건드리지 않았습니다. 원시 결과는(`results/`는 이 저장소에서 추적하지 않음) 노드의 실험 로그와 함께
+다른 Deployment나 EPP는 건드리지 않았고, 어떤 노드도 cordon·uncordon하거나 이름으로 지정하지 않았습니다. cordon된 RNGD
+노드는 그대로였고 그 위에는 아무것도 스케줄하지 않았습니다. 원시 결과는(`results/`는 이 저장소에서 추적하지 않음) 노드의 실험 로그와 함께
 있습니다.
 
 ## 재현
@@ -421,4 +579,14 @@ python -m rm_controller.sim --episode     # 같은 에피소드 재생, 선형 �
 
 # W6: 실행과 비교한 시뮬레이션, README 표
 python -m rm_controller.sim --compare --requests 4000
+
+# W2 멀티 풀: 풀 둘(PD + aggregated serve), Deployment에 pool/role annotation. 이어서 풀 하나만 바꾸고 다시 실행
+rm-controller --spec packages/rm-controller/examples/multi-pool.yaml --once --apply
+rm-bench e2e ... --gateway http://<llm-d gateway>/rngd/llama8b-pd/completions --api completions &        # 둘을 동시에
+rm-bench e2e ... --gateway http://<qwen service>:8000 --model furiosa-ai/Qwen3-4B-FP8 --api completions-stream &
+
+# W2 노드 간 KV: CPU 노드에 relay를 둔 rngd-pd chart (rngd-pd#9)
+helm install <release> deploy/helm/rngd-pd -f <site values> --set airm.kvTransport=tcp --set kvRelay.enabled=true \
+  --set kvRelay.nodeSelector.kubernetes\\.io/hostname=<cpu node> --set env.AIRM_KV_TCP_LOG=1    # 감사 로그: blob마다 크기 + sha256
+python bench/kv_tcp_bench.py --server <release>-kv-relay:5577 --concurrency 1,2,4,8     # prefill 파드 안에서
 ```

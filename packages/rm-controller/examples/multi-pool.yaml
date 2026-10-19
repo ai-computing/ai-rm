@@ -1,0 +1,16 @@
+# Two models on one node, no card shared (HUB-35, docs/baselines.md "Two model pools"): Llama-3.1-8B
+# prefill/decode on rngd-pd and Qwen3-4B aggregated on furiosa-llm. Pools are placed in order; the Deployments
+# carry airm.ai-computing.io/pool and /role (prefill | decode | serve). Try: rm-controller --spec examples/multi-pool.yaml --dry-run
+namespace: llm-serving
+placement: topology
+pools:
+  - pool: llama8b-pd-pool
+    model: meta-llama/Llama-3.1-8B-Instruct
+    kv_transport: shm
+    slo: {ttft_p90_ms: 2000, tpot_p90_ms: 100}
+    prefill: {accelerator: furiosa.RNGD, count: 1}
+    decode:  {accelerator: furiosa.RNGD, count: 1}
+  - pool: qwen3-4b-pool                    # aggregated: single-card replicas, one `serve` decision, no KV link
+    model: furiosa-ai/Qwen3-4B-FP8
+    slo: {ttft_p90_ms: 2000, tpot_p90_ms: 100}
+    serve: {accelerator: furiosa.RNGD, count: 1}
