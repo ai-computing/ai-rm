@@ -2,7 +2,7 @@
 
 [English](README.md) · [한국어](README.ko.md) · [Documentation](docs/README.md)
 
-Use a focused branch and PR. The umbrella owns architecture, component pointers, integration tools and public documentation; implementation changes belong in the appropriate component repository.
+Use a focused branch and PR. The umbrella owns architecture, component pointers, integration tools, the in-tree packages under `packages/` (rm-bench, rm-controller) and public documentation; other implementation changes belong in the appropriate component repository.
 
 The [Optimus Prime direction](docs/engine-integration.md) consolidates inference-engine technology into `aicomp/opt_prime` with `fasop` as a planner element. Keep new engine work aligned with that owner; existing source cards remain transition requirements. `config/engine-integration.yaml` is planning metadata, not a runtime activation mechanism. Do not change live setup to a proposed branch before it exists and is validated.
 

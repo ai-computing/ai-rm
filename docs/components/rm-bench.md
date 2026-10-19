@@ -1,5 +1,8 @@
 # rm-bench — L5 카드
 
+> 위치: ai-rm [`packages/rm-bench`](../../packages/rm-bench) (2026-10-19 이전, 기존 저장소는 archive). 아래 v0.1 항목 1–4는 완료됐고,
+> 이후 `--api completions`와 실제 트레이스 재생(`rm-bench traces fetch|stats`, `tools/trace_atlas.py`)이 추가됐습니다.
+
 > **Optimus Prime 전환 안내:** 부하·측정 책임은 유지하며 후속 작업에서 Optimus Prime 실행 실측과 FASOP 추정값을 구분해 비교합니다. 구현 완료를 뜻하지 않습니다. [통합 설계](../ko/engine-integration.md) · [English design](../engine-integration.md) · [계획 설정](../../config/engine-integration.yaml)
 
 end-to-end 시나리오의 실행기가 됩니다.

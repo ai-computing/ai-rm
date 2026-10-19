@@ -34,6 +34,7 @@ Use explicit submodule paths for a public-only checkout. `git clone --recursive`
 | Area | What is present | Boundary |
 |---|---|---|
 | Layer organization | Five-layer submodule layout, integration and interface guides | Each component's behavior lives in its own repository |
+| In-tree packages | `packages/rm-bench` (measurement, real-trace replay), `packages/rm-controller` (topology placement); CI runs their tests and contract checks | The controller writes decisions; serving pods do not follow them yet |
 | Component inspection | `list`, `doctor` and manifest discovery | A missing manifest may produce no steps; this is not a test PASS |
 | Installation / quick tests | Dispatch component-declared `install` / `test` commands | Depends on fetched revisions and local prerequisites |
 | Deployment | `kubectl apply` for `deploy.manifests`; local Kustomize overlay support | No automatic Helm invocation from `deploy.chart` |
@@ -55,7 +56,8 @@ component hosts where a check needs their environment.
 | npu-lora | `f9b7bc5` | `airm.workloads:npu-lora`, `airm_tok_s` | Tests PASS; chart renders and lints |
 | llm-d-setup | `0f4f58e` | CRD, `airm_*` scrape, dashboard, placement ConfigMap | Server-side dry-run PASS on the live cluster |
 | lmd-top | `73e07d7` | reads `AcceleratorProfile`, `airm_*`, placement | 447 + 11 cargo tests PASS, clippy clean |
-| rm-bench | `7779ce1` | `airm.workloads:rm-bench`, measurements | 14 tests PASS |
+| rm-bench | in-tree | `airm.workloads:rm-bench`, measurements, trace replay | 26 tests PASS |
+| rm-controller | in-tree | `airm.placements:topology` | conformance PASS, 12 tests PASS |
 
 The L1 → L5 wiring check passes through rm-core alone, and on 2026-10-19 the layers ran together on the live
 cluster: L1 profiles placed rngd-pd's PD pods, requests went through the llm-d gateway and EPP, KV moved over
@@ -65,7 +67,7 @@ Sensitive-data scans of every component tree are clean.
 
 ## Work still requiring independent validation
 
-Component adapters, device-profile publication, charts and metrics readers have their own work cards and acceptance criteria. A combined umbrella chart, simulation cluster command, automated placement controller and compatibility registry are integration directions, **not available capabilities demonstrated by this documentation update**.
+Component adapters, device-profile publication, charts and metrics readers have their own work cards and acceptance criteria. A combined umbrella chart, simulation cluster command, load-aware placement that serving pods follow, and a compatibility registry are integration directions, **not available capabilities**. The placement controller exists as a first version (dry-run verified on the cluster).
 
 Report PASS, FAIL and hardware SKIP separately. Preserve the actual component combination and test conditions with every result.
 
@@ -75,4 +77,4 @@ The previous `rm_monitor` roles are split: the monitoring stack and Grafana dash
 
 ## lmd-top public history export
 
-The public `lmd-top` repository contains sanitized branches/tags. Its previous repository, including historical PRs and issues, is preserved privately as `lmd-top-private-history`. Internal-address text was replaced with documentation addresses; the historical terminal recording and compiled Python cache were omitted from the public history. The umbrella pointer is updated to the corresponding sanitized commit. Existing developers should use a fresh clone or carefully rebase onto the sanitized history; merging old history can reintroduce removed material. The private archive is not a component to publish.
+The public `lmd-top` repository contains sanitized branches/tags. Its previous repository, including historical PRs and issues, is preserved privately as `lmd-top-private-history` (archived, read-only). Internal-address text was replaced with documentation addresses; the historical terminal recording and compiled Python cache were omitted from the public history. The umbrella pointer is updated to the corresponding sanitized commit. Existing developers should use a fresh clone or carefully rebase onto the sanitized history; merging old history can reintroduce removed material. The private archive is not a component to publish.

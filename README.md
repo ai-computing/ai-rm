@@ -93,7 +93,7 @@ Components never import each other. Each registers an <a href="https://github.co
 | Layer | Responsibility | Components |
 |:-:|---|---|
 | **L5** | Observability & operations | lmd-top · rm-bench |
-| **L4** | Cluster & planning boundary | llm-d-setup · FASOP adapter *(planned)* |
+| **L4** | Cluster & placement | llm-d-setup · rm-controller · FASOP adapter *(planned)* |
 | **L3** | Unified engine | Optimus Prime · rngd-pd *(migration source)* · npu-lora |
 | **L2** | Memory & transport | hetero-npu-p2p · npu-offload · duet |
 | **L1** | Accelerator abstraction | rm_abstract_layer |
@@ -152,8 +152,8 @@ See [deployment](deploy/README.md).
 | 🚂 | **Engine & planning** | [Optimus Prime · `opt_prime`](https://github.com/ai-computing/aicomp/tree/main/opt_prime) · [FASOP · `fasop`](https://github.com/ai-computing/aicomp/tree/main/fasop) |
 | 🟣 | **Resource discovery** | [rm_abstract_layer](https://github.com/ai-computing/rm_abstract_layer) |
 | 🔵 | **Engine migration sources** | [rngd-pd](https://github.com/ai-computing/rngd-pd) · [hetero-npu-p2p](https://github.com/ai-computing/hetero-npu-p2p) · [npu-offload](https://github.com/ai-computing/npu-offload) |
-| 🟡 | **Cluster integration** | [llm-d-setup](https://github.com/ai-computing/llm-d-setup) · [rm-core contracts](https://github.com/ai-computing/rm-core) |
-| 🟠 | **Operations & measurement** | [lmd-top](https://github.com/ai-computing/lmd-top) · [rm-bench](packages/rm-bench) · [rm-controller](packages/rm-controller) |
+| 🟡 | **Cluster integration** | [llm-d-setup](https://github.com/ai-computing/llm-d-setup) · [rm-controller](packages/rm-controller) · [rm-core contracts](https://github.com/ai-computing/rm-core) |
+| 🟠 | **Operations & measurement** | [lmd-top](https://github.com/ai-computing/lmd-top) · [rm-bench](packages/rm-bench) |
 | 🟢 | **Training & search workloads** | [npu-lora](https://github.com/ai-computing/npu-lora) · **duet** *(private, optional)* |
 
 Responsibilities, source roles and integration tasks: [component directory](docs/components/README.md).
@@ -192,7 +192,9 @@ Details: [interfaces](docs/interfaces.md) · [integration guide](docs/integratio
 - [ ] Optimus Prime integration branch: PD, KV-transport and expert-offload modules from the migration sources
 - [ ] FASOP inference planning and a reviewed llm-d placement adapter
 - [x] First end-to-end run on the live cluster: L1 placement → llm-d → PD serving → measurement ([results](docs/e2e.md))
-- [ ] Placement controller writing `airm-placement`; RNGD→ATOM decode and P2P with live buffers end to end
+- [x] Real-trace replay and workload characterization ([traces](docs/workload-traces.md)); rm-bench and rm-controller in-tree under `packages/`
+- [x] Placement controller, first version: topology-aware placement written to `airm-placement` (dry-run verified on the cluster)
+- [ ] Serving pods that follow the placement decisions; load-aware placement; RNGD→ATOM decode and P2P with live buffers end to end
 - [ ] Umbrella chart, simulated cluster and power / MFU evidence from every run
 - [ ] Protocol v0.2: bind live buffers (`MemoryRegion`) to KV transfers
 

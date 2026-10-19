@@ -92,7 +92,7 @@ TTFT, TPOT, tok/s, 전력, MFU를 모든 계층이 같은 <code>airm_*</code> �
 | 계층 | 책임 | 구성요소 |
 |:-:|---|---|
 | **L5** | 관측·운영 | lmd-top · rm-bench |
-| **L4** | 클러스터·계획 경계 | llm-d-setup · FASOP 어댑터 *(계획)* |
+| **L4** | 클러스터·배치 | llm-d-setup · rm-controller · FASOP 어댑터 *(계획)* |
 | **L3** | 통합 엔진 | Optimus Prime · rngd-pd *(이전 소스)* · npu-lora |
 | **L2** | 메모리·전송 | hetero-npu-p2p · npu-offload · duet |
 | **L1** | 가속기 추상화 | rm_abstract_layer |
@@ -151,8 +151,8 @@ make deploy CLUSTER=local DRY_RUN=1                 # 적용 전 검토
 | 🚂 | **엔진·계획** | [Optimus Prime · `opt_prime`](https://github.com/ai-computing/aicomp/tree/main/opt_prime) · [FASOP · `fasop`](https://github.com/ai-computing/aicomp/tree/main/fasop) |
 | 🟣 | **자원 탐지** | [rm_abstract_layer](https://github.com/ai-computing/rm_abstract_layer) |
 | 🔵 | **엔진 이전 소스** | [rngd-pd](https://github.com/ai-computing/rngd-pd) · [hetero-npu-p2p](https://github.com/ai-computing/hetero-npu-p2p) · [npu-offload](https://github.com/ai-computing/npu-offload) |
-| 🟡 | **클러스터 통합** | [llm-d-setup](https://github.com/ai-computing/llm-d-setup) · [rm-core 계약](https://github.com/ai-computing/rm-core) |
-| 🟠 | **운영·측정** | [lmd-top](https://github.com/ai-computing/lmd-top) · [rm-bench](packages/rm-bench) · [rm-controller](packages/rm-controller) |
+| 🟡 | **클러스터 통합** | [llm-d-setup](https://github.com/ai-computing/llm-d-setup) · [rm-controller](packages/rm-controller) · [rm-core 계약](https://github.com/ai-computing/rm-core) |
+| 🟠 | **운영·측정** | [lmd-top](https://github.com/ai-computing/lmd-top) · [rm-bench](packages/rm-bench) |
 | 🟢 | **학습·검색 워크로드** | [npu-lora](https://github.com/ai-computing/npu-lora) · **duet** *(비공개·선택 사항)* |
 
 역할, 소스 이전 방향, 통합 작업은 [구성요소 디렉터리](docs/components/README.md)에 정리했습니다.
@@ -191,7 +191,9 @@ transport = registry.load("airm.kv_transports", "p2p")   # kvTransport: p2p | sh
 - [ ] Optimus Prime 통합 브랜치: 이전 소스의 PD, KV 전송, 전문가 offload 모듈 통합
 - [ ] FASOP 추론 계획과 검토된 llm-d 배치 어댑터
 - [x] 실제 클러스터 첫 end-to-end 실행: L1 배치 → llm-d → PD 서빙 → 측정 ([결과](docs/ko/e2e.md))
-- [ ] `airm-placement`를 쓰는 배치 컨트롤러, RNGD→ATOM decode와 실제 버퍼 P2P의 end-to-end
+- [x] 실제 트레이스 재생과 워크로드 분석([트레이스](docs/ko/workload-traces.md)), rm-bench·rm-controller를 `packages/`로 통합
+- [x] 배치 컨트롤러 1차: 토폴로지 인지 배치를 `airm-placement`에 기록(클러스터 dry-run 확인)
+- [ ] 배치 결정대로 움직이는 서빙 파드, 부하 인지 배치, RNGD→ATOM decode와 실제 버퍼 P2P의 end-to-end
 - [ ] 통합 차트, 시뮬레이션 클러스터, 모든 실행의 전력·MFU 증빙
 - [ ] 프로토콜 v0.2: 실제 버퍼(`MemoryRegion`)를 KV 전송에 연결
 
