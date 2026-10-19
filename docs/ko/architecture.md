@@ -12,10 +12,10 @@ AI-RM은 자원 표현, 데이터 이동, 워크로드 실행, 클러스터 연�
 
 | 계층 | 책임 | 구성요소·연결 지점 |
 |---|---|---|
-| L1 가속기 추상화 | 장치 탐지·메모리·정밀도·peak 출처·전력·인터커넥트 | rm_abstract_layer, AcceleratorProfile과 노드 레이블 |
+| L1 가속기 추상화 | 장치 탐지·메모리·정밀도·peak 출처·전력·인터커넥트 | rm-accel, AcceleratorProfile과 노드 레이블 |
 | L2 메모리·전송 | 메모리 계층과 워크로드 데이터 이동 | Optimus Prime KV/offload 모듈 계획, 기존 hetero-npu-p2p/npu-offload 소스, 별도 비공개 duet |
-| L3 통합 엔진·워크로드 | 단일 런타임 책임으로 추론 실행, 학습 연결 | Optimus Prime 목표, rngd-pd 이전 소스, npu-lora workload |
-| L4 클러스터·계획 | 라우팅·검토된 배치 제안·스토어·모니터링 | llm-d-setup의 Gateway/InferencePool/EPP, 엔진 내부 FASOP adapter 계획 |
+| L3 통합 엔진·워크로드 | 단일 런타임 책임으로 추론 실행, 학습 연결 | Optimus Prime 목표, rngd-pd 이전 소스, npu-train workload |
+| L4 클러스터·계획 | 라우팅·검토된 배치 제안·스토어·모니터링 | hetero-llm-d의 Gateway/InferencePool/EPP, 엔진 내부 FASOP adapter 계획 |
 | L4 배치 | 서빙 풀마다 가속기를 고르고 결정을 게시 | rm-controller (`airm-placement`) |
 | L5 관측·운영 | 운영 관측·부하·측정 증빙 | lmd-top, rm-bench, 공통 지표 |
 

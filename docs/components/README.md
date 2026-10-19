@@ -15,13 +15,13 @@
 
 | Layer | Current component | Transition role | Detailed card |
 |---|---|---|---|
-| L1 | rm_abstract_layer | Retain device discovery; engine-facing backend adapters target Optimus Prime | [Korean card](rm_abstract_layer.md) |
+| L1 | rm-accel | Retain device discovery; engine-facing backend adapters target Optimus Prime | [Korean card](rm-accel.md) |
 | L2 | hetero-npu-p2p | Source for the engine's KV-transport module | [Korean card](hetero-npu-p2p.md) |
 | L2 | npu-offload | Source for expert-offload; workload/memory-tier contract, not KVTransport | [Korean card](npu-offload.md) |
 | L2 / workload | duet | Optional private search workload; no public-code migration | [Korean card](duet.md) |
 | L3 | rngd-pd | Source for engine PD/NPU-backend modules | [Korean card](rngd-pd.md) |
-| L3 / workload | npu-lora | Training workload and future engine adapter as needed | [Korean card](npu-lora.md) |
-| L4 | llm-d-setup | Keep cluster/routing/storage/monitoring; accept reviewed planner proposals | [Korean card](llm-d-setup.md) |
+| L3 / workload | npu-train | Training workload and future engine adapter as needed | [Korean card](npu-train.md) |
+| L4 | hetero-llm-d | Keep cluster/routing/storage/monitoring; accept reviewed planner proposals | [Korean card](hetero-llm-d.md) |
 | L4 (in-tree) | rm-controller | Topology-aware placement written to `airm-placement`; first version | [Korean card](rm-controller.md) |
 | L5 | lmd-top | Keep observation/operations; display engine and plan provenance | [Korean card](lmd-top.md) |
 | L5 (in-tree) | rm-bench | Load/measurement and real-trace replay; compare actual execution with planner estimates | [Korean card](rm-bench.md) |

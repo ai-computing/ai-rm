@@ -186,7 +186,7 @@ uv run python loadgen/replay_vllm_azure2024.py --csv hf-cache/AzureLLMInferenceT
 `.research/report.py --metric ... --artifact ...`로 보고하고 research-hub가 MLflow에 기록합니다.
 
 `rm_monitor`(ai-computing/rm_monitor@5d23892)에서 옮겨 왔습니다. 모니터링 스택(Prometheus, Grafana, DCGM)과 대시보드는
-`llm-d-setup/monitoring/`으로 갔습니다.
+`hetero-llm-d/monitoring/`으로 갔습니다.
 </details>
 
 ## 📄 라이선스

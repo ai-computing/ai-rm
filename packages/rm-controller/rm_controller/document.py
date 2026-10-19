@@ -1,4 +1,4 @@
-"""The `airm-placement` ConfigMap document (llm-d-setup deploy/airm/README.md, key `decisions.json`).
+"""The `airm-placement` ConfigMap document (hetero-llm-d deploy/airm/README.md, key `decisions.json`).
 
     {"protocol": "0.1", "generation": N, "updatedAt": "...Z", "placement": "topology",
      "decisions": [{"pool", "workload": {"kind", "model", "slo", "labels"}, "acceleratorIds",

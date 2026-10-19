@@ -193,7 +193,7 @@ Both loadgen tools also write rm-core Measurements with `--out results/<run>.jso
 with `.research/report.py --metric ... --artifact ...`, which research-hub records in MLflow.
 
 Moved from `rm_monitor` (ai-computing/rm_monitor@5d23892); the monitoring stack (Prometheus, Grafana, DCGM) and dashboards
-went to `llm-d-setup/monitoring/`.
+went to `hetero-llm-d/monitoring/`.
 </details>
 
 ## 📄 License

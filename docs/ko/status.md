@@ -14,11 +14,11 @@
 
 | 저장소 | 접근 |
 |---|---|
-| ai-rm, rm-core, rm_abstract_layer | 공개 |
+| ai-rm, rm-core, rm-accel | 공개 |
 | aicomp | Optimus Prime·FASOP 공개 소스, 아직 활성 엔진 서브모듈은 아님 |
 | hetero-npu-p2p, npu-offload | 공개 |
-| rngd-pd, npu-lora | 공개 |
-| llm-d-setup | 공개 |
+| rngd-pd, npu-train | 공개 |
+| hetero-llm-d | 공개 |
 | rm-bench, rm-controller | ai-rm `packages/`에 포함 (rm-bench는 2026-10-19 이전, 기존 저장소는 archive) |
 | lmd-top | 내부 주소 이력을 정리한 공개본 |
 | duet | **비공개·선택 구성요소**, 별도 권한 필요 |
@@ -46,12 +46,12 @@ Umbrella chart, 시뮬레이션 클러스터 명령, 서빙 파드가 따르는 
 
 | 구성요소 | 고정 커밋 | Adapter / 역할 | 결과 |
 |---|---|---|---|
-| rm_abstract_layer | `c72f356` (0.4.1, chart 0.4.2) | `airm.accelerator_providers:rm-abstract` | 적합성 PASS, npu-node-1에서 RNGD 3 + ATOM 4 탐지(device plugin과 일치). *정정:* 처음 기록한 "ATOM 2, 벤더 도구와 일치"는 틀렸습니다. `rbln-stat` 번호 문제였고 0.4.1에서 수정 |
+| rm-accel | `c72f356` (0.4.1, chart 0.4.2) | `airm.accelerator_providers:rm-abstract` | 적합성 PASS, npu-node-1에서 RNGD 3 + ATOM 4 탐지(device plugin과 일치). *정정:* 처음 기록한 "ATOM 2, 벤더 도구와 일치"는 틀렸습니다. `rbln-stat` 번호 문제였고 0.4.1에서 수정 |
 | hetero-npu-p2p | `9556e1a` | `airm.kv_transports:p2p` | 단위 테스트 91개 PASS, 적합성 **SKIP** (`HETERO_P2P_HELPER`와 실제 버퍼 fixture 필요) |
 | npu-offload | `486d1e7` | `airm.workloads:npu-offload`, 메모리 계층 | `RNGD_LLMD` 설정 시 6/6 PASS, chart 렌더·lint 통과 |
 | rngd-pd | `83ba553` | `airm.kv_transports:shm`, `airm.workloads:rngd-pd` | `shm` 적합성 PASS, 테스트 44개 PASS, chart 렌더·lint 통과 |
-| npu-lora | `f9b7bc5` | `airm.workloads:npu-lora`, `airm_tok_s` | 테스트 PASS, chart 렌더·lint 통과 |
-| llm-d-setup | `0f4f58e` | CRD, `airm_*` 수집, 대시보드, 배치 ConfigMap | 실제 클러스터에서 server dry-run PASS |
+| npu-train | `f9b7bc5` | `airm.workloads:npu-lora`, `airm_tok_s` | 테스트 PASS, chart 렌더·lint 통과 |
+| hetero-llm-d | `0f4f58e` | CRD, `airm_*` 수집, 대시보드, 배치 ConfigMap | 실제 클러스터에서 server dry-run PASS |
 | lmd-top | `73e07d7` | `AcceleratorProfile`·`airm_*`·배치 결정 표시 | cargo 테스트 447 + 11개 PASS, clippy 경고 0 |
 | rm-bench | in-tree | `airm.workloads:rm-bench`, 측정, 트레이스 재생 | 테스트 26개 PASS |
 | rm-controller | in-tree | `airm.placements:topology` | 적합성 PASS, 테스트 12개 PASS |
@@ -64,7 +64,7 @@ L1 → L5 연결 검사(탐지 → 프로파일 → 배치 → 이름으로 고�
 
 ## 기존 구조 변경
 
-이전 `rm_monitor`의 역할은 `llm-d-setup/monitoring/`의 모니터링·Grafana, `rm-bench`의 trace·부하, `lmd-top`의 운영 콘솔로 나뉘었습니다. `rm_monitor`는 archive 상태이며 `rm_abstract_layer`는 `components/l1-accel/`에 있습니다.
+이전 `rm_monitor`의 역할은 `hetero-llm-d/monitoring/`의 모니터링·Grafana, `rm-bench`의 trace·부하, `lmd-top`의 운영 콘솔로 나뉘었습니다. `rm_monitor`는 archive 상태이며 `rm-accel`는 `components/l1-accel/`에 있습니다.
 
 ## lmd-top 공개 이력
 

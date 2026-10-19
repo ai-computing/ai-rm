@@ -1,4 +1,4 @@
-# npu-lora — L3 카드
+# npu-train — L3 카드
 
 > **Optimus Prime 전환 안내:** 학습 workload로 유지하며 필요한 Optimus Prime adapter는 후속 구현합니다. 추론 엔진 이전과 학습 검증을 구분합니다. 구현 완료를 뜻하지 않습니다. [통합 설계](../ko/engine-integration.md) · [English design](../engine-integration.md) · [계획 설정](../../config/engine-integration.yaml)
 

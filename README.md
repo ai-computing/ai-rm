@@ -93,10 +93,10 @@ Components never import each other. Each registers an <a href="https://github.co
 | Layer | Responsibility | Components |
 |:-:|---|---|
 | **L5** | Observability & operations | lmd-top · rm-bench |
-| **L4** | Cluster & placement | llm-d-setup · rm-controller · FASOP adapter *(planned)* |
-| **L3** | Unified engine | Optimus Prime · rngd-pd *(migration source)* · npu-lora |
+| **L4** | Cluster & placement | hetero-llm-d · rm-controller · FASOP adapter *(planned)* |
+| **L3** | Unified engine | Optimus Prime · rngd-pd *(migration source)* · npu-train |
 | **L2** | Memory & transport | hetero-npu-p2p · npu-offload · duet |
-| **L1** | Accelerator abstraction | rm_abstract_layer |
+| **L1** | Accelerator abstraction | rm-accel |
 
 More: [architecture](docs/architecture.md) · [interfaces](docs/interfaces.md) · [engine consolidation plan](docs/engine-integration.md)
 </details>
@@ -150,11 +150,11 @@ See [deployment](deploy/README.md).
 | | Area | Components |
 |:-:|---|---|
 | 🚂 | **Engine & planning** | [Optimus Prime · `opt_prime`](https://github.com/ai-computing/aicomp/tree/main/opt_prime) · [FASOP · `fasop`](https://github.com/ai-computing/aicomp/tree/main/fasop) |
-| 🟣 | **Resource discovery** | [rm_abstract_layer](https://github.com/ai-computing/rm_abstract_layer) |
+| 🟣 | **Resource discovery** | [rm-accel](https://github.com/ai-computing/rm-accel) |
 | 🔵 | **Engine migration sources** | [rngd-pd](https://github.com/ai-computing/rngd-pd) · [hetero-npu-p2p](https://github.com/ai-computing/hetero-npu-p2p) · [npu-offload](https://github.com/ai-computing/npu-offload) |
-| 🟡 | **Cluster integration** | [llm-d-setup](https://github.com/ai-computing/llm-d-setup) · [rm-controller](packages/rm-controller) · [rm-core contracts](https://github.com/ai-computing/rm-core) |
+| 🟡 | **Cluster integration** | [hetero-llm-d](https://github.com/ai-computing/hetero-llm-d) · [rm-controller](packages/rm-controller) · [rm-core contracts](https://github.com/ai-computing/rm-core) |
 | 🟠 | **Operations & measurement** | [lmd-top](https://github.com/ai-computing/lmd-top) · [rm-bench](packages/rm-bench) |
-| 🟢 | **Training & search workloads** | [npu-lora](https://github.com/ai-computing/npu-lora) · **duet** *(private, optional)* |
+| 🟢 | **Training & search workloads** | [npu-train](https://github.com/ai-computing/npu-train) · **duet** *(private, optional)* |
 
 Responsibilities, source roles and integration tasks: [component directory](docs/components/README.md).
 

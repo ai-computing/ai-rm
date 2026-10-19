@@ -30,7 +30,7 @@
 
 **rm-controller**는 [ai-rm](https://github.com/ai-computing/ai-rm)의 L4 배치 컨트롤러입니다. L1이 게시한 가속기
 (`AcceleratorProfile`)와 노드 상태를 읽고, spec이 요구하는 prefill/decode 풀을 배치하고, 결정을 ConfigMap `airm-placement`에
-씁니다. EPP scorer와 lmd-top이 이 ConfigMap을 읽습니다(형식: llm-d-setup `deploy/airm/README.md`, 키 `decisions.json`).
+씁니다. EPP scorer와 lmd-top이 이 ConfigMap을 읽습니다(형식: hetero-llm-d `deploy/airm/README.md`, 키 `decisions.json`).
 
 <table>
 <tr>
