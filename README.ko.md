@@ -197,6 +197,22 @@ transport = registry.load("airm.kv_transports", "p2p")   # kvTransport: p2p | sh
 - [ ] 통합 차트, 시뮬레이션 클러스터, 모든 실행의 전력·MFU 증빙
 - [ ] 프로토콜 v0.2: 실제 버퍼(`MemoryRegion`)를 KV 전송에 연결
 
+### 격차 메우기
+
+llm-d, Dynamo, vLLM + NIXL/LMCache, Mooncake, HexGen-2/Helix와 비교하면, 서로 다른 벤더의 NPU에 걸쳐 prefill/decode를
+분리 서빙하는 스택은 ai-rm뿐입니다. 남은 격차는 일곱 가지이며, 엔진 쪽은 [aicomp](https://github.com/ai-computing/aicomp/issues)에
+기능 요청으로 올리고 나머지는 여기서 진행합니다. 전체 계획: [로드맵](docs/ko/roadmap.md).
+
+| | 격차 | 계획 |
+|:-:|---|---|
+| W1 | 서빙 기능 | 스트리밍, chat API, sampling, 취소 ([#41](https://github.com/ai-computing/aicomp/issues/41)–[#43](https://github.com/ai-computing/aicomp/issues/43)), PD 경로에서 GuideLLM·MLPerf |
+| W2 | 규모와 성숙도 | 배치 decode ([#44](https://github.com/ai-computing/aicomp/issues/44)), S≥2048, 노드 이미지와 통합 차트, CI의 시뮬레이션 클러스터, 다중 노드 풀 |
+| W3 | KV 전송 표준 | RNGD↔ATOM NIXL 백엔드, vLLM KV connector, layer 단위·GB급 전송 ([#47](https://github.com/ai-computing/aicomp/issues/47), [#48](https://github.com/ai-computing/aicomp/issues/48)) |
+| W4 | 캐시 재사용 | KV 블록 이벤트와 prefix 재사용 ([#46](https://github.com/ai-computing/aicomp/issues/46)), EPP prefix-cache 라우팅, 호스트 DRAM KV 계층 |
+| W5 | 제어 루프 | 배치 결정 적용, P:D 재조정, 장애 시 재배치, `/metrics` 기반 KEDA ([#45](https://github.com/ai-computing/aicomp/issues/45), [#49](https://github.com/ai-computing/aicomp/issues/49)) |
+| W6 | 형식적 스케줄링 | 카드 종류와 KV 링크 비용을 고려한 `optimal` 배치, FASOP 추론 비용 모델 ([#50](https://github.com/ai-computing/aicomp/issues/50)) |
+| W7 | 근거 | 같은 예산의 기준선 비교, 모든 실행에 tok/J, 논문 초안 |
+
 ## 📚 문서
 
 | 목적 | 안내 |
@@ -204,7 +220,7 @@ transport = registry.load("airm.kv_transports", "p2p")   # kvTransport: p2p | sh
 | 🧭 **프로젝트 이해** | [개요](docs/ko/project-overview.md) · [아키텍처](docs/ko/architecture.md) · [연구 시나리오](docs/ko/research-scenarios.md) · [용어집](docs/ko/glossary.md) |
 | 🔧 **구현 연결** | [엔진 설계](docs/ko/engine-integration.md) · [인터페이스](docs/ko/interfaces.md) · [통합 가이드](docs/ko/integration-guide.md) |
 | 📊 **실행과 평가** | [시작하기](docs/ko/getting-started.md) · [배포](deploy/README.ko.md) · [성과지표·증빙](docs/ko/kpi-map.md) |
-| 📍 **진행 상태 확인** | [현재 상태](docs/ko/status.md) · [계획 설정](config/engine-integration.yaml) |
+| 📍 **진행 상태 확인** | [현재 상태](docs/ko/status.md) · [로드맵](docs/ko/roadmap.md) · [계획 설정](config/engine-integration.yaml) |
 
 [전체 문서](docs/ko/README.md) · [English documentation](docs/README.md)
 
