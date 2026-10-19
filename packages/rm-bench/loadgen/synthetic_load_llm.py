@@ -16,7 +16,7 @@ Example
     --prompt-tokens uniform:10,200 --max-tokens const:128 --concurrency 64
 """
 
-import argparse, time, math, threading, queue, random, json
+import argparse, time, math, threading, queue, random, json, os, sys
 from collections import deque
 from typing import Callable, Tuple, Optional
 
@@ -170,6 +170,16 @@ def build_arrival_sampler(args) -> Callable[[float], float]:
     raise argparse.ArgumentTypeError(f"Unknown arrival: {arrival}")
 
 
+def load_rm_bench_results():
+    """rm_bench.results from the installed package, or from this checkout when run as a script."""
+    try:
+        from rm_bench import results
+    except ImportError:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from rm_bench import results
+    return results
+
+
 # -------------------- main --------------------
 def main():
     ap = argparse.ArgumentParser()
@@ -211,8 +221,12 @@ def main():
     ap.add_argument("--spark-width", type=int, default=80)
     ap.add_argument("--y-width", type=int, default=10)
     ap.add_argument("--no-plot", action="store_true")
+    ap.add_argument("--out", default=None, help="also save rm-core Measurement JSON here (e.g. results/<run>.json)")
+    ap.add_argument("--run-id", default=None, help="run_id tag for --out (default: output file name)")
 
     args = ap.parse_args()
+    rb = load_rm_bench_results() if args.out else None
+    records = []  # per-request rm_bench.results.RequestRecord, for --out
 
     headers = {"Authorization": "Bearer dummy", "Content-Type": "application/json"}
     headers.update(parse_kv_pairs(args.header))
@@ -530,6 +544,8 @@ def main():
                         sample_ttft.append(ttft_ms)
                     if tpot_ms is not None:
                         sample_tpot.append(tpot_ms)
+                    if rb:
+                        records.append(rb.RequestRecord(ok, lat_ms, ttft_ms, tpot_ms, int(otok_done) if ok else 0))
 
             if now >= next_sample:
                 with lock:
@@ -561,6 +577,11 @@ def main():
 
     console.print("[green]Test finished[/]")
     console.print(render_table())
+    if rb:
+        tags = rb.make_tags(model=args.model, workload="synthetic",
+                            run_id=args.run_id or os.path.splitext(os.path.basename(args.out))[0])
+        rb.write_measurements(args.out, rb.summarize(records, time.time() - wall0, tags))
+        console.print(f"[green]Measurements → {args.out}[/]")
 
 
 if __name__ == "__main__":

@@ -4,3 +4,4 @@ __pycache__/
 hf-cache/
 *.norm.csv.gz
 results/
+*.egg-info/

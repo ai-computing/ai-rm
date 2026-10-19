@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import csv, time, argparse, requests, threading, queue, os, gzip, math, json
+import csv, time, argparse, requests, threading, queue, os, gzip, math, json, sys
 from collections import deque
 from datetime import datetime, timezone
 from rich.console import Console
@@ -136,6 +136,15 @@ def stream_cached_rows(cache_path):
         for row in r:
             yield (int(row["ts_ms"]), int(row["input_tokens"]), int(row["output_tokens"]))
 
+def load_rm_bench_results():
+    """설치된 rm_bench.results, 없으면 스크립트로 실행할 때 이 checkout의 것."""
+    try:
+        from rm_bench import results
+    except ImportError:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from rm_bench import results
+    return results
+
 # ---------- main ----------
 def main():
     ap = argparse.ArgumentParser()
@@ -160,7 +169,11 @@ def main():
     ap.add_argument("--assume-sorted", action="store_true", default=True, help="입력 CSV가 시간순 정렬됐다고 가정(빠름)")
     ap.add_argument("--sort", dest="assume_sorted", action="store_false", help="정렬 보장 없으면 켜기(느림)")
     ap.add_argument("--limit", type=int, default=None, help="최대 N행만 재생(샘플 테스트용)")
+    ap.add_argument("--out", default=None, help="rm-core Measurement JSON도 저장 (예: results/<run>.json)")
+    ap.add_argument("--run-id", default=None, help="--out의 run_id 태그 (기본: 출력 파일 이름)")
     args = ap.parse_args()
+    rb = load_rm_bench_results() if args.out else None
+    records = []  # 요청별 rm_bench.results.RequestRecord (--out용)
     if args.sample_interval is None:
         args.sample_interval = args.log_every
 
@@ -582,9 +595,10 @@ def main():
         nonlocal sent, err, sum_in, sum_out, tx_total, rx_total, tx_since_sample, rx_since_sample, sample_completed, sample_in_tokens, sample_out_tokens
         while True:
             try:
-                ok, i, o, btx, brx, l_ms, ttft_ms, tpot_ms = done_q.get_nowait() if non_blocking else done_q.get()
+                ok, i, o, btx, brx, l_ms, ttft_ms, tpot_ms = done_q.get_nowait() if non_blocking else done_q.get(timeout=1.0)
             except queue.Empty:
                 break
+            non_blocking = True  # 블록은 한 건만 기다리고 나머지는 있는 만큼만 (무한 대기 방지)
             with sent_lock:
                 sent += 1
                 sum_in += i
@@ -602,6 +616,8 @@ def main():
                 if tpot_ms is not None:
                     sample_tpot.append(tpot_ms)
                 if not ok: err += 1
+                if rb:
+                    records.append(rb.RequestRecord(ok, l_ms, ttft_ms, tpot_ms, int(o) if ok else 0))
             # progress handled by integrated table
 
     with Live(render_table(), refresh_per_second=4, console=console, transient=False) as live:
@@ -695,6 +711,11 @@ def main():
 
     console.print("[green]Replay finished.[/]")
     console.print(render_table())
+    if rb:
+        tags = rb.make_tags(model=args.model, workload="azure-trace-replay",
+                            run_id=args.run_id or os.path.splitext(os.path.basename(args.out))[0])
+        rb.write_measurements(args.out, rb.summarize(records, time.time() - wall0, tags))
+        console.print(f"[green]Measurements → {args.out}[/]")
 
 if __name__=="__main__":
     main()
