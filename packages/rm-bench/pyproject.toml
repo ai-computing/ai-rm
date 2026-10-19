@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rm-bench"
+version = "0.1.0"
+requires-python = ">=3.9"
+dependencies = [
+    "rm-core @ git+https://github.com/ai-computing/rm-core@v0.1.1",
+    "pyyaml",
+    "pandas",
+    "numpy",
+    "requests",
+    "pyarrow",
+    "tqdm",
+    "rich",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+rm-bench = "rm_bench.cli:main"
+
+[project.entry-points."airm.workloads"]
+rm-bench = "rm_bench.airm:RmBenchRunner"
+
+[tool.setuptools]
+packages = ["rm_bench"]

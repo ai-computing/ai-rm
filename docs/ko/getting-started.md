@@ -31,7 +31,6 @@ git submodule update --init -- \
   components/l3-serving/rngd-pd \
   components/l3-serving/npu-lora \
   components/l4-cluster/llm-d-setup \
-  components/l5-ops/rm-bench \
   components/l5-ops/lmd-top
 ```
 

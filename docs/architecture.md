@@ -42,6 +42,10 @@ L1 provides the capability model used by integration logic; it is not a network 
 - Existing implementations remain pinned migration sources. Engine-facing technology is planned to consolidate into `aicomp/opt_prime`, with `aicomp/fasop` as a planner element. Public resource/workload/cluster boundaries remain explicit; see the [ownership map](engine-integration.md).
 - [rm-core](https://github.com/ai-computing/rm-core) owns normative protocol definitions and conformance checks. See [interfaces](interfaces.md).
 - Submodule commits pin the component combination. A pinned combination alone is not evidence of end-to-end validation.
+- Integration code that no component owns lives in ai-rm itself under `packages/`: `rm-bench` (measurement, trace replay) and
+  `rm-controller` (L4 placement). They change with ai-rm's profiles and scenarios, so they share its commits. `rm-core` stays a
+  separate repository because every component pins it; inside the umbrella it would make components depend on ai-rm.
+- NPU vendor backends (RNGD/ATOM graphs, kernels, compile caches) go into `aicomp` with Optimus Prime, not into a separate repository.
 - `ai-rm.yaml` declares each component's install/test/deploy metadata. See the [component contract](component-contract.md).
 - Site settings remain in untracked `cluster.local.env` files. See [deployment](../deploy/README.md) and [security](security.md).
 

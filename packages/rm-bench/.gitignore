@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+hf-cache/
+*.norm.csv.gz
+results/
+*.egg-info/

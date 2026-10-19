@@ -18,7 +18,8 @@
 | aicomp | Optimus Prime·FASOP 공개 소스, 아직 활성 엔진 서브모듈은 아님 |
 | hetero-npu-p2p, npu-offload | 공개 |
 | rngd-pd, npu-lora | 공개 |
-| llm-d-setup, rm-bench | 공개 |
+| llm-d-setup | 공개 |
+| rm-bench, rm-controller | ai-rm `packages/`에 포함 (rm-bench는 2026-10-19 이전, 기존 저장소는 archive) |
 | lmd-top | 내부 주소 이력을 정리한 공개본 |
 | duet | **비공개·선택 구성요소**, 별도 권한 필요 |
 

@@ -1,0 +1,18 @@
+# PD smoke: a few dozen small requests through the gateway; every one must stream a reply.
+# Run: rm-bench e2e --gateway $LLMD_GATEWAY_URL --scenario pd-smoke
+name: pd-smoke
+description: small requests end-to-end through the prefill/decode path; all must succeed
+requests:
+  source: synthetic
+  count: 32
+  arrival: {kind: poisson, rps: 8}
+  prompt_tokens: "uniform:16,128"
+  max_tokens: "const:16"
+concurrency: 8
+duration_s: 60
+timeout_s: 60
+seed: 0
+max_error_pct: 0
+slo:
+  ttft_p90_ms: 5000
+  tpot_p90_ms: 500
