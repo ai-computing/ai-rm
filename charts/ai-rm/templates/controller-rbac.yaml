@@ -1,0 +1,72 @@
+{{- if .Values.controller.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "ai-rm.controller" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ai-rm.labels" . | nindent 4 }}
+---
+# Reads: AcceleratorProfiles (L1) and node state (cordoned / not Ready).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "ai-rm.controller" . }}
+  labels:
+    {{- include "ai-rm.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["airm.ai-computing.io"]
+    resources: ["acceleratorprofiles"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "ai-rm.controller" . }}
+  labels:
+    {{- include "ai-rm.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "ai-rm.controller" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "ai-rm.controller" . }}
+    namespace: {{ .Release.Namespace }}
+---
+# The one write: the airm-placement ConfigMap in the placement namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "ai-rm.controller" . }}
+  namespace: {{ include "ai-rm.placementNamespace" . }}
+  labels:
+    {{- include "ai-rm.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["airm-placement"]
+    verbs: ["get", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create"]            # create cannot be limited by name
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "ai-rm.controller" . }}
+  namespace: {{ include "ai-rm.placementNamespace" . }}
+  labels:
+    {{- include "ai-rm.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "ai-rm.controller" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "ai-rm.controller" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

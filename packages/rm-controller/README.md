@@ -107,7 +107,7 @@ pools:
 
 - [ ] Use live load (`airm_*` queueing, TPOT) and workload shape ([traces](../../docs/workload-traces.md)) in the choice
 - [ ] Serving pods that follow the decisions (today site values still pin the same cards)
-- [ ] An image and chart to run in the cluster, as part of the umbrella chart
+- [x] An image (`ghcr.io/ai-computing/rm-controller`, [`Dockerfile`](Dockerfile)) and a Deployment in the umbrella chart [`charts/ai-rm`](../../charts/ai-rm)
 - [ ] The `airm-placement` format made normative in rm-core's protocol
 
 ## 📄 License

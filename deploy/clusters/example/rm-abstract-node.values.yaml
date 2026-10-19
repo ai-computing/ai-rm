@@ -1,36 +1,8 @@
-# Example site override for rm-abstract-node (docs/e2e.md); copy to deploy/clusters/<name>/.
-# No published image yet: stock Python image,
-# rm-abstract + rm-core + kubernetes installed by an init container, host vendor tools on PATH.
-image:
-  repository: python
-  tag: "3.11-slim"
-
-extraEnv:
-  - {name: PYTHONPATH, value: /opt/airm}
-  - {name: PYTHONDONTWRITEBYTECODE, value: "1"}
-  - {name: PATH, value: /usr/local/bin:/usr/bin:/bin:/host/usr/bin}
-
-initContainers:
-  - name: install
-    image: python:3.11-slim
-    command: ["sh", "-c"]
-    args:
-      - >-
-        pip install -q --no-cache-dir --target /opt/airm --no-deps
-        https://github.com/ai-computing/rm-accel/archive/refs/tags/v0.4.1.tar.gz
-        https://github.com/ai-computing/rm-core/archive/refs/tags/v0.1.1.tar.gz
-        && pip install -q --no-cache-dir --target /opt/airm "kubernetes>=24.2.0" "numpy>=1.20,<3"
-    volumeMounts:
-      - {name: airm-pkgs, mountPath: /opt/airm}
-
-extraVolumes:
-  - {name: airm-pkgs, emptyDir: {}}
-  - {name: host-bin, hostPath: {path: /usr/bin, type: Directory}}
-
-extraVolumeMounts:
-  - {name: airm-pkgs, mountPath: /opt/airm, readOnly: true}
-  - {name: host-bin, mountPath: /host/usr/bin, readOnly: true}
-
+# Example site override for rm-abstract-node (rm-accel chart >= 0.5.0); copy to deploy/clusters/<name>/.
+# The chart's defaults run the published image ghcr.io/ai-computing/rm-accel with the host's vendor
+# tools mounted from /usr/bin (hostBin); no init container is needed. Set only what differs per site.
+# hostBin: /usr/bin            # where nvidia-smi / furiosa-smi / rbln-stat live on the nodes
+# image: {tag: master}         # a newer image than the chart's appVersion
 resources:
   requests: {cpu: 50m, memory: 128Mi}
   limits: {memory: 512Mi}
