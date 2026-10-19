@@ -164,3 +164,51 @@ def test_no_slo_reports_success_rate(gateway, tmp_path):
     out = tmp_path / "noslo.json"
     assert cli.main(["e2e", "--gateway", url, "--scenario", str(sc), "--out", str(out)]) == 0
     assert _check_file(out)["slo_attainment_pct"]["value"] == 100.0
+
+
+class FakeCompletions(BaseHTTPRequestHandler):
+    """Non-streaming /v1/completions that reports its own timing like rngd-pd's PD gateway."""
+    protocol_version = "HTTP/1.1"
+    server_ttft_ms = 40.0
+    server_wall_ms = 100.0
+
+    def log_message(self, *args):
+        pass
+
+    def do_POST(self):
+        req = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        if self.path != "/v1/completions":
+            self.send_error(404)
+            return
+        assert req["stream"] is False and req["prompt"] and req["model"] == MODEL
+        time.sleep(self.server_wall_ms / 1000.0)
+        n = req["max_tokens"]
+        body = json.dumps({"object": "text_completion", "model": MODEL,
+                           "choices": [{"index": 0, "text": "x " * n, "finish_reason": "length"}],
+                           "usage": {"prompt_tokens": 4, "completion_tokens": n},
+                           "pd": {"ttft_ms": self.server_ttft_ms, "wall_ms": self.server_wall_ms}}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+def test_completions_api_uses_server_timing(tmp_path):
+    from rm_bench import client
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), type("H", (FakeCompletions,), {}))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        url = client.completions_url(f"http://127.0.0.1:{srv.server_port}")
+        assert url.endswith("/v1/completions")
+        rec = client.complete(url, MODEL, prompt_tokens=8, max_tokens=5, timeout_s=10)
+        assert rec.ok and rec.out_tokens == 5
+        # TTFT = time outside the server + server TTFT: above 40 ms, well below the 100 ms server wall
+        assert 40.0 <= rec.ttft_ms < rec.e2e_ms
+        assert rec.ttft_ms < 40.0 + (rec.e2e_ms - 100.0) + 1.0
+        assert rec.tpot_ms == pytest.approx((rec.e2e_ms - rec.ttft_ms) / 4)
+        # a full URL ending in /completions (route that rewrites its prefix) is used as given
+        assert client.completions_url("http://gw/rngd/x/completions") == "http://gw/rngd/x/completions"
+    finally:
+        srv.shutdown()

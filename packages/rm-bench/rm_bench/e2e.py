@@ -14,7 +14,7 @@ from rm_core.workload import SLO_KEYS
 
 from . import client
 from .results import RequestRecord, make_tags, percentile, summarize
-from .scenario import Scenario
+from .scenario import API_KINDS, Scenario
 
 # Measurements `rm-bench e2e` reports (ai-rm.yaml `metrics`).
 E2E_METRICS = ("slo_attainment_pct", "tok_s", "ttft_p90_ms", "tpot_p90_ms")
@@ -81,8 +81,9 @@ def judge(records: list[RequestRecord], wall_s: float, slo: Mapping[str, float],
 
 def run(scenario: Scenario, gateway: str, model: str | None = None, *,
         slo: Mapping[str, float] | None = None, run_id: str | None = None,
-        kv_transport: str | None = None) -> E2EResult:
-    """Run `scenario` against `gateway`. `slo` overrides the scenario's SLO when given."""
+        kv_transport: str | None = None, api: str | None = None) -> E2EResult:
+    """Run `scenario` against `gateway`. `slo` overrides the scenario's SLO when given, `api`
+    the scenario's request API (chat | completions)."""
     if not gateway:
         raise ValueError("no gateway: pass --gateway or set LLMD_GATEWAY_URL")
     slo = dict(scenario.slo if slo is None else slo)
@@ -90,7 +91,11 @@ def run(scenario: Scenario, gateway: str, model: str | None = None, *,
     if unknown:
         raise ContractError(f"unknown SLO keys {sorted(unknown)}; allowed {SLO_KEYS}")
     run_id = run_id or new_run_id(scenario.name)
-    url = client.chat_url(gateway)
+    api = api or scenario.api
+    if api not in API_KINDS:
+        raise ValueError(f"api must be one of {API_KINDS}")
+    url = client.chat_url(gateway) if api == "chat" else client.completions_url(gateway)
+    send = client.stream_chat if api == "chat" else client.complete
     model = model or scenario.model or client.discover_model(gateway, scenario.timeout_s)
     schedule = [r for r in scenario.schedule() if r[0] < scenario.duration_s]
 
@@ -101,8 +106,7 @@ def run(scenario: Scenario, gateway: str, model: str | None = None, *,
         # Still queued when the run's time is up: count it as a failed (unserved) request.
         if time.perf_counter() >= stop_at:
             return RequestRecord(ok=False, e2e_ms=(time.perf_counter() - t0 - offset) * 1000.0)
-        return client.stream_chat(url, model, prompt_tokens, max_tokens, scenario.timeout_s,
-                                  scheduled_at=t0 + offset)
+        return send(url, model, prompt_tokens, max_tokens, scenario.timeout_s, scheduled_at=t0 + offset)
 
     with ThreadPoolExecutor(max_workers=scenario.concurrency) as pool:
         futures = []
