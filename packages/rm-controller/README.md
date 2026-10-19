@@ -94,8 +94,8 @@ condition that is not True) and nodes under disk, memory or PID pressure are ski
 ### `optimal` (W6)
 
 Policy `optimal`, entry point `airm.placements:optimal` (`placement: optimal` in the spec). It chooses the prefill device
-type, the decode device type, how many instances of each, the nodes and the KV link so that **SLO-feasible goodput per card**
-is highest, from:
+type(s), the decode device type(s), how many instances of each, the nodes and the KV link so that **SLO-feasible goodput per
+card** is highest, from:
 
 - the free, healthy cards (types `vendor.model`, nodes) and optional per-role type filters;
 - a throughput profile per device type (prefill tok/s, decode TPOT at batch 1 and at the max batch, KV capacity, cards per
@@ -110,9 +110,10 @@ is highest, from:
 | Decode | batch = largest with TPOT ≤ SLO and batch × (in + out) ≤ KV capacity; a type is ruled out if < 90 % of prompts fit its KV |
 | TTFT p90 | prefill(p90 prompt) + KV(link, p90 prompt) + TPOT + p90 wait for a prefill server + p90 wait for a decode slot (M/G/c, Erlang C with Allen–Cunneen) |
 | Goodput | highest rate with TTFT p90 ≤ SLO, ÷ peak/mean (sized for the 60 s peak) |
-| Constraints | one device type per role (one Deployment each); an instance's cards on one node; host-scope links (`shm`, `p2p`) keep the pool on one node; ≥ 1 instance per role; cards ≤ budget |
+| Mixed roles | `mixed_roles: true` (default): a role may hold instances of several types. Prefill: one M/G/c per type, arrivals split by routing weight = the rate that type's group takes with its own TTFT p90 within the SLO (so every group meets it); decode: split by capacity. One type per role is the case above, with the same numbers |
+| Constraints | an instance's cards on one node; every prefill→decode type pair served by the plan's KV link; host-scope links (`shm`, `p2p`) keep the pool on one node; ≥ 1 instance per role; cards ≤ budget; `mixed_roles: false` → one device type per role |
 | Objective | no rate: max goodput/card, then goodput; rate given: fewest cards that cover it; `objective: goodput`: max goodput |
-| Search | exact enumeration over links × nodes × types² × instance counts (thousands of candidates at 32 cards) |
+| Search | exact enumeration over links × nodes × types² × instance counts (thousands of candidates at 32 cards); mixed roles add every pair of per-type count vectors within the cards and budget, visited by an upper bound (min(prefill, decode capacity) / peak) and cut when the bound cannot win; above 200,000 pairs a scope keeps one type per role and the reason says so |
 | Fallback | no profile for any free type, `loopback`, an unknown transport, or nothing SLO-feasible → `topology` with the spec's counts, and the reason says so; a pool that leaves one choice gets topology's choice |
 
 `kv_transport: auto` lets it pick among implemented links; `p2p` is offered only for RNGD → ATOM, where it was verified.
@@ -137,6 +138,7 @@ pools:
 ```yaml
 placement: optimal                     # topology (default) | optimal
 objective: per_card                    # optimal: per_card (default) | goodput
+mixed_roles: true                      # optimal: a role may mix device types (default true)
 profiles: my-profiles.yaml             # optimal / rebalance / apply: throughput table (default: packaged)
 pools:
   - pool: ...
@@ -178,6 +180,9 @@ it fixes the instance counts and the policy still picks types, nodes and link.
 `airm.ai-computing.io/role: prefill|decode|serve` get a merge patch: `spec.replicas` (cards ÷ cards per instance), a
 required node affinity on the label `airm.ai-computing.io/<vendor>.<model>` and `kubernetes.io/hostname` in the decision's
 nodes, and the card ids in the pod-template annotation `airm.ai-computing.io/accelerator-ids` for charts that pin devices.
+A role that mixes device types needs one Deployment per type, annotated `airm.ai-computing.io/accelerator: <vendor>.<model>`:
+it follows only that type's cards and goes to 0 replicas when the decision has none. The decision's `reason` gives the
+routing weights; the gateway must split traffic by them (the simulator does).
 A Deployment that already matches gets no patch; an empty decision leaves its Deployment alone. `--apply --dry-run` prints
 `{"document", "patches"}`. Without `--apply` only the ConfigMap is written, as before.
 
@@ -203,9 +208,9 @@ rate at which ≥ 90 % of requests meet TTFT and TPOT: the goodput. SLOs: 2 s / 
 
 | Trace | topology RNGD/RNGD shm | topology RNGD/ATOM×2 p2p | optimal (per card) | optimal (max goodput) | optimal (max goodput, planned tcp) |
 |---|--:|--:|--:|--:|--:|
-| azure-conv | 0.336 (0.168) | 0.046 (0.015) | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.730 (0.182)<br>P 3x RNGD / D 1x RNGD, tcp, 2 nodes |
+| azure-conv | 0.336 (0.168) | 0.046 (0.015) | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.336 (0.168)<br>P 1x RNGD / D 1x RNGD, shm | 0.844 (0.070)<br>P 3x RNGD / D 1x RNGD+4x ATOM, tcp, 2 nodes<br>_one type per role: 0.730 (0.182), P 3x RNGD / D 1x RNGD_ |
 | azure-code | 0.133 (0.067) | 0.000 (0.000) | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm | 0.133 (0.067)<br>P 1x RNGD / D 1x RNGD, shm | 0.613 (0.153)<br>P 3x RNGD / D 1x RNGD, tcp, 2 nodes |
-| burstgpt | 0.026 (0.013) | 0.004 (0.001) | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.061 (0.015)<br>P 2x RNGD / D 2x RNGD, tcp, 2 nodes |
+| burstgpt | 0.026 (0.013) | 0.004 (0.001) | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.026 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.059 (0.006)<br>P 2x RNGD / D 2x RNGD+3x ATOM, tcp, 2 nodes<br>_one type per role: 0.061 (0.015), P 2x RNGD / D 2x RNGD_ |
 | mooncake-conv | 0.000 (0.000) | 0.000 (0.000) | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, shm |
 | mooncake-tool | 0.037 (0.018) | 0.000 (0.000) | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm | 0.037 (0.018)<br>P 1x RNGD / D 1x RNGD, shm | 0.379 (0.095)<br>P 3x RNGD / D 1x RNGD, tcp, 2 nodes |
 
@@ -216,11 +221,13 @@ What it shows, with these profiles:
   no room for most Azure code or Mooncake prompts), and ATOM prefill is too slow for the TTFT SLO.
 - **Across two nodes it gains only with a cross-node KV transport**, which does not exist yet (`tcp` in the table is a
   planned link at an estimated 0.5 GB/s): then 2.2× (Azure conversation) to 10× (Mooncake tool-agent) the goodput and up to
-  5× per card, mostly from more prefill servers for long, variable prompts.
+  5× per card, mostly from more prefill servers for long, variable prompts. With mixed roles it adds ATOM decode instances
+  there: +16 % goodput on Azure conversation (0.730 → 0.844 req/s on 12 cards instead of 4) but −3 % on BurstGPT (0.061 →
+  0.059), where the model over-credits ATOM's KV-bound decode. Per card nothing changes (in italics: `mixed_roles: false`).
 - Mooncake conversation is infeasible everywhere (p90 prompt 27 K tokens ≈ 11 s of prefill); optimal falls back to topology.
 - Absolute rates are low because the measured `shm` path moves 0.6 GB/s (a 1 K-token prompt's KV takes ~0.3 s) and capacity
   is sized for each trace's 60 s peak (BurstGPT: 69×).
-- The analytical model in `optimal` gives 0.41–1.25× the simulated goodput, conservative in most cases (column "Model
+- The analytical model in `optimal` gives 0.41–1.31× the simulated goodput (1.31× on the row that mixes in ATOM decode), conservative in most cases (column "Model
   est." in [the component card](../../docs/components/rm-controller.md)). Both read the same profiles, so the simulation checks
   queueing, bursts, KV fit and routing, **not the profile numbers, which are partly estimates**.
 
@@ -266,9 +273,9 @@ policy here, although ai-rm has no transport plugin for it. 4,000 requests per r
 
 | Trace | topology (shm) | optimal, per card | optimal, max goodput | distserve | hexgen2 |
 |---|--:|--:|--:|--:|--:|
-| azure-conv | 4.168 (2.084)<br>P 1x A100 / D 1x A100, shm | 4.218 (2.109)<br>P 1x A100 / D 1x A100, cuda-ipc | 4.218 (2.109)<br>P 1x A100 / D 1x A100, cuda-ipc | 4.218 (2.109)<br>P 1x A100 / D 1x A100, cuda-ipc | 6.244 (0.780)<br>P 2x RNGD+1x A100 / D 1x A100+2x ATOM, shm |
-| azure-code | 1.034 (0.517)<br>P 1x A100 / D 1x A100, shm | 2.114 (0.705)<br>P 2x A100 / D 1x RNGD, shm | 2.145 (0.536)<br>P 2x A100 / D 2x RNGD, shm | 1.040 (0.520)<br>P 1x A100 / D 1x A100, cuda-ipc | 2.145 (0.536)<br>P 2x A100 / D 2x RNGD, shm |
-| burstgpt | 0.162 (0.081)<br>P 1x A100 / D 1x A100, shm | 0.163 (0.082)<br>P 1x A100 / D 1x A100, cuda-ipc | 0.163 (0.082)<br>P 1x A100 / D 1x A100, cuda-ipc | 0.163 (0.082)<br>P 1x A100 / D 1x A100, cuda-ipc | 0.258 (0.032)<br>P 2x RNGD+1x A100 / D 1x A100+2x ATOM, shm |
+| azure-conv | 4.168 (2.084)<br>P 1x A100 / D 1x A100, shm | 4.218 (2.109)<br>P 1x A100 / D 1x A100, cuda-ipc | **5.410 (1.353)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 4.218 (2.109), P 1x A100 / D 1x A100, cuda-ipc_ | 4.218 (2.109)<br>P 1x A100 / D 1x A100, cuda-ipc | 6.244 (0.780)<br>P 2x RNGD+1x A100 / D 1x A100+2x ATOM, shm |
+| azure-code | 1.034 (0.517)<br>P 1x A100 / D 1x A100, shm | 2.114 (0.705)<br>P 2x A100 / D 1x RNGD, shm | 2.149 (0.537)<br>P 1x RNGD+2x A100 / D 1x RNGD, shm<br>_one type per role: 2.145 (0.536), P 2x A100 / D 2x RNGD_ | 1.040 (0.520)<br>P 1x A100 / D 1x A100, cuda-ipc | 2.145 (0.536)<br>P 2x A100 / D 2x RNGD, shm |
+| burstgpt | 0.162 (0.081)<br>P 1x A100 / D 1x A100, shm | 0.163 (0.082)<br>P 1x A100 / D 1x A100, cuda-ipc | **0.230 (0.058)**<br>P 2x RNGD+1x A100 / D 1x A100, shm<br>_one type per role: 0.163 (0.082), P 1x A100 / D 1x A100, cuda-ipc_ | 0.163 (0.082)<br>P 1x A100 / D 1x A100, cuda-ipc | 0.258 (0.032)<br>P 2x RNGD+1x A100 / D 1x A100+2x ATOM, shm |
 | mooncake-conv | 0.389 (0.195)<br>P 1x A100 / D 1x A100, shm | 1.126 (0.282)<br>P 2x A100 / D 2x RNGD, shm | 1.126 (0.282)<br>P 2x A100 / D 2x RNGD, shm | 0.536 (0.268)<br>P 1x A100 / D 1x A100, cuda-ipc | 1.126 (0.282)<br>P 2x A100 / D 2x RNGD, shm |
 | mooncake-tool | 0.763 (0.382)<br>P 1x A100 / D 1x A100, shm | 1.692 (0.564)<br>P 2x A100 / D 1x RNGD, shm | 1.703 (0.426)<br>P 2x A100 / D 2x RNGD, shm | 0.814 (0.407)<br>P 1x A100 / D 1x A100, cuda-ipc | 1.703 (0.426)<br>P 2x A100 / D 2x RNGD, shm |
 
@@ -281,16 +288,22 @@ What it shows, with these profiles:
   capacity; the simulator shows them lowering goodput (the max-flow objective ignores TTFT queueing and ATOM's slow,
   KV-bound decode). Its own estimate is 1.8–6× the simulated value on this node.
 - **Mixed**: `optimal` beats `distserve` by 2.0–2.1× (Azure code, Mooncake) by pairing A100 prefill with RNGD decode,
-  which a homogeneous search cannot. `hexgen2` gets the most total goodput on Azure conversation and BurstGPT (6.24 vs
-  4.22 req/s and 0.258 vs 0.163) by mixing three types across roles, at 2.6–2.7× lower goodput per card; `optimal` keeps one type
-  per role (one Deployment per role) and cannot express that layout.
+  which a homogeneous search cannot. `hexgen2` gets the most total goodput on Azure conversation and BurstGPT (6.24 and
+  0.258 req/s on 8 cards) by mixing types within a role. With **mixed roles** `optimal` (max goodput) now does that too:
+  A100 + 2 RNGD prefill with A100 decode, 4.22 → **5.41** and 0.163 → **0.230** req/s (in italics: before), 87 % and 89 % of
+  `hexgen2` on half the cards. RNGD prefill gets weight 0.19 / 0.29: with ~1.75 s of p90 prefill + `shm` KV it has little
+  TTFT slack. It matches `hexgen2` on Azure code (2.149 vs 2.145) and both Mooncake traces, and matches or beats it per card
+  on every trace. The rest of the gap is routing, not the type mix: the same 4 cards served from one shared prefill queue
+  (fastest free first, how the simulator serves `hexgen2`) reach 6.34 and 0.257 req/s, i.e. `hexgen2`'s goodput on half its
+  cards; a fixed weighted split cannot borrow idle capacity across types, and the per-type p90 rule is conservative
+  (RNGD weight 0.30 by hand: 6.02). Per-card choices are unchanged on every card set, which is why `mixed_roles` is on by default.
 - W6's "optimal beats topology per card against a GPU-only baseline" holds in simulation: on 4 A100 it matches or beats the
   DistServe-style search and beats topology on every trace. All rows share one profile table, so they compare placement
   logic, not hardware.
 
 ## ✅ Verified
 
-- 60 tests (topology, optimal, rebalancer, health and re-placement, apply, simulator, baselines, document bytes identical to 0.1's);
+- 73 tests (topology, optimal and mixed roles, rebalancer, health and re-placement, apply, simulator, baselines, document bytes identical to 0.1's);
   `rm_core.conformance airm.placements topology optimal` PASS with rm-core v0.1.2; CI runs both.
 - Read-only dry run on the live cluster (2026-10-19, topology): the shm pool went to `etri-001/furiosa:0` + `furiosa:1`, the
   placement the end-to-end run had pinned by hand, with the cordoned node skipped; the p2p pool went to RNGD 0 + ATOM 0, 1.
@@ -304,6 +317,8 @@ What it shows, with these profiles:
 - [x] The `airm-placement` format made normative in rm-core's protocol (§5.4, v0.1.2)
 - [x] An image (`ghcr.io/ai-computing/rm-controller`, [`Dockerfile`](Dockerfile)) and a Deployment in the umbrella chart [`charts/ai-rm`](../../charts/ai-rm)
 - [ ] Measured profiles (FASOP NPU cost model, aicomp #50) in place of the estimates (A100 added for the GPU baselines, partly estimated)
+- [x] Device types mixed within a role (`mixed_roles`), routed by per-type weights
+- [ ] Pooled (work-conserving) prefill routing across types in the model and the gateway; a KV link per type pair
 - [ ] A cross-node KV transport, so that `optimal` can span nodes
 - [ ] Run `optimal`, `--rebalance` and `--apply` on the live cluster
 
