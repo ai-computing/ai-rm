@@ -2,10 +2,13 @@
 
 [Documentation](../README.md) · [한국어 문서](../ko/README.md)
 
-All artwork is stored in this repository; diagrams do not depend on a remote renderer. The SVGs use a fixed dark background for readable display in GitHub light and dark themes. Each diagram has a title, description and matching Markdown alt text. Their English labels are shared by both documentation languages; the surrounding Korean prose explains the same concepts.
+All artwork is stored in this repository; diagrams do not depend on a remote renderer. The README wordmark and overview have light/dark variants selected through `<picture>`. Detailed diagrams retain their fixed dark canvas. Each diagram has a title, description and matching Markdown alt text. Their English labels are shared by both documentation languages; the surrounding Korean prose explains the same concepts.
 
 | Asset | Type / source | Purpose |
 |---|---|---|
+| `wordmark-light.svg`, `wordmark-dark.svg` | Original SVG | Compact, theme-aware README identity |
+| `overview-light.svg`, `overview-dark.svg` | Original SVG | Concise hub / runtime / planner overview |
+| `overview-mobile-light.svg`, `overview-mobile-dark.svg` | Original SVG | Stacked overview with readable labels on small screens |
 | `hero.svg` | Original SVG, generated from repository code | Project identity and hardware scope |
 | `architecture.svg` | Original SVG | L1–L5 responsibilities and rm-core boundary |
 | `request-flow.svg` | Original SVG | Conceptual PD request and named KV path |
@@ -16,7 +19,11 @@ All artwork is stored in this repository; diagrams do not depend on a remote ren
 | `lab-environment.png` | Built-in ImageGen, generated for this documentation | Conceptual lab environment |
 | `hardware-workbench.png` | Built-in ImageGen, generated for this documentation | Generic hardware research context |
 
-Regenerate the 12 SVG assets with `python3 tools/render_docs_assets.py` from the repository root. The generator is Python standard-library only. SVG artwork is original project material distributed under the repository license. Third-party badges retain their providers' terms; vendor/product names identify the research context without implying endorsement.
+Regenerate the 18 SVG assets with `python3 tools/render_docs_assets.py` from the repository root. The generator is Python standard-library only. SVG artwork is original project material distributed under the repository license. Third-party badges retain their providers' terms; vendor/product names identify the research context without implying endorsement.
+
+## README layout references
+
+The layout refinement reviewed [vLLM](https://github.com/vllm-project/vllm), [SGLang](https://github.com/sgl-project/sglang), [Ray](https://github.com/ray-project/ray) and [llm-d](https://github.com/llm-d/llm-d) on 2026-10-19. The adopted patterns are a compact identity, a short purpose statement, early quick start, role-based navigation and links to detailed documentation. Artwork and project copy remain original; no third-party logos, screenshots or performance claims are reused.
 
 ## Image provenance
 
@@ -36,4 +43,4 @@ Use case: product-mockup. Asset type: landscape supporting image for AI-RM heter
 
 ## 한국어 안내
 
-SVG 12개는 저장소의 생성 스크립트에서 재현하는 자체 제작 도식·아이콘입니다. PNG 2개는 내장 ImageGen으로 만든 실사풍 개념 이미지이며 실제 과제 장비 사진·제품 식별 자료·성능 증빙이 아닙니다. 실제 구축 사진이 제공되면 개인정보·주소·화면 내 비밀정보를 확인하고 명확한 출처와 함께 별도 등록하세요. 생성 이미지의 설명 문구는 유지합니다.
+SVG 18개는 저장소의 생성 스크립트에서 재현하는 자체 제작 도식·아이콘입니다. README용 워드마크·개요 그림에는 밝은/어두운 테마를 제공하고, 작은 화면에서는 세로형 개요 그림을 표시합니다. PNG 2개는 내장 ImageGen으로 만든 실사풍 개념 이미지이며 실제 과제 장비 사진·제품 식별 자료·성능 증빙이 아닙니다. 이미지 설명은 유지하고 실제 구축 사진은 출처와 공개 가능한 내용을 확인해 별도 등록합니다.

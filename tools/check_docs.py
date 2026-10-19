@@ -24,6 +24,11 @@ class ImagesAndLinks(HTMLParser):
             self.links.append(attrs.get('src', ''))
         elif tag == 'a' and attrs.get('href'):
             self.links.append(attrs['href'])
+        elif tag == 'source' and attrs.get('srcset'):
+            for candidate in attrs['srcset'].split(','):
+                parts = candidate.strip().split()
+                if parts:
+                    self.links.append(parts[0])
 
 
 def main():

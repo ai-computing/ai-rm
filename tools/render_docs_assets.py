@@ -38,7 +38,72 @@ def save(name, title, desc, width, height, parts):
     (ROOT / name).write_text(svg + '\n', encoding="utf-8")
 
 
+def save_clean(name, title, desc, width, height, parts, background=None):
+    """Compact README artwork, with explicit light and dark theme variants."""
+    ROOT.mkdir(parents=True, exist_ok=True)
+    backdrop = '<rect width="100%%" height="100%%" rx="12" fill="%s"/>' % background if background else ''
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" '
+           'viewBox="0 0 %s %s" role="img" aria-labelledby="title desc">'
+           '<title id="title">%s</title><desc id="desc">%s</desc>'
+           '<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">'
+           '<path d="M0 0L8 4L0 8" fill="#8b96a8"/></marker></defs>%s'
+           '<g font-family="Segoe UI, Arial, sans-serif">%s</g></svg>') % (
+               width, height, width, height, escape(title), escape(desc), backdrop, ''.join(parts))
+    (ROOT / name).write_text(svg + '\n', encoding="utf-8")
+
+
+def readme_artwork():
+    for theme, bg, card, ink, muted, border, accent in [
+        ('light', '#ffffff', '#f6f8fa', '#1f2328', '#59636e', '#d1d9e0', '#107e72'),
+        ('dark', '#0d1117', '#161b22', '#e6edf3', '#9198a1', '#30363d', '#55d6be'),
+    ]:
+        p = [icon('chip', 6, 9, accent, 1), text(86, 63, 'AI-RM', 64, ink, 700)]
+        save_clean('wordmark-%s.svg' % theme, 'AI-RM',
+                   'AI-RM project wordmark and original accelerator icon.', 320, 82, p)
+        p = [box(24, 24, 1232, 108, fill=card, stroke=border, radius=10),
+             text(48, 68, 'AI-RM', 28, ink, 650),
+             text(1000, 65, 'INTEGRATION HUB', 14, muted, 600),
+             text(48, 106, 'Resource contracts  /  Kubernetes + llm-d  /  Operations & measurements', 21, muted),
+             arrow(640, 140, 640, 164, '#8b96a8'),
+             box(24, 178, 1232, 162, fill=bg, stroke=border, radius=10),
+             text(48, 210, 'OPTIMUS PRIME  /  ENGINE CONSOLIDATION TARGET', 14, accent, 600),
+             text(48, 258, 'Inference runtime', 27, ink, 600),
+             text(48, 298, 'opt_prime/  ·  PD, KV and offload integration planned', 18, muted),
+             '<path d="M640 230V314" stroke="%s"/>' % border,
+             text(676, 258, 'FASOP', 27, ink, 600),
+             text(676, 298, 'fasop/  ·  Planning & search', 18, muted),
+             text(48, 391, 'RESEARCH SCOPE', 13, muted, 600),
+             text(230, 393, 'GPU  ·  FuriosaAI RNGD  ·  Rebellions ATOM  ·  CPU  ·  GB10', 20, ink)]
+        save_clean('overview-%s.svg' % theme, 'AI-RM and Optimus Prime target architecture',
+                   'AI-RM coordinates resource contracts, Kubernetes llm-d and operations. '
+                   'Optimus Prime is the planned engine consolidation target, with opt_prime runtime '
+                   'and FASOP planning in one product. Inference planning and PD/KV/offload migration '
+                   'remain future work. Hardware labels describe research scope, not certified support.',
+                   1280, 422, p, bg)
+        p = [box(16, 16, 608, 120, fill=card, stroke=border, radius=10),
+             text(40, 61, 'AI-RM', 32, ink, 650),
+             text(421, 59, 'INTEGRATION HUB', 15, muted, 600),
+             text(40, 97, 'Resource contracts · Kubernetes + llm-d', 22, muted),
+             text(40, 124, 'Operations & measurements', 21, muted),
+             arrow(320, 145, 320, 170, '#8b96a8'),
+             box(16, 184, 608, 314, fill=bg, stroke=border, radius=10),
+             text(40, 220, 'OPTIMUS PRIME · TARGET', 20, accent, 600),
+             text(40, 266, 'Inference runtime', 30, ink, 600),
+             text(40, 302, 'opt_prime/', 23, muted),
+             text(40, 335, 'PD, KV & offload integration planned', 20, muted),
+             '<path d="M40 358H600" stroke="%s"/>' % border,
+             text(40, 404, 'FASOP', 30, ink, 600),
+             text(40, 441, 'fasop/ · Planning & search', 23, muted),
+             text(40, 546, 'RESEARCH SCOPE', 17, muted, 600),
+             text(40, 581, 'GPU · RNGD · ATOM · CPU · GB10', 25, ink)]
+        save_clean('overview-mobile-%s.svg' % theme, 'AI-RM target architecture for small screens',
+                   'AI-RM integration hub above the Optimus Prime runtime and FASOP planner. '
+                   'Consolidation and inference planning remain future work. Hardware labels denote research scope.',
+                   640, 610, p, bg)
+
+
 def main():
+    readme_artwork()
     p = [text(48, 53, "AI-COMPUTING / RESEARCH & INTEGRATION", 15, COLORS[0], 600),
          text(44, 147, "AI-RM", 86, INK, 700),
          text(48, 199, "Unified resource management", 29, INK, 600),
@@ -92,7 +157,7 @@ def main():
     save("engine-consolidation.svg","Optimus Prime consolidation target","AI-RM owns resource, contract, Kubernetes llm-d and observation integration. Optimus Prime in aicomp owns the unified runtime at opt_prime and FASOP planning at fasop. The proposed optimus-prime branch is not created. Current training cost search is not yet an inference SLO optimizer. Existing repositories remain pinned migration sources; npu-lora and private duet remain workloads.",1280,770,p)
     for i,kind in enumerate(["chip","memory","serve","cluster","observe","contract"]):
         save("icon-%s.svg"%kind,kind.capitalize(),"Original AI-RM %s icon"%kind,80,80,[icon(kind,8,8,COLORS[i%5])])
-    print("Generated 12 SVG assets in docs/assets/")
+    print("Generated 18 SVG assets in docs/assets/")
 
 
 if __name__ == "__main__":
