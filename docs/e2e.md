@@ -37,7 +37,8 @@ cold, TPOT 15.8 ms).
 ## Real traces
 
 rm-bench replays public production traces with their real arrival times and lengths
-(`rm-bench traces fetch`, data kept out of the repositories; see the rm-bench README).
+(`rm-bench traces fetch`, data kept out of the repositories; see the rm-bench README). Their full
+characterization and what each asks of the NPU stack: [workload traces](workload-traces.md).
 
 | Trace (whole) | Requests | Mean / 60 s peak rps | Prompt p50 / p90 | Output p50 | Prefix-block reuse | Fits S=512 |
 |---|---|---|---|---|---|---|
