@@ -26,5 +26,6 @@ interfaces:
   provides: [WorkloadRunner]
   uses: [Workload, Metrics]
 # rm-bench e2e 결과(Measurement JSON). loadgen/ 도구의 --out은 여기에 tpot/ttft p50·p99, e2e_p90_ms, req_s를 더 낸다.
-metrics: [slo_attainment_pct, tok_s, ttft_p90_ms, tpot_p90_ms]
+# --power를 주면 power_w·energy_j(scope 태그), --cards를 주면 accelerators를 더 낸다. 최대 W·tok/J·goodput은 <out>.meta.json.
+metrics: [slo_attainment_pct, tok_s, ttft_p90_ms, tpot_p90_ms, power_w, energy_j, accelerators]
 kpi: [SLO, 전력효율]
