@@ -9,8 +9,9 @@
     python3 tools/airm.py check
     python3 tools/airm.py bump COMPONENT [--ref REF]
 
-Components live under components/<layer>/<name> as git submodules; each declares itself in
-<name>/ai-rm.yaml (docs/component-contract.md). Needs Python 3.8+ and PyYAML.
+Components live under components/<layer>/<name> as git submodules, or in-tree under packages/<name>
+(rm-bench, rm-controller) with their layer in the manifest; each declares itself in <name>/ai-rm.yaml
+(docs/component-contract.md). Needs Python 3.8+ and PyYAML.
 """
 import argparse
 import os
@@ -45,7 +46,22 @@ def components(layer=None, names=None):
             manifest = os.path.join(path, "ai-rm.yaml")
             spec = load_yaml(manifest) if os.path.exists(manifest) else {}
             found.append({"name": name, "layer": lay, "path": path, "spec": spec,
-                          "fetched": bool(os.listdir(path))})
+                          "fetched": bool(os.listdir(path)), "in_tree": False})
+    pkgs = os.path.join(ROOT, "packages")
+    for name in sorted(os.listdir(pkgs)) if os.path.isdir(pkgs) else []:
+        path = os.path.join(pkgs, name)
+        manifest = os.path.join(path, "ai-rm.yaml")
+        if not os.path.exists(manifest):
+            continue
+        spec = load_yaml(manifest)
+        lay = spec.get("layer")
+        if lay not in LAYERS:
+            sys.exit(f"{manifest}: layer must be one of {LAYERS}")
+        if layer and lay != layer:
+            continue
+        found.append({"name": spec.get("name", name), "layer": lay, "path": path, "spec": spec,
+                      "fetched": True, "in_tree": True})
+    found.sort(key=lambda c: (LAYERS.index(c["layer"]), c["name"]))
     if names:
         unknown = set(names) - {c["name"] for c in found}
         if unknown:
@@ -83,7 +99,10 @@ def cmd_list(args):
     rows = [("LAYER", "COMPONENT", "KIND", "MATURITY", "VERSION", "DEPLOY", "MANIFEST")]
     for c in components(args.layer):
         s = c["spec"]
-        version = git("describe", "--tags", "--always", cwd=c["path"]) if c["fetched"] else "(not fetched)"
+        if c["in_tree"]:
+            version = "in-tree@" + git("rev-parse", "--short", "HEAD")
+        else:
+            version = git("describe", "--tags", "--always", cwd=c["path"]) if c["fetched"] else "(not fetched)"
         deploy = (s.get("deploy") or {})
         target = deploy.get("target") or "-"
         if deploy.get("manifests"):
@@ -157,6 +176,8 @@ def cmd_check(_args):
 
 def cmd_bump(args):
     [c] = components(names=[args.component])
+    if c["in_tree"]:
+        sys.exit(f"{c['name']} is in-tree (packages/); it moves with ai-rm commits, nothing to bump")
     ref = args.ref or "origin/HEAD"
     subprocess.run(["git", "fetch", "--tags", "origin"], cwd=c["path"], check=True)
     subprocess.run(["git", "checkout", "-q", ref], cwd=c["path"], check=True)

@@ -1,0 +1,8 @@
+# RNGD prefill + ATOM decode over same-host P2P (hetero-npu-p2p), decode on two ATOM cards.
+namespace: llm-serving
+pools:
+  - pool: koni-hetero-pd-pool
+    model: KISTI-KONI/KONI-Llama3.1-8B-Instruct-20241024
+    kv_transport: p2p
+    prefill: {accelerator: furiosa.RNGD, count: 1}
+    decode:  {accelerator: rebellions.ATOM, count: 2}
