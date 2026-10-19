@@ -14,8 +14,8 @@ the Optimus Prime engine is not involved.
 
 | Layer | Component (pinned) | On the cluster |
 |---|---|---|
-| L1 | rm_abstract_layer v0.4.1, chart 0.4.2 | DaemonSet `airm-system/rm-abstract-node`; 7 `AcceleratorProfile`s on etri-001 (3 RNGD + 4 ATOM), 2 on etri-esc8000-e11; node labels `airm.ai-computing.io/<vendor>.<model>` |
-| L4 | llm-d-setup | CRD v0.1.1, `ScrapeConfig airm-pods`, `airm-placement` ConfigMap, airm dashboard; existing Gateway → `llama8b-pd-pool` → EPP |
+| L1 | rm-accel v0.4.1, chart 0.4.2 | DaemonSet `airm-system/rm-abstract-node`; 7 `AcceleratorProfile`s on etri-001 (3 RNGD + 4 ATOM), 2 on etri-esc8000-e11; node labels `airm.ai-computing.io/<vendor>.<model>` |
+| L4 | hetero-llm-d | CRD v0.1.1, `ScrapeConfig airm-pods`, `airm-placement` ConfigMap, airm dashboard; existing Gateway → `llama8b-pd-pool` → EPP |
 | L3 | rngd-pd | Release `airm-e2e`: gateway (`app: llama8b-pd`, joins the pool), prefill on RNGD 0, decode on RNGD 1, pods placed by the L1 labels (`furiosa.RNGD` and `rebellions.ATOM` both present) |
 | L2 | rngd-pd `shm` transport (`airm.kv_transports:shm`) | 67 MB of KV per 8B request through `/dev/shm` |
 | L5 | rm-bench, lmd-top | `rm-bench e2e --scenario pd-smoke --api completions` through the llm-d gateway; lmd-top Infra ▸ Devices shows profiles, `airm_*` series and placement |
@@ -67,11 +67,11 @@ figure does not show. Bursts push the server's TTFT p90 up to 1.5 s within the r
 
 | Layer | Finding | Fix |
 |---|---|---|
-| L1 | `rbln-stat` numbers NPUs per device group, so a 4-ATOM node was reported as 2 | rm_abstract_layer 0.4.1: index from `rbln<N>` |
+| L1 | `rbln-stat` numbers NPUs per device group, so a 4-ATOM node was reported as 2 | rm-accel 0.4.1: index from `rbln<N>` |
 | L1 | `rbln-stat` cannot unpack under the read-only root; no ATOM was published | chart 0.4.2: writable `/tmp` |
 | L1 | An ATOM re-created by the driver after a pod released it dropped out of the daemon's `/dev` | chart 0.4.2: `hostDev` mounts the host's `/dev` live (verified with an allocate/release cycle) |
 | L3↔L5 | The PD gateway serves only non-streaming `/v1/completions`; rm-bench sent streaming chat | rm-bench `--api completions`, TTFT from the server's reported timing |
-| L4↔L5 | llm-d-setup documents `airm-placement` as one `decisions.json` list; lmd-top read one key per workload and looked in namespace `llm-d` | lmd-top reads both layouts; `LMD_AIRM_NS` follows `LMD_NS` |
+| L4↔L5 | hetero-llm-d documents `airm-placement` as one `decisions.json` list; lmd-top read one key per workload and looked in namespace `llm-d` | lmd-top reads both layouts; `LMD_AIRM_NS` follows `LMD_NS` |
 
 ## Open items
 
@@ -80,7 +80,7 @@ figure does not show. Bursts push the server's TTFT p90 up to 1.5 s within the r
   on the same card of a cordoned node with `loopback`. A real controller must keep P and D on one node for
   `shm`, use distinct cards, skip cordoned/NotReady nodes and pick a real transport.
 - **The placement ConfigMap format is not in rm-core.** PROTOCOL.md §5.2 defines the `Placement` API only;
-  llm-d-setup's `decisions.json` layout is the de-facto format. It should be made normative.
+  hetero-llm-d's `decisions.json` layout is the de-facto format. It should be made normative.
 - **Card selection in rngd-pd.** `--chip -1` takes the first visible card; a privileged pod with `/dev/rngd`
   mounted sees every card, so prefill and decode collided until the cards were pinned. It should use the
   card the device plugin allocated.
@@ -96,9 +96,9 @@ Site values go in `deploy/clusters/<name>/` (untracked). Start from the examples
 
 ```bash
 # L4: CRD, scrape config, placement ConfigMap, dashboard
-components/l4-cluster/llm-d-setup/scripts/airm-install.sh apply all
+components/l4-cluster/hetero-llm-d/scripts/airm-install.sh apply all
 # L1: node daemon
-helm upgrade --install rm-abstract-node components/l1-accel/rm_abstract_layer/deploy/helm/rm-abstract-node \
+helm upgrade --install rm-abstract-node components/l1-accel/rm-accel/deploy/helm/rm-abstract-node \
   -n airm-system --create-namespace -f deploy/clusters/<name>/rm-abstract-node.values.yaml
 kubectl get accp
 # L3: PD serving behind the existing pool

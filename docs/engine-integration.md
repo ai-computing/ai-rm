@@ -22,19 +22,19 @@ The inspected source is `aicomp/main` at [`62a7831`](https://github.com/ai-compu
 | **Optimus Prime / `opt_prime`** | Unified inference runtime, backend adapters, prefill/decode, KV lifecycle/transport integration and expert offload | NPU and source-module integration remain planned; existing GPU features are not proof of NPU support |
 | **FASOP / `fasop`** | Planning/search element inside Optimus Prime | Logical L4 policy interface; not a replacement for Kubernetes/llm-d routing |
 | **rm-core** | Shared resource, transport, workload, placement and measurement contracts | Normative protocol changes require separate review |
-| **llm-d-setup** | Cluster setup, Gateway, InferencePool/EPP, model storage and monitoring | Executes reviewed configuration through established cluster mechanisms |
+| **hetero-llm-d** | Cluster setup, Gateway, InferencePool/EPP, model storage and monitoring | Executes reviewed configuration through established cluster mechanisms |
 | **lmd-top / rm-bench** | Observation/operations and workload measurement | Consume the same engine/resource identity and metric definitions |
 
 ## Migration map
 
 | Current source | Planned destination / role | Retained boundary |
 |---|---|---|
-| `rm_abstract_layer` | Engine-facing backend/execution adapters → Optimus Prime | L1 device discovery and capability publication remain a resource responsibility |
+| `rm-accel` | Engine-facing backend/execution adapters → Optimus Prime | L1 device discovery and capability publication remain a resource responsibility |
 | `rngd-pd` | Optimus Prime PD-serving and NPU-backend modules | Preserve exact output behavior, transport selection and llm-d boundary until accepted |
 | `hetero-npu-p2p` | Optimus Prime KV-transport module/integration | Same-host support, ABI constraints, completion fences and explicit failures |
 | `npu-offload` | Optimus Prime expert-offload module | MoE weight/execution partitioning; not a `KVTransport` implementation |
 | `aicomp/fasop` | Planning element of the same Optimus Prime product | Existing training estimates remain distinct from inference measurements |
-| `npu-lora` | Training workload, with an engine adapter where justified | Do not treat training integration as completed inference migration |
+| `npu-train` | Training workload, with an engine adapter where justified | Do not treat training integration as completed inference migration |
 | `duet` | Optional private search/RAG workload | No private code is copied into the public engine |
 
 The source repositories remain useful for development, provenance and comparison during the transition. Removing submodules or archiving source repositories is a later cutover decision after the consolidated engine is validated.

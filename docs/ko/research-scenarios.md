@@ -27,10 +27,10 @@
 
 ## 4. NPU 학습을 공통 자원 체계에 연결
 
-`npu-lora`의 LoRA·full fine-tuning 연구를 workload runner와 Kubernetes Job으로 연결하는 시나리오입니다. Backend·데이터셋과 학습 처리량·정확도를 기록합니다.
+`npu-train`의 LoRA·full fine-tuning 연구를 workload runner와 Kubernetes Job으로 연결하는 시나리오입니다. Backend·데이터셋과 학습 처리량·정확도를 기록합니다.
 
 ## 5. 관측·부하·비교
 
-`llm-d-setup`은 클러스터·모니터링, `lmd-top`은 운영 화면, `rm-bench`는 trace·합성 부하와 측정을 담당합니다. 공통 이름과 단위를 사용해 운영 화면과 벤치마크가 같은 양을 가리키도록 합니다.
+`hetero-llm-d`는 클러스터·모니터링, `lmd-top`은 운영 화면, `rm-bench`는 trace·합성 부하와 측정을 담당합니다. 공통 이름과 단위를 사용해 운영 화면과 벤치마크가 같은 양을 가리키도록 합니다.
 
 [성과지표](kpi-map.md), [인터페이스](interfaces.md), [현재 상태](status.md)를 함께 참고하세요.

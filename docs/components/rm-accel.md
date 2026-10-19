@@ -1,4 +1,4 @@
-# rm_abstract_layer — L1 카드
+# rm-accel — L1 카드
 
 > **Optimus Prime 전환 안내:** L1 장치 탐지·능력 게시는 유지하고, 엔진 실행·백엔드 adapter는 Optimus Prime으로 통합하는 방향입니다. 구현 완료를 뜻하지 않습니다. [통합 설계](../ko/engine-integration.md) · [English design](../engine-integration.md) · [계획 설정](../../config/engine-integration.yaml)
 

@@ -30,7 +30,7 @@
 
 **rm-controller** is the L4 placement controller of [ai-rm](https://github.com/ai-computing/ai-rm). It reads the
 accelerators L1 publishes (`AcceleratorProfile`) and the nodes' state, places the prefill/decode pools a spec asks for, and
-writes the decisions to the `airm-placement` ConfigMap that the EPP scorer and lmd-top read (format: llm-d-setup
+writes the decisions to the `airm-placement` ConfigMap that the EPP scorer and lmd-top read (format: hetero-llm-d
 `deploy/airm/README.md`, key `decisions.json`).
 
 <table>

@@ -12,11 +12,11 @@ The [integration plan](engine-integration.md) proposes `airm.workloads` / `optim
 
 | Contract | Entry-point group | Responsibility | Integration target |
 |---|---|---|---|
-| `Accelerator` / `AcceleratorProvider` | `airm.accelerator_providers` | Describe and discover devices, memory, precision, peak provenance, power and interconnect | rm_abstract_layer |
+| `Accelerator` / `AcceleratorProvider` | `airm.accelerator_providers` | Describe and discover devices, memory, precision, peak provenance, power and interconnect | rm-accel |
 | `AcceleratorProfile` | — | Publish capabilities through Kubernetes CRDs and `airm.ai-computing.io/<vendor>.<model>` node labels | rm-core Kubernetes helpers and L1 daemon |
 | `MemoryTier` / `KVLayout` / `KVTransport` | `airm.kv_transports` | Describe KV movement and completion fences; select paths by name | hetero-npu-p2p; rngd-pd host staging |
 | `Workload` / `Placement` | `airm.placements` | Describe what runs where, including its KV path | llm-d EPP integration and serving configuration |
-| Workload runner | `airm.workloads` | Start serving, training or search workloads | rngd-pd, npu-offload, npu-lora, duet |
+| Workload runner | `airm.workloads` | Start serving, training or search workloads | rngd-pd, npu-offload, npu-train, duet |
 | `Measurement` / metrics | — | Common names, units and tags; Prometheus `airm_<name>` series | Benchmark tools, exporters and research records |
 
 ## Metrics used in the v0.1 integration guides
