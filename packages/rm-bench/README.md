@@ -33,7 +33,7 @@ rm-core `rm_core.metrics.METRICS`(`ttft_p90_ms`, `tpot_p90_ms`, `tok_s` …)를 
 k8s Job으로 돌리는 매니페스트는 아직 없습니다.
 
 ```bash
-python -m pip install -e .            # rm-core v0.1.0 포함
+python -m pip install -e .            # rm-core v0.1.1 포함
 python -m pytest -q tests             # 가짜 OpenAI 호환 서버로 e2e 확인
 python -m rm_core.conformance
 ```
