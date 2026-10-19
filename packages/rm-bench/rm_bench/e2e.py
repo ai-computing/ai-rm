@@ -103,7 +103,8 @@ def run(scenario: Scenario, gateway: str, model: str | None = None, *,
     if api not in API_KINDS:
         raise ValueError(f"api must be one of {API_KINDS}")
     url = client.chat_url(gateway) if api == "chat" else client.completions_url(gateway)
-    send = client.stream_chat if api == "chat" else client.complete
+    send = {"chat": client.stream_chat, "completions": client.complete,
+            "completions-stream": client.stream_completions}[api]
     model = model or scenario.model or client.discover_model(gateway, scenario.timeout_s)
     schedule = [r for r in scenario.schedule() if r[0] < scenario.duration_s]
 

@@ -146,6 +146,21 @@ def stream_chat(url: str, model: str, prompt_tokens: int, max_tokens: int, timeo
         "stream": True,
         "stream_options": {"include_usage": True},
     }
+    return _stream(url, payload, timeout_s, scheduled_at)
+
+
+def stream_completions(url: str, model: str, prompt_tokens: int, max_tokens: int, timeout_s: float,
+                       scheduled_at: float | None = None, prompt: str | None = None) -> RequestRecord:
+    """Send one streaming /v1/completions request: the same prompt text as `complete` (no chat
+    template), timed from the SSE chunks like `stream_chat`. For servers that stream completions
+    (vLLM, furiosa-llm), so TTFT is the client's first token rather than an upper bound."""
+    payload = {"model": model, "prompt": prompt or make_prompt(prompt_tokens),
+               "max_tokens": max(1, int(max_tokens)), "stream": True,
+               "stream_options": {"include_usage": True}}
+    return _stream(url, payload, timeout_s, scheduled_at)
+
+
+def _stream(url: str, payload: dict, timeout_s: float, scheduled_at: float | None) -> RequestRecord:
     t0 = time.perf_counter() if scheduled_at is None else scheduled_at
     deadline = time.perf_counter() + timeout_s
     token_times: list[float] = []

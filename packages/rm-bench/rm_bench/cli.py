@@ -190,8 +190,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--model", default=None, help="model id (default: scenario, else gateway /v1/models)")
     p.add_argument("--out", default=None, help="Measurement JSON path (default: results/<run_id>.json)")
     p.add_argument("--kv-transport", default=None, help="KV transport name under test, recorded as a tag")
-    p.add_argument("--api", choices=("chat", "completions"), default=None,
-                   help="request API (default: the scenario's api, else chat)")
+    p.add_argument("--api", choices=("chat", "completions", "completions-stream"), default=None,
+                   help="request API (default: the scenario's api, else chat); completions-stream "
+                        "streams /v1/completions so TTFT is the client's first token")
     p.add_argument("--deployment", default=None,
                    help="deployment label for compare (e.g. same-vendor-pd, vendor-pd, replication)")
     p.add_argument("--cards", type=int, default=None, help="accelerators serving the run (per-card goodput)")

@@ -17,6 +17,7 @@
     max_error_pct: 0            # verdict fails above this
     slo: {ttft_p90_ms: 2000}    # keys from rm_core.workload.SLO_KEYS
     api: chat                   # chat (streaming /v1/chat/completions) | completions (/v1/completions)
+                                # | completions-stream (streaming /v1/completions)
 
 Target addresses never go here; they come from --gateway / LLMD_GATEWAY_URL.
 """
@@ -34,7 +35,7 @@ from rm_core.workload import SLO_KEYS
 
 from . import traces
 
-API_KINDS = ("chat", "completions")
+API_KINDS = ("chat", "completions", "completions-stream")
 
 # (offset_s from run start, prompt_tokens, max_tokens[, mooncake hash_ids])
 Request = tuple[float, int, int]
