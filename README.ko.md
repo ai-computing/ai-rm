@@ -1,42 +1,80 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/wordmark-dark.svg">
-    <img src="docs/assets/wordmark-light.svg" width="260" alt="AI-RM">
-  </picture>
+<div align="center">
+
+<a href="docs/ko/project-overview.md"><img src="docs/assets/hero.svg" width="100%" alt="AI-RM: Kubernetes와 llm-d 위에서 GPU·NPU·CPU·GB10 통합메모리를 하나로 관리하는 통합 자원관리, Optimus Prime 엔진 통합"></a>
+
+<h3>이종 AI 인프라를 위한 통합 자원관리</h3>
+
+<p>
+  <a href="README.md">English</a> · <strong>한국어</strong>
 </p>
 
-<p align="center"><strong>이종 AI 인프라를 위한 통합 자원관리.</strong></p>
-
-<p align="center">
-  <a href="README.md">English</a> · <strong>한국어</strong><br>
-  <a href="docs/ko/README.md">문서</a> · <a href="docs/ko/getting-started.md">시작하기</a> · <a href="docs/ko/architecture.md">아키텍처</a> · <a href="docs/ko/engine-integration.md">Optimus Prime</a>
-</p>
-
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-BSD--3--Clause-64748b" alt="라이선스: BSD-3-Clause"></a>
+<p>
   <a href="https://github.com/ai-computing/ai-rm/actions/workflows/check-docs.yml"><img src="https://github.com/ai-computing/ai-rm/actions/workflows/check-docs.yml/badge.svg" alt="문서 검사"></a>
-  <a href="docs/ko/status.md"><img src="https://img.shields.io/badge/Stage-Research%20%26%20integration-107e72" alt="단계: 연구·통합"></a>
+  <a href="https://github.com/ai-computing/rm-core/blob/main/PROTOCOL.md"><img src="https://img.shields.io/badge/protocol-v0.1-7c5cff" alt="프로토콜 v0.1"></a>
+  <a href="https://github.com/ai-computing/rm-core"><img src="https://img.shields.io/badge/rm--core-0.1.1-22d3ee" alt="rm-core 0.1.1"></a>
+  <a href="deploy/README.ko.md"><img src="https://img.shields.io/badge/target-Kubernetes%20%2B%20llm--d-326ce5?logo=kubernetes&amp;logoColor=white" alt="대상: Kubernetes와 llm-d"></a>
+  <a href="docs/ko/status.md"><img src="https://img.shields.io/badge/stage-research%20%26%20integration-107e72" alt="단계: 연구·통합"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSD--3--Clause-64748b" alt="라이선스: BSD-3-Clause"></a>
 </p>
 
-AI-RM은 **「AI 반도체 통합 자원관리 기술 개발」 과제의 통합 허브**입니다. 공통 계약, 고정된 구성요소 버전, 재현 가능한 측정을 통해 **GPU·NPU·CPU·GB10 통합메모리 연구**를 **Kubernetes + llm-d** 환경에 연결합니다.
+<p>
+  <a href="docs/ko/getting-started.md"><b>시작하기</b></a> ·
+  <a href="docs/ko/architecture.md"><b>아키텍처</b></a> ·
+  <a href="docs/ko/engine-integration.md"><b>Optimus Prime</b></a> ·
+  <a href="docs/components/README.md"><b>구성요소</b></a> ·
+  <a href="docs/ko/status.md"><b>현재 상태</b></a> ·
+  <a href="docs/ko/README.md"><b>문서</b></a>
+</p>
 
-- **자원 표현** — 장치를 탐지하고 서로 다른 능력을 공통 모델로 표현합니다.
-- **엔진 기술 통합** — 추론·KV 전송·전문가 offload를 Optimus Prime으로 모으고 FASOP을 내부 계획 요소로 둡니다.
-- **관측과 평가** — 클러스터 운영, 워크로드 실측, 과제 증빙을 같은 체계로 연결합니다.
+</div>
 
-## 빠른 시작
+---
 
-가속기나 비공개 구성요소 권한 없이 저장소를 살펴볼 수 있습니다.
+**AI-RM**은 **「AI 반도체 통합 자원관리 기술 개발」 과제의 통합 허브**입니다. 공통 계약, 고정된 구성요소 버전,
+재현 가능한 측정을 통해 **GPU·NPU(FuriosaAI RNGD, Rebellions ATOM)·CPU·GB10 통합메모리 연구**를
+**Kubernetes + llm-d** 환경에 연결합니다. 추론 엔진 기술은 **Optimus Prime**으로 모으고, **FASOP**을 그 안의
+계획 요소로 둡니다.
 
-```bash
-git clone https://github.com/ai-computing/ai-rm.git
-cd ai-rm
-python3 tools/airm.py list
-```
+## ✨ 무엇을 연결하나
 
-구성요소 설치와 클러스터 준비는 [시작하기](docs/ko/getting-started.md)를 참고하세요. 공개 구성요소만 사용할 때는 [경로를 선택해 초기화](docs/ko/getting-started.md#공개-구성요소-선택-초기화)합니다. 재귀 clone은 비공개 `duet`도 받으려 합니다.
+<table>
+<tr>
+<td width="33%" valign="top">
+<img src="docs/assets/icon-chip.svg" width="44" alt="칩 아이콘"><br>
+<b>모든 장치를 하나의 모델로</b><br>
+GPU·NPU·CPU·통합메모리 시스템을 탐지하고 그 능력을 하나의 <code>AcceleratorProfile</code> 모델로 게시합니다.
+</td>
+<td width="33%" valign="top">
+<img src="docs/assets/icon-memory.svg" width="44" alt="메모리 아이콘"><br>
+<b>KV·전문가를 이름으로 이동</b><br>
+NPU↔NPU KV 전송, NPU↔호스트 전문가 offload, CPU↔GPU 통합메모리를 공통 <code>KVTransport</code>·메모리 계층 계약 뒤에 둡니다.
+</td>
+<td width="33%" valign="top">
+<img src="docs/assets/icon-serve.svg" width="44" alt="서빙 아이콘"><br>
+<b>하나의 엔진 목표</b><br>
+Prefill/decode, KV, offload 경로를 Optimus Prime으로 모으고 FASOP이 병렬화와 배치를 계획합니다.
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+<img src="docs/assets/icon-cluster.svg" width="44" alt="클러스터 아이콘"><br>
+<b>Kubernetes + llm-d 기본</b><br>
+Gateway, InferencePool/EPP, 모델 저장소, 모니터링을 llm-d가 이미 제공하는 확장 지점으로 연결합니다.
+</td>
+<td width="33%" valign="top">
+<img src="docs/assets/icon-observe.svg" width="44" alt="관측 아이콘"><br>
+<b>하나의 지표 언어</b><br>
+TTFT, TPOT, tok/s, 전력, MFU를 모든 계층이 같은 <code>airm_*</code> 이름으로 보고해 콘솔부터 성과지표 표까지 같은 숫자를 봅니다.
+</td>
+<td width="33%" valign="top">
+<img src="docs/assets/icon-contract.svg" width="44" alt="계약 아이콘"><br>
+<b>계약으로 연결</b><br>
+구성요소끼리 직접 import하지 않습니다. 각자 <a href="https://github.com/ai-computing/rm-core">rm-core</a> 어댑터를 등록하고 적합성 검사로 확인합니다.
+</td>
+</tr>
+</table>
 
-## 아키텍처
+## 🏗 아키텍처
 
 <picture>
   <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="docs/assets/overview-mobile-dark.svg">
@@ -45,36 +83,137 @@ python3 tools/airm.py list
   <img src="docs/assets/overview-light.svg" width="100%" alt="목표 구조: AI-RM은 자원·클러스터·운영 통합을 맡고, Optimus Prime은 추론 런타임과 FASOP 계획 요소를 포함하며, GPU·NPU·CPU·통합메모리 연구를 연결합니다.">
 </picture>
 
-**통합 진행 단계입니다.** [`aicomp`](https://github.com/ai-computing/aicomp)의 Optimus Prime을 통합 추론 엔진으로 두는 방향입니다. FASOP은 현재 학습 병렬화 전략을 탐색하며 추론용 계획은 후속 구현입니다. 기존 저장소는 고정된 이전 소스로 유지합니다. [5계층 아키텍처](docs/ko/architecture.md), [엔진 통합 설계](docs/ko/engine-integration.md), [현재 상태](docs/ko/status.md)를 참고하세요.
+<details>
+<summary><b>5개 기술 계층</b></summary>
+<br>
 
-## 구성요소
+<img src="docs/assets/architecture.svg" width="100%" alt="L1부터 L5까지의 책임: 가속기 추상화, 메모리·전송 모듈, 통합 엔진, 클러스터·계획 경계, 관측·운영, 그리고 이를 묶는 rm-core 계약">
 
-| 영역 | 구성요소 |
-|---|---|
-| **엔진·계획** | `aicomp`의 [Optimus Prime · `opt_prime`](https://github.com/ai-computing/aicomp/tree/main/opt_prime), [FASOP · `fasop`](https://github.com/ai-computing/aicomp/tree/main/fasop) |
-| **자원 탐지** | [rm_abstract_layer](https://github.com/ai-computing/rm_abstract_layer) |
-| **이전 소스** | [rngd-pd](https://github.com/ai-computing/rngd-pd) · [hetero-npu-p2p](https://github.com/ai-computing/hetero-npu-p2p) · [npu-offload](https://github.com/ai-computing/npu-offload) |
-| **클러스터 통합** | [llm-d-setup](https://github.com/ai-computing/llm-d-setup) · [rm-core 계약](https://github.com/ai-computing/rm-core) |
-| **운영·측정** | [lmd-top](https://github.com/ai-computing/lmd-top) · [rm-bench](https://github.com/ai-computing/rm-bench) |
-| **워크로드** | [npu-lora](https://github.com/ai-computing/npu-lora) · **duet** (비공개·선택 사항) |
+| 계층 | 책임 | 구성요소 |
+|:-:|---|---|
+| **L5** | 관측·운영 | lmd-top · rm-bench |
+| **L4** | 클러스터·계획 경계 | llm-d-setup · FASOP 어댑터 *(계획)* |
+| **L3** | 통합 엔진 | Optimus Prime · rngd-pd *(이전 소스)* · npu-lora |
+| **L2** | 메모리·전송 | hetero-npu-p2p · npu-offload · duet |
+| **L1** | 가속기 추상화 | rm_abstract_layer |
+
+자세히: [아키텍처](docs/ko/architecture.md) · [인터페이스](docs/ko/interfaces.md) · [엔진 통합 설계](docs/ko/engine-integration.md)
+</details>
+
+> [!IMPORTANT]
+> **통합 진행 단계입니다.** [`aicomp`](https://github.com/ai-computing/aicomp)의 Optimus Prime을 통합 추론 엔진으로 두는 방향이며, 통합 브랜치와 어댑터는 아직 활성화되지 않았습니다. FASOP의 추론용 계획도 후속 구현입니다. 기존 저장소는 고정된 실행 소스로 유지합니다. 구현과 계획의 구분은 [현재 상태](docs/ko/status.md)를 참고하세요.
+
+## 🚀 빠른 시작
+
+가속기나 비공개 구성요소 권한 없이 살펴볼 수 있습니다.
+
+```bash
+git clone https://github.com/ai-computing/ai-rm.git && cd ai-rm
+python3 tools/airm.py list            # 구성요소 · 계층 · 버전 · 배포 가능 여부
+python3 tools/check_sensitive.py .    # 내부 주소·토큰·키 검사
+```
+
+<details>
+<summary><b>구성요소 받기, 설치, 테스트</b></summary>
+<br>
+
+[공개 구성요소를 경로로 선택해 초기화](docs/ko/getting-started.md#공개-구성요소-선택-초기화)한 뒤
+(재귀 clone은 비공개 `duet`도 받으려 합니다):
+
+```bash
+make doctor                     # 필수 도구와 빠진 항목
+make setup                      # 구성요소 설치 (LAYER=l2-memory로 범위 제한)
+make test                       # 가속기 없이 도는 빠른 테스트
+python -m rm_core.conformance   # 계약 검사: PASS / SKIP(하드웨어 없음) / FAIL
+```
+
+전체 절차: [시작하기](docs/ko/getting-started.md).
+</details>
+
+<details>
+<summary><b>Kubernetes + llm-d 클러스터에 배포</b></summary>
+<br>
+
+```bash
+mkdir -p deploy/clusters/local
+cp deploy/clusters/example/cluster.example.env deploy/clusters/local/cluster.local.env
+$EDITOR deploy/clusters/local/cluster.local.env    # 사이트 값 (추적하지 않음)
+make deploy CLUSTER=local DRY_RUN=1                 # 적용 전 검토
+```
+
+[배포 안내](deploy/README.ko.md)를 참고하세요.
+</details>
+
+## 🧩 구성요소
+
+| | 영역 | 구성요소 |
+|:-:|---|---|
+| 🚂 | **엔진·계획** | [Optimus Prime · `opt_prime`](https://github.com/ai-computing/aicomp/tree/main/opt_prime) · [FASOP · `fasop`](https://github.com/ai-computing/aicomp/tree/main/fasop) |
+| 🟣 | **자원 탐지** | [rm_abstract_layer](https://github.com/ai-computing/rm_abstract_layer) |
+| 🔵 | **엔진 이전 소스** | [rngd-pd](https://github.com/ai-computing/rngd-pd) · [hetero-npu-p2p](https://github.com/ai-computing/hetero-npu-p2p) · [npu-offload](https://github.com/ai-computing/npu-offload) |
+| 🟡 | **클러스터 통합** | [llm-d-setup](https://github.com/ai-computing/llm-d-setup) · [rm-core 계약](https://github.com/ai-computing/rm-core) |
+| 🟠 | **운영·측정** | [lmd-top](https://github.com/ai-computing/lmd-top) · [rm-bench](https://github.com/ai-computing/rm-bench) |
+| 🟢 | **학습·검색 워크로드** | [npu-lora](https://github.com/ai-computing/npu-lora) · **duet** *(비공개·선택 사항)* |
 
 역할, 소스 이전 방향, 통합 작업은 [구성요소 디렉터리](docs/components/README.md)에 정리했습니다.
 
-## 문서
+## 🔌 연결 방식
+
+구성요소는 rm-core 계약을 구현해 entry point로 등록하고, 실행 시 **이름으로** 선택됩니다. KV 경로를 바꾸는 일은
+코드 수정이 아니라 설정 변경입니다.
+
+```toml
+# hetero-npu-p2p/pyproject.toml
+[project.entry-points."airm.kv_transports"]
+p2p = "hetero_p2p.airm:P2PTransport"
+```
+
+```python
+from rm_core import registry
+transport = registry.load("airm.kv_transports", "p2p")   # kvTransport: p2p | shm | loopback
+```
+
+| 계약 | Entry-point 그룹 | 계층 |
+|---|---|:-:|
+| `AcceleratorProvider` | `airm.accelerator_providers` | L1 |
+| `KVTransport` | `airm.kv_transports` | L2 |
+| 워크로드 실행기 | `airm.workloads` | L3 |
+| `Placement` | `airm.placements` | L4 |
+| 지표 (`airm_*`) | — | 전체 |
+
+자세히: [인터페이스](docs/ko/interfaces.md) · [통합 가이드](docs/ko/integration-guide.md) · [`ai-rm.yaml` 스키마](docs/ko/component-contract.md)
+
+## 🗺 로드맵
+
+- [x] 5계층 구조, 고정된 서브모듈, 셋업 도구 (`list` · `doctor` · `setup` · `test` · `deploy` · `check`)
+- [x] rm-core v0.1 계약, 참조 구현, 적합성 검사, `AcceleratorProfile` CRD
+- [ ] 프로토콜 v0.1 구성요소 어댑터 (검토 중)
+- [ ] Optimus Prime 통합 브랜치: 이전 소스의 PD, KV 전송, 전문가 offload 모듈 통합
+- [ ] FASOP 추론 계획과 검토된 llm-d 배치 어댑터
+- [ ] 통합 차트, 시뮬레이션 클러스터, TTFT / TPOT / 전력 / MFU 증빙을 남기는 end-to-end 시나리오
+- [ ] 프로토콜 v0.2: 실제 버퍼(`MemoryRegion`)를 KV 전송에 연결
+
+## 📚 문서
 
 | 목적 | 안내 |
 |---|---|
-| **프로젝트 이해** | [개요](docs/ko/project-overview.md) · [아키텍처](docs/ko/architecture.md) · [연구 시나리오](docs/ko/research-scenarios.md) |
-| **구현 연결** | [엔진 설계](docs/ko/engine-integration.md) · [인터페이스](docs/ko/interfaces.md) · [통합 가이드](docs/ko/integration-guide.md) |
-| **실행과 평가** | [시작하기](docs/ko/getting-started.md) · [배포](deploy/README.ko.md) · [성과지표·증빙](docs/ko/kpi-map.md) |
-| **진행 상태 확인** | [현재 상태](docs/ko/status.md) · [계획 설정](config/engine-integration.yaml) |
+| 🧭 **프로젝트 이해** | [개요](docs/ko/project-overview.md) · [아키텍처](docs/ko/architecture.md) · [연구 시나리오](docs/ko/research-scenarios.md) · [용어집](docs/ko/glossary.md) |
+| 🔧 **구현 연결** | [엔진 설계](docs/ko/engine-integration.md) · [인터페이스](docs/ko/interfaces.md) · [통합 가이드](docs/ko/integration-guide.md) |
+| 📊 **실행과 평가** | [시작하기](docs/ko/getting-started.md) · [배포](deploy/README.ko.md) · [성과지표·증빙](docs/ko/kpi-map.md) |
+| 📍 **진행 상태 확인** | [현재 상태](docs/ko/status.md) · [계획 설정](config/engine-integration.yaml) |
 
-[전체 문서](docs/ko/README.md) · [English documentation](docs/README.md) · [용어집](docs/ko/glossary.md)
+[전체 문서](docs/ko/README.md) · [English documentation](docs/README.md)
 
-## 기여
+## 🤝 기여
 
-구현 경계, 문서 작성, 검증 방법은 [기여 안내](CONTRIBUTING.md)를 확인하세요. 질문과 제안은 [GitHub Issues](https://github.com/ai-computing/ai-rm/issues)를 이용합니다. 사이트 설정과 자격 증명은 추적 파일에 넣지 않으며 [보안 안내](docs/ko/security.md)를 따릅니다.
+구현 경계, 문서 작성, 검증 방법은 [기여 안내](CONTRIBUTING.md)를 확인하세요. 질문과 제안은
+[GitHub Issues](https://github.com/ai-computing/ai-rm/issues)를 이용합니다.
 
-## 라이선스
+> [!NOTE]
+> 공개 저장소입니다. 사이트 설정, 내부 주소, 자격 증명은 추적 파일에 넣지 않으며 사이트 값은 추적하지 않는 `cluster.local.env`에만 둡니다. [보안 안내](docs/ko/security.md)를 참고하세요.
+
+## 📄 라이선스
 
 통합 저장소는 [BSD-3-Clause](LICENSE)를 따릅니다. 각 구성요소에는 해당 저장소의 라이선스가 적용됩니다.
+
+<div align="center"><sub>ai-computing 팀 · ETRI</sub></div>
