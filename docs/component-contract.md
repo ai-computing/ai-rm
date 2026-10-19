@@ -25,6 +25,13 @@ interfaces:
   provides: [KVTransport]
   uses: [Accelerator, Metrics]
 kpi: [전력효율, SLO]
+# protocol v0.1부터 (docs/integration-guide.md §2.7)
+protocol: "0.1"               # 구현한 rm-core protocol 버전
+adapters:                     # 등록한 entry point
+  - group: airm.kv_transports
+    name: p2p
+metrics: [kv_transfer_ms, kv_transfer_gbps]   # 내보내는 rm-core 지표
+# deploy.chart: deploy/helm/<component>  (Helm chart가 있으면)
 ```
 
 ## 2. README의 `## ai-rm` 절
