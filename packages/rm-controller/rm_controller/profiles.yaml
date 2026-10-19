@@ -38,6 +38,23 @@ devices:
       tpot_ms_bmax: derived
       max_batch: measured
       kv_tokens: derived
+  nvidia.A100:                       # A100 80GB, vLLM v0.11 (CUDA); the GPU baseline for W6, not an ai-rm serving path
+    group: 1
+    prefill_tok_s: 10000             # estimate: 312 TFLOPS bf16 dense (NVIDIA A100 datasheet) x ~50 % MFU
+    prefill_overhead_ms: 20          #   / 16 GFLOP per token (2 x 8.0 B parameters); not measured here
+    tpot_ms_b1: 11.0                 # estimate: 16 GB of weights per step over 2.0 TB/s HBM2e at ~75 % efficiency
+    tpot_ms_bmax: 20.0               # derived: hetero-llm-d experiments/2026-10-19-hetero-llama8b-mixed-pool, A100
+                                     #   alone, 128 requests at concurrency 64, ~110 output tokens, p50 latency
+                                     #   2.39-2.43 s -> 20-25 ms per token including prefill and queueing (upper bound)
+    max_batch: 64                    # measured: the concurrency of that run; vLLM allows more (max_num_seqs 256)
+    kv_tokens: 400000                # derived: 80 GiB x 0.90 (--gpu-memory-utilization) - 15 GiB weights - ~4 GiB
+                                     #   activations = ~53 GiB / 128 KiB per token (manifests/vllm-a100-llama31-8b.yaml)
+    source:
+      prefill_tok_s: estimate
+      tpot_ms_b1: estimate
+      tpot_ms_bmax: derived
+      max_batch: measured
+      kv_tokens: derived
 
 # KV handoff from a prefill instance to a decode instance. scope: card (same card), host (same node),
 # cluster (any two nodes). `pairs` limits a link to the prefill->decode types it was verified for (absent =
@@ -69,4 +86,11 @@ links:
     gb_s: 0.5                        # estimate: host-staged on both ends like shm (0.6 GB/s), plus the wire
     latency_ms: 5
     implemented: false               # no cross-node airm.kv_transports plugin yet
+    source: estimate
+  cuda-ipc:                          # GPU->GPU on one node, as vLLM's NixlConnector does it (UCX cuda_ipc)
+    scope: host
+    gb_s: 20.0                       # estimate: PCIe Gen4 x16 peer-to-peer; NVLink would be ~10x more
+    latency_ms: 1
+    pairs: [nvidia.A100->nvidia.A100]
+    implemented: false               # upstream vLLM has it; ai-rm has no airm.kv_transports plugin for GPUs
     source: estimate
