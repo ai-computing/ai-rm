@@ -1,0 +1,19 @@
+# Real trace replay: burstgpt. Fetch first: rm-bench traces fetch
+# Inspect: rm-bench traces stats trace-burstgpt [--max-total-tokens N --no-filter]
+# Run:     rm-bench e2e --scenario trace-burstgpt --gateway URL [--speedup X] [--max-total-tokens N]
+name: trace-burstgpt
+description: real arrival times and lengths from the burstgpt trace
+requests:
+  source: trace
+  trace:
+    path: ${RM_BENCH_TRACES}/burstgpt/BurstGPT_without_fails_1.csv
+    speedup: 1
+    policy: skip
+concurrency: 64
+duration_s: 600
+timeout_s: 300
+seed: 0
+max_error_pct: 1
+slo:
+  ttft_p90_ms: 5000
+  tpot_p90_ms: 200

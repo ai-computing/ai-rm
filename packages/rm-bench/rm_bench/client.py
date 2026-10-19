@@ -52,7 +52,7 @@ def make_prompt(num_tokens: int) -> str:
 
 
 def stream_chat(url: str, model: str, prompt_tokens: int, max_tokens: int, timeout_s: float,
-                scheduled_at: float | None = None) -> RequestRecord:
+                scheduled_at: float | None = None, prompt: str | None = None) -> RequestRecord:
     """Send one streaming request; TTFT is the first non-empty content chunk.
 
     TTFT and e2e are measured from `scheduled_at` (a `time.perf_counter()` value) when given, so
@@ -63,7 +63,7 @@ def stream_chat(url: str, model: str, prompt_tokens: int, max_tokens: int, timeo
     """
     payload = {
         "model": model,
-        "messages": [{"role": "user", "content": make_prompt(prompt_tokens)}],
+        "messages": [{"role": "user", "content": prompt or make_prompt(prompt_tokens)}],
         "max_tokens": max(1, int(max_tokens)),
         "stream": True,
         "stream_options": {"include_usage": True},
@@ -114,7 +114,7 @@ def stream_chat(url: str, model: str, prompt_tokens: int, max_tokens: int, timeo
 
 
 def complete(url: str, model: str, prompt_tokens: int, max_tokens: int, timeout_s: float,
-             scheduled_at: float | None = None) -> RequestRecord:
+             scheduled_at: float | None = None, prompt: str | None = None) -> RequestRecord:
     """Send one non-streaming /v1/completions request.
 
     Without a stream the client cannot see the first token. When the response carries the
@@ -123,7 +123,7 @@ def complete(url: str, model: str, prompt_tokens: int, max_tokens: int, timeout_
     (e2e - wall_ms) + ttft_ms. Otherwise TTFT is e2e, an upper bound. Output tokens come from
     `usage.completion_tokens`; TPOT = (e2e - ttft) / (out_tokens - 1).
     """
-    payload = {"model": model, "prompt": make_prompt(prompt_tokens),
+    payload = {"model": model, "prompt": prompt or make_prompt(prompt_tokens),
                "max_tokens": max(1, int(max_tokens)), "stream": False}
     t0 = time.perf_counter() if scheduled_at is None else scheduled_at
     obj = None

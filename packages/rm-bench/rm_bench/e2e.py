@@ -12,7 +12,7 @@ from rm_core import Measurement
 from rm_core.errors import ContractError
 from rm_core.workload import SLO_KEYS
 
-from . import client
+from . import client, traces
 from .results import RequestRecord, make_tags, percentile, summarize
 from .scenario import API_KINDS, Scenario
 
@@ -102,19 +102,26 @@ def run(scenario: Scenario, gateway: str, model: str | None = None, *,
     t0 = time.perf_counter()
     stop_at = t0 + scenario.duration_s
 
-    def one(offset: float, prompt_tokens: int, max_tokens: int) -> RequestRecord:
+    from_trace = scenario.requests.get("source", "synthetic") == "trace"
+    block_tokens = int((scenario.requests.get("trace") or {}).get("block_tokens", 512))
+
+    def one(index: int, offset: float, prompt_tokens: int, max_tokens: int, blocks=None) -> RequestRecord:
         # Still queued when the run's time is up: count it as a failed (unserved) request.
         if time.perf_counter() >= stop_at:
             return RequestRecord(ok=False, e2e_ms=(time.perf_counter() - t0 - offset) * 1000.0)
-        return send(url, model, prompt_tokens, max_tokens, scenario.timeout_s, scheduled_at=t0 + offset)
+        # Trace prompts must not share a prefix by accident; Mooncake ones share it where the trace did.
+        prompt = (traces.prompt_for(prompt_tokens, blocks=blocks, block_tokens=block_tokens, salt=index)
+                  if from_trace else None)
+        return send(url, model, prompt_tokens, max_tokens, scenario.timeout_s, scheduled_at=t0 + offset,
+                    prompt=prompt)
 
     with ThreadPoolExecutor(max_workers=scenario.concurrency) as pool:
         futures = []
-        for offset, prompt_tokens, max_tokens in schedule:
+        for index, (offset, prompt_tokens, max_tokens, *blocks) in enumerate(schedule):
             delay = offset - (time.perf_counter() - t0)
             if delay > 0:
                 time.sleep(delay)
-            futures.append(pool.submit(one, offset, prompt_tokens, max_tokens))
+            futures.append(pool.submit(one, index, offset, prompt_tokens, max_tokens, *blocks))
         records = [f.result() for f in futures]
     wall_s = time.perf_counter() - t0
 

@@ -1,0 +1,19 @@
+# Real trace replay: azure-conv. Fetch first: rm-bench traces fetch
+# Inspect: rm-bench traces stats trace-azure-conv [--max-total-tokens N --no-filter]
+# Run:     rm-bench e2e --scenario trace-azure-conv --gateway URL [--speedup X] [--max-total-tokens N]
+name: trace-azure-conv
+description: real arrival times and lengths from the azure-conv trace
+requests:
+  source: trace
+  trace:
+    path: ${RM_BENCH_TRACES}/azure-2023/AzureLLMInferenceTrace_conv.csv
+    speedup: 1
+    policy: skip
+concurrency: 64
+duration_s: 600
+timeout_s: 300
+seed: 0
+max_error_pct: 1
+slo:
+  ttft_p90_ms: 5000
+  tpot_p90_ms: 200
