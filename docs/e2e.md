@@ -34,6 +34,34 @@ deployment, so the user-visible latency is dominated by waiting, not by the pref
 A single request answers "The three primary colors are" with " red, blue, and yellow. …" (TTFT 1.7 s
 cold, TPOT 15.8 ms).
 
+## Real traces
+
+rm-bench replays public production traces with their real arrival times and lengths
+(`rm-bench traces fetch`, data kept out of the repositories; see the rm-bench README).
+
+| Trace (whole) | Requests | Mean / 60 s peak rps | Prompt p50 / p90 | Output p50 | Prefix-block reuse | Fits S=512 |
+|---|---|---|---|---|---|---|
+| Azure 2023 conversation | 19,366 / 1 h | 5.5 / 8.5 | 1041 / 2221 | 217 | — | 32 % |
+| Azure 2023 code | 8,819 / 1 h | 2.6 / 10.5 | 1425 / 5479 | 13 | — | 22 % |
+| BurstGPT (without fails, 1) | 1.4 M / 61 days | 0.27 / 18.3 | 472 / 1360 | 362 | — | 62 % |
+| Mooncake conversation | 12,031 / 1 h | 3.4 / 4.1 | 8039 / 30220 | 364 | 28 % | 0 % |
+| Mooncake tool-agent | 23,608 / 1 h | 6.7 / 7.8 | 6402 / 18998 | 30 | 49 % | 0 % |
+
+The RNGD PD graph compiled for S=512 serves a quarter to a third of real chat traffic and none of the
+long-context Mooncake requests; real-length evaluation needs larger compiled sequence lengths.
+
+**Azure conversation replay on the PD path** (first 120 s of the trace, requests with input+output ≤ 511
+kept (33 %), time stretched 5× to match one PD pair: 152 requests over 600 s, mean 0.25 rps, peak 0.33):
+
+| View | TTFT p90 | TPOT p90 | Throughput | KV transfer p90 | Result |
+|---|---|---|---|---|---|
+| Client (rm-bench, through llm-d) | 188 ms | 78.9 ms | 34.0 tok/s | — | SLO PASS, 0 errors, 97.4 % of requests within SLO |
+| Server (PD gateway `airm_*`) | 179 ms (window max 1535 ms) | 17.3 ms | — | 111 ms | — |
+
+At this rate TTFT seen by the client matches the server's, but client TPOT is 4–5× the server's: when
+real arrivals overlap, a request waits for the single decode instance, which the server-side per-token
+figure does not show. Bursts push the server's TTFT p90 up to 1.5 s within the run.
+
 ## Found and fixed during the run
 
 | Layer | Finding | Fix |
