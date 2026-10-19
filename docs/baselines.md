@@ -19,7 +19,7 @@ engine generation, not a performance claim for the hardware.
 | W7 | **2 cards:** replication (two single-card `solo` instances) beats PD 1P+1D on goodput per card: Azure conversation at 1.52 req/s with 100 % SLO attainment (0.75 req/s per card) where 1P+1D reached 87.7 %; 1P+1D gives the most tokens per joule (1.17 tok/J against 0.76). **3 cards:** the calibrated `optimal` layout, PD 1P+2D, met the SLO for every request on both traces, like `solo` ×3, at 1.2× its tokens per joule; the shipped-profile choice 2P+1D reached 93.6 % and 77.5 %. **RNGD prefill → ATOM decode cannot meet a 100 ms TPOT SLO**: the ATOM decode graph takes 108 ms per token. |
 | W6 | The profile table was off by 2× and more: RNGD prefill of a 400-token prompt takes 100 ms, not the 220 ms the old derived numbers gave, RNGD decode on the batched graph is 30 ms per token at any batch (not 17–24), ATOM decode is 108 ms on one card (not 40–52 on two). `profiles.yaml` now carries the measured values; `optimal` changes its choice from 2P+1D to 1P+2D, and 1P+2D did better on the cluster (100 % against 93.6 % and 77.5 %). |
 | W7 vendor | **furiosa-llm 2026.3.0 aggregated** (one card per replica, FuriosaAI's pre-compiled Llama-3.1-8B) met the SLO for every request on both traces with 2 and 3 cards. It tied `solo` on goodput per card (offered-load bound) and on tokens per joule (0.74 against 0.76), with TPOT p90 17–19 ms against rngd-pd's 30–69 ms. **furiosa-llm has no PD mode** (no disaggregation option, no KV-transfer code, and FuriosaAI's llm-d guide lists it as unsupported), so there is no vendor PD row. |
-| W5 rebalancer | `rm-controller --rebalance --apply` on the gateway's `airm_*` gauges moved P:D three times in an hour, each time toward the role under pressure (generations 5–7). Moving a card to decode for conversation ×2 raised attainment from ~10 % to 85 %. Moving one to prefill for code ×3 lowered it from 63–68 % to 45 %, because the rule does not model what the donor role loses. |
+| W5 rebalancer | `rm-controller --rebalance --apply` on the gateway's `airm_*` gauges moved P:D three times in an hour, each time toward the role under pressure (generations 5–7). Moving a card to decode for conversation ×2 raised attainment from ~10 % to 85 %. Moving one to prefill for code ×3 lowered it from 63–68 % to 45 %, because the rule does not model what the donor role loses. The predictive rule (both roles predicted after a move) made only the conversation move in a 50-minute live re-check and held 1P+2D through code ×3: 77–81 % there. |
 | Found | rngd-pd's gateway `airm_tpot_p90_ms` was the engine step and did not see decode queueing ([rngd-pd#7](https://github.com/ai-computing/rngd-pd/pull/7)). rm-bench's trace prompts shared prefixes by accident (72 distinct texts), which a prefix cache exploits (fixed here). rngd-pd addressed an allocated card by its host index (`npu3` → `rngd:3`, out of range): fixed in [rngd-pd#5](https://github.com/ai-computing/rngd-pd/pull/5). The continuous decode worker stops serving for good once more than 8 requests wait with `PD_PREFETCH=1`: [rngd-pd#4](https://github.com/ai-computing/rngd-pd/issues/4). A process outside Kubernetes held one RNGD card, so a pod allocated that card failed with `EBUSY`. |
 
 ## Setup
@@ -116,14 +116,86 @@ turning over), and the new pods were serving about two minutes after the patch. 
   current pressure, linearly (decode at 0.66 on two cards → 1.3 on one); on one card it measured 3.1–3.8. With short
   answers every decode admission loads 67 MB of KV inside the device lock (`PD_PREFETCH=0`), so one decode card
   that admits all of code ×3's requests saturates far sooner than linear. Both roles then read over 1, and the rule,
-  comparing linear needs, keeps 2:1. The rebalancer needs a donor model (the profiles' per-instance capacity, or the
-  admission cost) and should check a move against the attainment it measures afterwards; recorded for W5.
+  comparing linear needs, keeps 2:1. Fixed by [the predictive rule](#the-predictive-rule): it predicts the donor role
+  too and holds here.
 - **Found: the gateway's TPOT gauge did not see decode queueing.** `airm_tpot_p90_ms` was the decode worker's
   median graph step (~30 ms), flat while requests queued for a lane: in the first conversation phase the client
   TPOT p90 was 1,089 ms and the gauge 30 ms, so the decode pressure read 0.3 and nothing moved. Fixed in
   [rngd-pd#7](https://github.com/ai-computing/rngd-pd/pull/7) (the gauge is now (wall − TTFT) / (tokens − 1) per request,
   what a client sees); the conversation and later phases above ran with it. Also fixed here: an unreadable metrics
   source (the gateway not up yet) no longer fails the controller's round, and each round logs its signals.
+
+### The predictive rule
+
+Fix ([`predict.py`](../packages/rm-controller/rm_controller/predict.py), PR `rebalance-predict`): before a move the
+rebalancer predicts both roles' pressure at every split of the budget with `optimal`'s queueing model and the calibrated
+profiles, and moves only if the predicted worst-role pressure drops by `margin` (20 %); otherwise it holds and logs why.
+The model adds what the code ×3 move ran into: with `shm` (`admit_blocking` in the profiles) each decode admission stalls
+the decode loop for the 67 MB KV load (42 ms at 1.6 GB/s), the lane wait counts in TPOT, and decode is fed what prefill
+passes, so a second prefill card lets more of a burst through to the single decode card. The rate is fitted on the current
+split: the rate at which the model reproduces an over-SLO role's reading is the pool's effective arrival rate (code ×3's
+mean is 1.9 req/s, but 24 requests arrive in its busiest second), and a calm role's reading caps the rate it is predicted
+at. The arrival rate and mean lengths from the metrics, or the workload's trace, are only the fallback. Hysteresis is unchanged.
+
+On the signals of the run above (no `workload` in the spec, as live):
+
+| Round (live run above) | Split | Pressure P / D | Linear rule | Predictive rule |
+|---|---|--:|---|---|
+| 16:29, code ×3 | 1P+2D | 2.44 / 0.66 | 2:1 (decode on one card estimated at 1.3; measured 3.1–3.8) | **hold**: 2:1 predicted P 0.12, D ∞ (decode saturates) |
+| 16:13, conversation ×2 | 2P+1D | 0.16 / 5.57 | 1:2 | **1:2**: predicted P 0.13, D 0.33 |
+| conversation ×2 after the move | 1P+2D | 0.22 / 1.31 | 1:2 (hold) | hold: 2:1 predicted D ∞ |
+| 16:35, code ×3 | 2P+1D | 2.2 / 3.46 | 2:1 (hold) | hold: 1:2 predicted P ∞ (the prefill fit reads the burst-driven TTFT as near-saturation) |
+
+The same decisions come out with the trace mixes of either load, the replay windows' mixes or the default mix.
+
+**Simulated replay** (`python -m rm_controller.sim --episode`, [`episode.py`](../packages/rm-controller/rm_controller/episode.py)):
+3 RNGD, Azure 2023 arrival times of the replayed windows (code ×3: 579 requests in 300 s, busiest second 24; conversation
+×2: 698), three 300 s replays per phase, the rebalancer every 60 s on simulated gateway gauges with the live hysteresis,
+pods ready two minutes after a move and in-flight work on a moved card lost. On top of the profiles it models rm-bench's 64
+open requests, the in-loop KV load, prefill pods reached at random through a Service, and prefill under load at 1.5× the
+idle profile (the idle profile replays code ×3 to a TTFT p90 of 1.2 s; live it was 5.0–5.8 s). SLO attainment per phase:
+
+| Run | code ×3 | conversation ×2 | code ×3 | conversation ×2 | Moves |
+|---|--:|--:|--:|--:|--:|
+| fixed 1P+2D | 77.9 % | 99.1 % | 77.9 % | 99.1 % | – |
+| fixed 2P+1D | 68.6 % | 3.0 % | 67.2 % | 3.0 % | – |
+| linear rule from 1P+2D (as live) | 74.4 % | 56.3 % | 75.8 % | 56.3 % | 8 |
+| **predictive rule from 1P+2D** | **77.9 %** | **99.1 %** | **77.9 %** | **99.1 %** | 0 |
+
+| Run | conversation ×2 | code ×3 | conversation ×2 | code ×3 | Moves |
+|---|--:|--:|--:|--:|--:|
+| linear rule from 2P+1D | 68.7 % | 75.6 % | 56.3 % | 75.5 % | 7 |
+| **predictive rule from 2P+1D** | **68.7 %** | **77.9 %** | **99.1 %** | **77.9 %** | 1 (2:1 → 1:2 at 180 s) |
+
+The linear rule makes the code move (1:2 → 2:1 four minutes into each code phase), sees decode go over and moves back, so it
+also enters every conversation phase on the wrong split. The predictive rule makes the conversation move at the same
+round as the linear one and no code move. Sensitivity to the prefill factor: at 1.0 code's TTFT stays under the SLO, neither
+rule moves on code, both make the conversation move; at 2.0 the replay makes 2P+1D the better split for code (71.9 % against
+50.6 %), which the live run contradicts, and the predictive rule still holds 1P+2D there (it misses that move; the linear
+rule's oscillation gets 57.5 %). Without the CSVs (60 s on/off bursts only) both rules make only the conversation move.
+
+**Live re-check** (2026-10-19 17:37–18:30 UTC, same node, cards, Deployments, gateway build with rngd-pd#7, `PD_PREFETCH=0`
+and load as the run above; controller at `adce9db`; started on 2P+1D, conversation first):
+
+| Run | Load | Split | SLO attainment | TTFT p90 | TPOT p90 | Run above, same load and split |
+|--:|---|---|--:|--:|--:|---|
+| 1 | conversation ×2 | 2P+1D → 1P+2D (move at 17:43) | 8.2 % | 50.5 s | 544 ms | 10.7 % (move during the run) |
+| 2 | conversation ×2 | 1P+2D (pods ready 17:45) | 76.4 % | 456 ms | 150 ms | |
+| 3 | conversation ×2 | 1P+2D | 80.4 % | 487 ms | 147 ms | 85.1 %, 85.5 % |
+| 4–6 | code ×3 | 1P+2D, held | 79.3 %, 78.4 %, 78.1 % | 5.2–5.3 s | 68–70 ms | 62.9 %, 68.4 % on 1P+2D; 44.8 %, 45.5 % after the move to 2P+1D |
+| 7–8 | conversation ×2 | 1P+2D, held | 80.7 %, 84.8 % | 454 ms, 445 ms | 149 ms, 136 ms | 85.1 %, 85.5 % |
+| 9–10 | code ×3 | 1P+2D, held | 80.9 %, 77.2 % | 5.0 s, 5.6 s | 70 ms | as runs 4–6 |
+
+- **One move in 50 minutes, the right one**: 2:1 → 1:2 at the fourth round of the first conversation phase (decode
+  pressure 5.33, predicted 1:2 P 0.13 D 0.33). Through both code ×3 phases it held 1P+2D at every round (P 2.4–2.7,
+  D 0.69: "no split predicted better than now", 2:1 predicted with decode saturated).
+- **Code ×3 attainment 77–81 %** on every run, against 63–68 % on the same split and 40–45 % after the linear rule's move
+  in the run above. The split is the same as the run above's first code phase, so part of that difference is run to run
+  (the earlier run had just come from a conversation phase with pods freshly patched); the 45 % level is what the predictive
+  rule avoided.
+- **Conversation ×2 on 1P+2D: 76–85 %**, as before (85 %). TTFT on code ×3 stays at 5 s, over the 2 s SLO: with three cards
+  no split serves code ×3 within the SLO, and moving a card to prefill makes it worse.
+- Not exercised live: a code move the model would predict to help (none exists on three cards for these loads).
 
 ## W7: same-budget baselines
 
@@ -339,6 +411,7 @@ were rerun with the calibrated profiles.
 | `airm-exp-flm-probe`, `airm-exp-cleanup` (Pods) | read the furiosa-llm CLI and package; remove the cache | deleted |
 | `llm-serving/airm-e2e` (rebalancer run) | gateway scaled to 1 with `PD_PREFETCH=0` and, for the second half, this run's rngd-pd checkout with rngd-pd#7 mounted at `/app`; prefill/decode replicas, affinity, `accelerator-ids` and generation annotation patched by `--apply` (generations 4–7); pods restarted once | all scaled to 0; gateway mount and `PD_PREFETCH=1` restored; annotations back to generation 3's cards |
 | `llm-serving/airm-placement` | generations 4–7 written by the rebalancer | generation 3 document restored byte for byte |
+| `llm-serving/airm-e2e`, `airm-placement` (predictive rule re-check, 17:37–18:30 UTC) | as the rebalancer run: gateway scaled to 1 with `PD_PREFETCH=0` and the rngd-pd#7 checkout at `/app`; generation 4 (2P+1D) then 5 (1P+2D) by `--apply` | Deployments and ConfigMap replaced with the saved objects (all at 0 replicas, generation 3 document byte for byte) |
 | `airm-exp-nixl-check` (Pod) | 2 RNGD + 1 ATOM for the `nixl` transport check (rngd-pd#8) | deleted |
 
 No other Deployment or EPP was touched. Raw results (`results/` is not tracked in this repository) stay with the
@@ -364,6 +437,8 @@ rm-bench e2e --scenario <conversation scenario> --api completions-stream --gatew
 # W5 rebalancer: loop with --apply, then alternate the mix through the rngd-pd gateway
 rm-controller --spec packages/rm-controller/examples/rebalance-gateway.yaml --rebalance --apply --interval 60
 rm-bench e2e --scenario <code scenario> --api completions --speedup 3 ...    # then conversation at --speedup 2
+
+python -m rm_controller.sim --episode     # the same episode replayed, linear vs predictive rule
 
 # W6: sim against the runs, and the README tables
 python -m rm_controller.sim --compare --requests 4000
