@@ -69,7 +69,7 @@ python -m pytest -q packages/rm-bench/tests   # fake OpenAI-compatible server, n
 ## 🎯 End-to-end scenarios
 
 ```bash
-rm-bench e2e --scenario pd-smoke [--gateway URL] [--model M] [--out results/<run>.json] [--kv-transport NAME] [--api chat|completions]
+rm-bench e2e --scenario pd-smoke [--gateway URL] [--model M] [--out results/<run>.json] [--kv-transport NAME] [--api chat|completions|completions-stream]
          [--deployment LABEL] [--cards N] [--power prom|cmd|none ...]
 ```
 
@@ -100,6 +100,9 @@ rm-bench e2e --scenario pd-smoke [--gateway URL] [--model M] [--out results/<run
   stream the first token is not visible: when the response carries server timing (`pd.ttft_ms`, `pd.wall_ms`, as rngd-pd's
   gateway sends), TTFT = (e2e − wall_ms) + ttft_ms; otherwise TTFT = e2e (an upper bound). A `--gateway` URL ending in
   `/completions` is used as given (for routes that rewrite their own prefix to `/v1`).
+- **`--api completions-stream`** sends the same prompt text as `--api completions` (no chat template) with `stream: true`
+  and times the SSE chunks like streaming chat, so TTFT is the client's first token. For servers that stream completions
+  (vLLM, furiosa-llm).
 - `--model` defaults to the scenario's `model`, else the first model at the gateway's `/v1/models`. `LLMD_API_KEY` is sent
   when set.
 - The `loadgen/` tools keep their own definitions (TPOT per output chunk, tokens = chunks), so on servers that send several

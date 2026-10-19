@@ -2,8 +2,8 @@
 
 [문서](README.md) · [English](../baselines.md) · [end-to-end 실행](e2e.md) · [로드맵](roadmap.md)
 
-로드맵 W5(컨트롤러가 서빙 파드를 배치하고 옮김), W6(`optimal` 정책의 측정 프로파일), W7(에너지를 포함한 같은 예산 기준선)의
-실제 증빙입니다. 2026-10-19, RNGD와 ATOM 카드를 함께 가진 노드에서 실행했습니다(시작 시 RNGD 3장·ATOM 4장이 비어 있었고, RNGD가
+로드맵 W5(컨트롤러가 서빙 파드를 배치하고 옮김, P:D 재조정기), W6(`optimal` 정책의 측정 프로파일), W7(벤더 엔진을 포함해 에너지까지 잰
+같은 예산 기준선)의 실제 증빙입니다. 2026-10-19, RNGD와 ATOM 카드를 함께 가진 노드에서 실행했습니다(시작 시 RNGD 3장·ATOM 4장이 비어 있었고, RNGD가
 있는 다른 노드는 cordon 상태).
 
 **범위.** Llama-3.1-8B-Instruct, 현재 rngd-pd가 컴파일한 그래프(S=512), 노드 하나, KV는 `shm`. 실제 트레이스 두 개를 S=512가 처리할
@@ -17,7 +17,9 @@
 | W5 | `rm-controller` `optimal`이 `airm-placement`를 쓰고 `--apply`가 rngd-pd Deployment를 그에 맞췄습니다. 두 번 했습니다(기존 프로파일로 prefill 2 / decode 1 RNGD, 보정한 프로파일로 prefill 1 / decode 2). 파드는 결정한 노드에 결정한 카드 수로 떴고, llm-d 게이트웨이를 거친 `pd-smoke`가 32/32 통과했습니다. 파드가 어느 카드를 받는지는 결정이 아니라 device plugin이 정합니다. |
 | W7 | **카드 2장:** 복제(카드 한 장짜리 `solo` 인스턴스 2개)가 카드당 goodput에서 PD 1P+1D를 이깁니다. Azure 대화 1.52 req/s에서 SLO 달성 100 %(카드당 0.75 req/s), 1P+1D는 87.7 %. 줄당 토큰(tok/J)은 1P+1D가 가장 높습니다(1.17 대 0.76). **카드 3장:** 보정한 `optimal` 배치 PD 1P+2D가 두 트레이스 모두 모든 요청에서 SLO를 지켰고(`solo` ×3과 같음) tok/J는 그 1.2배입니다. 기존 프로파일의 선택 2P+1D는 93.6 %와 77.5 %. **RNGD prefill → ATOM decode는 TPOT SLO 100 ms를 지킬 수 없습니다**: ATOM decode 그래프가 토큰당 108 ms입니다. |
 | W6 | 프로파일 표가 2배 이상 틀렸습니다. 400 토큰 프롬프트의 RNGD prefill은 예전 유도값의 220 ms가 아니라 100 ms, batch 그래프의 RNGD decode는 batch와 무관하게 토큰당 30 ms(17–24 아님), ATOM decode는 카드 한 장에서 108 ms(두 장에서 40–52 아님). `profiles.yaml`을 측정값으로 바꾸자 `optimal`의 선택이 2P+1D에서 1P+2D로 바뀌었고, 클러스터에서도 1P+2D가 더 좋았습니다(100 % 대 93.6 %, 77.5 %). |
-| 발견 | rngd-pd가 할당받은 카드를 호스트 번호로 불렀습니다(`npu3` → `rngd:3`, 범위 밖): [rngd-pd#5](https://github.com/ai-computing/rngd-pd/pull/5)에서 고침. `PD_PREFETCH=1`에서 continuous decode 워커는 대기 요청이 8개를 넘으면 영영 멈춥니다: [rngd-pd#4](https://github.com/ai-computing/rngd-pd/issues/4). Kubernetes 밖의 프로세스가 RNGD 카드 하나를 쓰고 있어, 그 카드를 할당받은 파드가 `EBUSY`로 실패했습니다. |
+| W7 벤더 | **furiosa-llm 2026.3.0 집약 서빙**(replica 하나에 카드 한 장, FuriosaAI가 미리 컴파일한 Llama-3.1-8B)이 카드 2장과 3장 모두 두 트레이스의 모든 요청에서 SLO를 지켰습니다. 카드당 goodput(제공 부하에 묶임)과 tok/J(0.74 대 0.76)는 `solo`와 같고, TPOT p90은 17–19 ms로 rngd-pd의 30–69 ms보다 낮습니다. **furiosa-llm에는 PD 모드가 없습니다**(disaggregation 옵션도, KV 전송 코드도 없고 FuriosaAI llm-d 가이드도 미지원으로 적음). 그래서 벤더 PD 행은 없습니다. |
+| W5 재조정기 | 게이트웨이 `airm_*` 지표를 읽는 `rm-controller --rebalance --apply`가 한 시간에 P:D를 세 번 바꿨고, 매번 부하가 걸린 역할 쪽이었습니다(generation 5–7). 대화 ×2에서 decode로 카드를 옮기자 달성률이 약 10 %에서 85 %로 올랐습니다. 코드 ×3에서 prefill로 옮기자 63–68 %에서 45 %로 내려갔습니다. 규칙이 카드를 내준 역할의 손실을 모델링하지 않기 때문입니다. |
+| 발견 | rngd-pd 게이트웨이의 `airm_tpot_p90_ms`는 엔진 step이라 decode 대기를 보지 못했습니다([rngd-pd#7](https://github.com/ai-computing/rngd-pd/pull/7)). rm-bench 트레이스 프롬프트는 우연히 prefix를 공유했고(서로 다른 문장 72개), prefix cache가 이를 이용했습니다(여기서 고침). rngd-pd가 할당받은 카드를 호스트 번호로 불렀습니다(`npu3` → `rngd:3`, 범위 밖): [rngd-pd#5](https://github.com/ai-computing/rngd-pd/pull/5)에서 고침. `PD_PREFETCH=1`에서 continuous decode 워커는 대기 요청이 8개를 넘으면 영영 멈춥니다: [rngd-pd#4](https://github.com/ai-computing/rngd-pd/issues/4). Kubernetes 밖의 프로세스가 RNGD 카드 하나를 쓰고 있어, 그 카드를 할당받은 파드가 `EBUSY`로 실패했습니다. |
 
 ## 구성
 
@@ -28,6 +30,7 @@
 | RNGD decode | `--backend rngd --B 8 --group 8 --sched continuous`(continuous batching, lane 8개) |
 | ATOM decode | `--backend atom --B 4 --sched continuous`, artifact `decode_S512_B4_lm`(S=512로 컴파일된 최대 batch), 카드 한 장 |
 | `solo` | `--role solo --C 512 --group 2 --decode-group 8 --B 8 --sched continuous`: 한 카드에서 prefill과 continuous decode. chart에 `solo` 역할이 없어 같은 이미지·마운트로 최소 Deployment(`airm-exp-solo`)를 만들고, replica N개를 targets 파일(`{model: {solo: <service>}}`)을 쓴 rngd-pd 게이트웨이 하나 뒤에 두었습니다. Service가 요청을 replica에 나눕니다 |
+| furiosa-llm | `furiosaai/furiosa-llm:2026.3.0`, `serve furiosa-ai/Llama-3.1-8B-Instruct`(미리 컴파일된 artifact, 태그 `v2026.3`), replica 하나에 카드 한 장, Service 하나 뒤에 replica N개(`airm-exp-flm`), 서빙 기본값. 클라이언트 `--api completions-stream` |
 | KV | `shm`(`/dev/shm` 경유), 보고한 모든 실행은 `PD_PREFETCH=0`([prefetch 실패](#prefetch를-켜면-부하에서-무너짐) 참고) |
 | 부하 | rm-bench `e2e --api completions`, Azure 2023 트레이스를 처음부터 재생, 입력+출력 ≤ 511 토큰 요청만 유지(`--max-total-tokens 511`, skip 정책, `trace-*` 시나리오와 같음), 300초 일정, 동시성 64, timeout 300초 |
 | 도착률 | 대화는 트레이스 속도(×1: 요청 455개, 1.52 req/s)와 그 절반(×0.5: 212개, 0.71 req/s), 코드는 트레이스 속도(×1: 222개, 0.74 req/s, 1초 안에 10 req/s 넘는 burst) |
@@ -68,6 +71,53 @@ replicas 2와 1, 필수 node affinity(RNGD 레이블, 노드 hostname), `acceler
 보정([W6](#보정-w6)) 후 같은 spec은 prefill 1 / decode 2를 골랐고(generation 3, `est. 1.52 req/s`), `--apply`가 prefill을 1, decode를
 2로 맞췄습니다. 이 배치의 실행은 아래 표의 `PD 1P+2D`입니다.
 
+## W5: P:D 재조정기, 실제 실행
+
+`rm-controller --rebalance --apply`를 루프로 돌렸습니다(60초 라운드, hysteresis 기본값: band 0.2, hold 3, cooldown 300초).
+대상은 `airm-e2e` rngd-pd Deployment, 예산은 RNGD 카드 3장, SLO는 TTFT p90 ≤ 2초·TPOT p90 ≤ 100 ms입니다. 입력은 rngd-pd
+게이트웨이의 `airm_ttft_p90_ms` / `airm_tpot_p90_ms`(vLLM 히스토그램이 없을 때 쓰는 대체 경로, 최근 요청 512개)입니다. spec:
+[`examples/rebalance-gateway.yaml`](../../packages/rm-controller/examples/rebalance-gateway.yaml). 부하는 Azure 코드 ×3(prefill
+위주: 1.9 req/s, 출력 p50 14 토큰)과 Azure 대화 ×2(decode 위주: 2.3 req/s, 출력 약 119 토큰)를 번갈아 걸었고, 300초 재생을 이어
+붙였습니다(`--api completions`, `PD_PREFETCH=0`). 두 도착률 모두 어떤 분할이든 카드 3장이 SLO 안에서 처리할 수 있는 양을 넘으므로,
+역할마다 차례로 부하가 걸립니다.
+
+| 시각 (UTC) | 부하 | 게이트웨이 TTFT / TPOT p90 | 압력 P / D | 결정 |
+|---|---|--:|--:|---|
+| 15:43 | 1P+2D(generation 4)에서 코드 ×3 시작 | 1,590 → 5,372 ms / 47 ms | 2.69 / 0.47 | 목표 2:1, 3 라운드 유지 |
+| 15:51 | | 5,769 ms / 47 ms | 2.88 / 0.47 | **generation 5: P:D 1:2 → 2:1**, Deployment 두 개 patch |
+| 16:09 | 2P+1D에서 대화 ×2 시작 | 815 ms / 159 → 557 ms | 0.25 / 5.57 | 목표 1:2, 3 라운드 유지 |
+| 16:13 | | 326 ms / 557 ms | 0.25 / 5.57 | **generation 6: P:D 2:1 → 1:2** |
+| 16:25 | 1P+2D에서 코드 ×3 시작 | 2,715 → 4,879 ms / 66 ms | 2.44 / 0.66 | 목표 2:1, 3 라운드 유지 |
+| 16:29 | | 4,879 ms / 66 ms | 2.44 / 0.66 | **generation 7: P:D 1:2 → 2:1** |
+| 16:31–16:40 | 2P+1D에서 코드 ×3 | 4,055–4,800 ms / 314–378 ms | 2.0–2.4 / 3.1–3.8 | 목표 2:1(두 역할 모두 1 초과, 2:1의 최악 need가 더 낮음), 변화 없음 |
+
+변경은 부하가 바뀐 뒤 3.5–8분 안에 일어났습니다(라운드 세 번 일치, 요청 512개 창이 바뀌는 시간). 새 파드는 patch 약 2분 뒤부터
+서빙했습니다. 300초 재생별 클라이언트 관점(rm-bench, 같은 SLO. 실행 중 분할이 바뀌면 없어지는 파드의 처리 중 요청을 잃습니다):
+
+| 부하 | 분할 | SLO 달성률 | TTFT p90 | TPOT p90 | Goodput req/s |
+|---|---|--:|--:|--:|--:|
+| 대화 ×2 | 2P+1D(이동 없음: 지표가 못 봄, 아래 참고) | 7.7 % | 50.3초 | 1,089 ms | 0.17 |
+| 대화 ×2 | 실행 중 2P+1D → 1P+2D | 10.7 % | 42.8초 | 525 ms | 0.25 |
+| 대화 ×2 | **1P+2D** | **85.1 %, 85.5 %** | 447 ms, 440 ms | 128 ms, 134 ms | **1.95, 1.96** |
+| 코드 ×3 | **1P+2D**(이동 전) | **62.9 %, 68.4 %** | 5.8초, 5.0초 | 69 ms, 67 ms | **1.22, 1.32** |
+| 코드 ×3 | 실행 중 1P+2D → 2P+1D | 40.0 %, 41.2 % | 5.4초, 4.2초 | 337 ms, 366 ms | 0.77, 0.79 |
+| 코드 ×3 | 2P+1D(이동 후) | 44.8 %, 45.5 % | 4.5초, 4.6초 | 334 ms, 336 ms | 0.86, 0.87 |
+
+- **분할이 부하 구성을 따라갑니다.** 기본 hysteresis로 한 시간에 세 번, 매번 부하가 걸린 역할 쪽으로 바뀌었고(generation 5, 6, 7),
+  한 구간 안에서는 오가지 않았습니다.
+- **대화: 옳은 이동.** decode로 카드를 옮기자 같은 제공 부하에서 달성률이 약 10 %에서 85 %로, goodput이 0.2에서 1.95 req/s로 올랐습니다.
+- **코드: 틀린 이동.** decode 카드를 prefill로 가져가자 TTFT p90은 약 15 % 줄었지만 TPOT p90은 다섯 배(67 → 335 ms)가 되었고,
+  달성률은 63–68 %에서 45 %로 떨어졌습니다. 규칙은 카드를 내주는 역할을 지금 압력에서 선형으로 예측합니다(카드 2장에서 0.66인 decode
+  → 1장이면 1.3). 실제로 1장에서는 3.1–3.8이었습니다. 답이 짧으면 decode admission마다 67 MB KV를 device lock 안에서 읽으므로
+  (`PD_PREFETCH=0`), 코드 ×3의 요청을 모두 받는 decode 카드 한 장은 선형보다 훨씬 빨리 포화됩니다. 그러면 두 역할 모두 1을 넘고,
+  선형 need를 비교하는 규칙은 2:1을 유지합니다. 재조정기에는 카드를 내주는 쪽의 모델(프로파일의 인스턴스당 처리량이나 admission 비용)이
+  필요하고, 이동 뒤 측정한 달성률로 이동을 검증해야 합니다. W5 항목으로 남깁니다.
+- **발견: 게이트웨이 TPOT 지표가 decode 대기를 보지 못했습니다.** `airm_tpot_p90_ms`는 decode 워커의 그래프 step 중앙값(약 30 ms)이라
+  요청이 lane을 기다리는 동안에도 평평했습니다. 첫 대화 구간에서 클라이언트 TPOT p90은 1,089 ms인데 지표는 30 ms였고, decode
+  압력은 0.3으로 읽혀 아무것도 움직이지 않았습니다. [rngd-pd#7](https://github.com/ai-computing/rngd-pd/pull/7)에서 고쳤고(이제
+  요청마다 (wall − TTFT) / (토큰 − 1), 클라이언트가 보는 값), 위의 대화 구간과 그 뒤는 이것으로 돌렸습니다. 여기서 함께 고친 것: 지표
+  출처를 읽을 수 없을 때(게이트웨이가 아직 안 뜸) 컨트롤러 라운드가 실패하지 않고, 라운드마다 신호를 로그에 남깁니다.
+
 ## W7: 같은 예산 기준선
 
 ### Azure 대화, ×0.5 (요청 212개, 0.71 req/s)
@@ -87,10 +137,12 @@ replicas 2와 1, 필수 node affinity(RNGD 레이블, 노드 hostname), `acceler
 |---|--:|--:|--:|--:|--:|--:|--:|--:|
 | PD 1P+1D RNGD | 2 | 87.7 % | 289 ms | 110.4 ms | 1.32 | 0.66 | 153.7 (168) | **1.17** |
 | 복제: `solo` ×2 RNGD | 2 | **100.0 %** | 186 ms | 32.1 ms | **1.51** | **0.75** | 236.1 (259) | 0.76 |
+| 벤더: furiosa-llm ×2 RNGD (집약) | 2 | **100.0 %** | 102 ms¹ | 18.1 ms¹ | **1.51** | **0.76** | 243.0 (297) | 0.74 |
 | RNGD prefill → ATOM decode | 2 | 0.0 % (455개 중 313개 timeout) | 135,915 ms | 3,390 ms | 0.00 | 0.00 | 92.3 (105) | 0.38 |
 | PD 2P+1D RNGD (optimal, 기존 프로파일) | 3 | 93.6 % | 249 ms | 85.4 ms | 1.41 | 0.47 | 200.7 (221) | **0.89** |
 | PD 1P+2D RNGD (optimal, 보정) | 3 | **100.0 %** | 336 ms | 38.7 ms | **1.51** | **0.50** | 257.7 (286) | **0.70** |
 | 복제: `solo` ×3 RNGD | 3 | 100.0 % | 200 ms | 31.6 ms | 1.51 | 0.50 | 317.0 (372) | 0.57 |
+| 벤더: furiosa-llm ×3 RNGD (집약) | 3 | 100.0 % | 91 ms¹ | 17.2 ms¹ | 1.51 | 0.50 | 319.4 (429) | 0.56 |
 
 ### Azure 코드, ×1 (요청 222개, 0.74 req/s, 짧은 답: p50 14 토큰)
 
@@ -98,12 +150,18 @@ replicas 2와 1, 필수 node affinity(RNGD 레이블, 노드 hostname), `acceler
 |---|--:|--:|--:|--:|--:|--:|--:|--:|
 | PD 1P+1D RNGD | 2 | 84.7 % | 281 ms | 143.4 ms | 0.62 | 0.31 | 98.2 (170) | **0.19** |
 | 복제: `solo` ×2 RNGD | 2 | **99.5 %** | 181 ms | 58.0 ms | **0.73** | **0.37** | 108.4 (208) | 0.17 |
+| 벤더: furiosa-llm ×2 RNGD (집약) | 2 | **100.0 %** | 64 ms¹ | 18.9 ms¹ | **0.74** | **0.37** | 109.6 (201) | 0.17 |
 | RNGD prefill → ATOM decode | 2 | 0.0 % | 239 ms | 4,225 ms | 0.00 | 0.00 | 78.4 (108) | 0.21 |
 | PD 2P+1D RNGD (optimal, 기존 프로파일) | 3 | 77.5 % | 793 ms | 195.6 ms | 0.57 | 0.19 | 138.6 (195) | 0.14 |
 | PD 1P+2D RNGD (optimal, 보정) | 3 | **100.0 %** | 1,675 ms | 69.2 ms | **0.74** | **0.25** | 144.0 (233) | **0.13** |
 | 복제: `solo` ×3 RNGD | 3 | 98.2 % | 185 ms | 47.7 ms | 0.72 | 0.24 | 160.2 (323) | 0.12 |
+| 벤더: furiosa-llm ×3 RNGD (집약) | 3 | 100.0 % | 52 ms¹ | 17.6 ms¹ | 0.74 | 0.25 | 152.8 (242) | 0.12 |
 
 모든 구성이 같은 요청을 처리했습니다(timeout이 없으면 tok/s 열이 0.1 % 안에서 일치).
+
+¹ furiosa-llm은 `--api completions-stream`으로 측정했습니다. TTFT는 클라이언트가 받은 첫 스트림 토큰(대기 포함), TPOT은 그
+뒤의 간격입니다. rngd-pd 행은 `--api completions`(비스트리밍, TTFT는 서버 시간에서 계산하고 decode lane 대기는 TPOT에 들어감)
+이므로 furiosa-llm 쪽이 더 엄격한 측정입니다. 대화 ×0.5 표에는 furiosa-llm 행이 없습니다(실행 안 함).
 
 ### 표가 말하는 것
 
@@ -126,6 +184,38 @@ replicas 2와 1, 필수 node affinity(RNGD 레이블, 노드 hostname), `acceler
   그래프는 batch 4까지 어디서나 토큰당 108 ms라 ATOM 한 장은 초당 약 37 토큰을 decode하는데, 이 실행들은 초당 90–180 토큰을
   요구합니다. 요청이 lane을 기다리며 쌓이고, 대화 ×1에서 455개 중 313개가 클라이언트 timeout 300초에 걸렸습니다. 배치 결과가
   아니라 엔진 한계(그래프 속도와 S=512의 B=4 상한)입니다.
+
+### 벤더 단독 기준선: furiosa-llm (W7)
+
+같은 카드에서 벤더 엔진을 돌렸습니다. 이미지 `furiosaai/furiosa-llm:2026.3.0`(클러스터의 k-exaone, qwen3-4b 배포가 쓰는 것),
+`furiosa-llm serve furiosa-ai/Llama-3.1-8B-Instruct`, FuriosaAI가 Hugging Face에 올린 미리 컴파일된 BF16 artifact(릴리스 태그
+`v2026.3`, 카드 한 장의 PE 8개에 tensor parallel), 서빙 이름은 `meta-llama/Llama-3.1-8B-Instruct`. replica 하나에 카드 한 장
+(`furiosa.ai/rngd: 1`), `solo`처럼 Deployment(`airm-exp-flm`) replica N개를 Service 하나 뒤에 두었고, 나머지는 서빙 기본값(prefix
+caching 켜짐, 기본 bucket)입니다. 트레이스, SLO, 전력 쿼리, 노드는 같고 클라이언트는 `--api completions-stream`입니다.
+
+| | furiosa-llm ×2 | `solo` ×2 | furiosa-llm ×3 | `solo` ×3 | PD 1P+2D |
+|---|--:|--:|--:|--:|--:|
+| 대화 ×1: SLO / TTFT p90 / TPOT p90 | 100 % / 102 / 18.1 | 100 % / 186 / 32.1 | 100 % / 91 / 17.2 | 100 % / 200 / 31.6 | 100 % / 336 / 38.7 |
+| 대화 ×1: W / tok/J | 243 / 0.74 | 236 / 0.76 | 319 / 0.56 | 317 / 0.57 | 258 / 0.70 |
+| 코드 ×1: SLO / TTFT p90 / TPOT p90 | 100 % / 64 / 18.9 | 99.5 % / 181 / 58.0 | 100 % / 52 / 17.6 | 98.2 % / 185 / 47.7 | 100 % / 1,675 / 69.2 |
+| 코드 ×1: W / tok/J | 110 / 0.17 | 108 / 0.17 | 153 / 0.12 | 160 / 0.12 | 144 / 0.13 |
+
+- **이 도착률에서는 SLO를 지키는 2·3장 배치가 모두 제공 부하에 묶입니다.** goodput은 furiosa-llm, `solo`, PD 1P+2D 모두
+  트레이스 속도(1.51, 0.74 req/s)라 카드당 goodput이 같습니다. 벤더 엔진이 앞서는 것은 이 goodput이 아니라 지연입니다.
+  TPOT p90 17–19 ms(rngd-pd 그래프는 30–69 ms), 클라이언트에서 잰 TTFT p90 52–102 ms(rngd-pd는 서버 기준 181–336 ms,
+  코드의 PD 1P+2D는 1,675 ms).
+- **에너지는 `solo`와 같습니다**(카드 2장 0.74 대 0.76 tok/J, 3장 0.56 대 0.57). 둘 다 요청 전체를 한 카드가 처리해 모든
+  카드가 바쁩니다. 카드 2장의 최고 에너지 효율은 여전히 PD 1P+1D의 1.17 tok/J입니다(달성률 87.7 %).
+- **furiosa-llm PD는 없으므로 벤더 PD 행도 없습니다.** 2026.3.0 `serve` CLI에는 disaggregation, KV 전송, 역할 옵션이 없고
+  (`furiosa-llm serve --help`), 설치된 패키지(`furiosa_llm`, `furiosa-llm-native`, `furiosa-native-llm-common`)에도
+  disaggregation, NIXL, KV connector 코드가 없습니다. FuriosaAI의 llm-d 가이드("Deploying Furiosa-LLM with llm-d")는
+  Furiosa-LLM이 prefill/decode disaggregation을 지원하지 않는다고 적고, values는 decode 파드만 띄웁니다(`prefill.create:
+  false`, intelligent inference scheduling 경로). 벤더 단독 PD 기준선(W7)은 벤더 지원을 기다립니다.
+- **도중에 찾은 프롬프트 문제.** 처음 furiosa-llm 실행에서 prefix cache 적중률이 70 %였는데, Azure 재생에는 공유 prefix가
+  없습니다. rm-bench의 트레이스 프롬프트가 72단어 어휘를 affine 인덱스로 골라 서로 다른 프롬프트 문장이 72개뿐이었습니다. 이
+  변경에서 고쳤고(해시 스트림에서 단어 선택, salt 2,000개가 서로 다른 8단어 머리 2,000개), 위 furiosa-llm 행은 다시 돌린
+  결과입니다(적중률 약 10 %, 대부분 `pd-smoke` 예열). 공유 prefix가 있을 때 대화 TTFT p90은 102 ms가 아니라 66 ms였습니다.
+  rngd-pd에는 prefix cache가 없어 그 행들은 영향이 없습니다.
 
 ### prefetch를 켜면 부하에서 무너짐
 
@@ -213,7 +303,12 @@ decode 로그에 `TimeoutError: pull timeout: <req>/layer.0/k`가 남습니다. 
   메모리)로 정했습니다.
 - **라우팅.** rngd-pd 게이트웨이 하나 뒤의 여러 prefill·decode 파드와 `solo` replica는 Kubernetes Service(연결 단위 분산)로
   닿습니다. 부하를 보는 라우팅은 없었습니다.
-- **실행하지 않음:** ATOM prefill, 실제 서빙에서 `p2p` 전송, B > 8 RNGD decode, GPU.
+- **실행하지 않음:** ATOM prefill, 실제 서빙에서 `p2p`·`nixl` 전송(`nixl`은 서빙 밖에서 바이트·토큰 일치를 확인,
+  [rngd-pd#8](https://github.com/ai-computing/rngd-pd/pull/8)), B > 8 RNGD decode, GPU.
+- **벤더 행**은 클라이언트 API(스트리밍 completions)와 엔진 기본값(prefix caching 켜짐)이 다릅니다. 표의 각주 참고. rngd-pd 행 뒤에 같은
+  카드에서 같은 날 오후에 돌렸습니다.
+- **재조정기 실행**은 한 번의 순서(코드 ×3, 대화 ×2, 코드 ×3)이고 일부러 용량을 넘겼습니다. 첫 대화 구간은 옛 TPOT 지표로 돌았으며
+  그 발견을 위해서만 보고합니다.
 
 ## 클러스터에서 바꾼 것
 
@@ -223,6 +318,11 @@ decode 로그에 `TimeoutError: pull timeout: <req>/layer.0/k`가 남습니다. 
 | `llm-serving/airm-placement` | `rm-controller` generation 2(P 2 / D 1), 이어서 3(P 1 / D 2, 보정 프로파일) | generation 3(이전 `manual` 문서 저장) |
 | `airm-exp-solo`, `airm-exp-solo-gw` (Deployment, Service) | 복제 실행용으로 생성 | 삭제 |
 | `llm-serving/airm-exp-hetero` (Helm) | RNGD prefill + ATOM decode 릴리스 | uninstall |
+| `airm-exp-flm` (Deployment, Service) | 벤더 기준선용 furiosa-llm replica, 모델 캐시는 `/var/tmp` 아래 hostPath | 삭제, 캐시 디렉터리 제거 |
+| `airm-exp-flm-probe`, `airm-exp-cleanup` (Pod) | furiosa-llm CLI·패키지 확인, 캐시 제거 | 삭제 |
+| `llm-serving/airm-e2e` (재조정기 실행) | 게이트웨이를 1로 scale, `PD_PREFETCH=0`, 후반에는 rngd-pd#7을 넣은 이 실행의 rngd-pd 체크아웃을 `/app`에 마운트. prefill·decode replica, affinity, `accelerator-ids`, generation annotation은 `--apply`가 patch(generation 4–7), 파드 한 번 재시작 | 모두 0으로 scale, 게이트웨이 마운트와 `PD_PREFETCH=1` 복원, annotation은 generation 3의 카드로 복원 |
+| `llm-serving/airm-placement` | 재조정기가 generation 4–7 기록 | generation 3 문서를 바이트 그대로 복원 |
+| `airm-exp-nixl-check` (Pod) | `nixl` 전송 검사용 RNGD 2장 + ATOM 1장(rngd-pd#8) | 삭제 |
 
 다른 Deployment나 EPP는 건드리지 않았습니다. 원시 결과는(`results/`는 이 저장소에서 추적하지 않음) 노드의 실험 로그와 함께
 있습니다.
@@ -240,6 +340,13 @@ rm-bench e2e --scenario <SLO 2 s / 100 ms인 대화 시나리오> --api completi
   --power prom --power-url http://<prometheus> \
   --power-query 'sum(furiosa_npu_hw_power{label="rms",device=~"npu0|npu1"})'
 rm-bench compare results/*.json
+
+# W7 벤더: Service 하나 뒤 furiosa-llm replica(각 카드 한 장), 스트리밍 completions
+rm-bench e2e --scenario <대화 시나리오> --api completions-stream --gateway http://<furiosa-llm service>:8000   --speedup 1 --max-total-tokens 511 --duration 300 --deployment flm-agg-x2-rngd --cards 2 --power prom ...
+
+# W5 재조정기: --apply 루프, 그리고 rngd-pd 게이트웨이로 부하 구성을 번갈아
+rm-controller --spec packages/rm-controller/examples/rebalance-gateway.yaml --rebalance --apply --interval 60
+rm-bench e2e --scenario <코드 시나리오> --api completions --speedup 3 ...    # 다음은 대화 --speedup 2
 
 # W6: 실행과 비교한 시뮬레이션, README 표
 python -m rm_controller.sim --compare --requests 4000

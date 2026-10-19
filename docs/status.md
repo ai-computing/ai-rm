@@ -34,7 +34,7 @@ Use explicit submodule paths for a public-only checkout. `git clone --recursive`
 | Area | What is present | Boundary |
 |---|---|---|
 | Layer organization | Five-layer submodule layout, integration and interface guides | Each component's behavior lives in its own repository |
-| In-tree packages | `packages/rm-bench` (measurement, real-trace replay), `packages/rm-controller` (topology and optimal placement, P:D rebalancer, re-placement, `--apply`); CI runs their tests and contract checks | `optimal`, `--rebalance` and `--apply` verified in simulation and with fake cluster IO, not yet on the cluster; throughput profiles partly estimates |
+| In-tree packages | `packages/rm-bench` (measurement, real-trace replay), `packages/rm-controller` (topology and optimal placement, P:D rebalancer, re-placement, `--apply`); CI runs their tests and contract checks | `optimal`, `--apply` and `--rebalance` run live on the RNGD+ATOM node ([baselines](baselines.md)); the rebalancer follows the mix but mis-sizes the donor role; ATOM prefill profile still an estimate |
 | Component inspection | `list`, `doctor` and manifest discovery | A missing manifest may produce no steps; this is not a test PASS |
 | Installation / quick tests | Dispatch component-declared `install` / `test` commands | Depends on fetched revisions and local prerequisites |
 | Deployment | `kubectl apply` for `deploy.manifests`; local Kustomize overlay support | No automatic Helm invocation from `deploy.chart` |
