@@ -61,7 +61,8 @@ devices:
 
 # KV handoff from a prefill instance to a decode instance. scope: card (same card), host (same node),
 # cluster (any two nodes). `pairs` limits a link to the prefill->decode types it was verified for (absent =
-# any). `implemented: false` links exist only for what-if simulation; the controller never
+# any). `admit_blocking: true` means the decode instance pays the transfer at admission, stalling every
+# active stream. `implemented: false` links exist only for what-if simulation; the controller never
 # picks them for `kv_transport: auto`.
 links:
   loopback:
@@ -76,6 +77,9 @@ links:
                                      #   PD_PREFETCH=0 (docs/baselines.md); 111 ms p90 with prefetch (docs/e2e.md)
     latency_ms: 0
     min_bytes: 67108864              # measured: copies the whole S=512 buffer whatever the prompt length
+    admit_blocking: true             # measured: with PD_PREFETCH=0 rngd-pd's decode worker loads the KV when it admits a
+                                     #   request, inside the device lock, and every active stream waits (31-54 ms);
+                                     #   read by the rebalancer's predictor and the simulator's episode replay
     implemented: true
     source: measured
   p2p:

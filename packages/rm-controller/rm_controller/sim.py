@@ -2,6 +2,7 @@
 
     python -m rm_controller.sim --compare               # topology vs optimal on the reference card sets
     python -m rm_controller.sim --compare --format json
+    python -m rm_controller.sim --episode               # the W5 rebalancer episode, old vs new rule (episode.py)
 
 Requests are drawn from a workload mix (mix.py: the trace atlas's length quantiles; arrivals Poisson within
 60 s windows whose rate follows an on/off burst model: one window in every round(2 x peak) runs at the
@@ -421,12 +422,24 @@ def markdown(rows: List[dict], est_label: str = "Model est.") -> str:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m rm_controller.sim", description=__doc__.split("\n")[0])
     ap.add_argument("--compare", action="store_true", help="topology vs optimal on the reference card sets")
+    ap.add_argument("--episode", action="store_true", help="replay W5's rebalancer episode (old vs new rule)")
+    ap.add_argument("--trace-dir", default=None, help="episode: trace CSVs (default $RM_BENCH_TRACES)")
+    ap.add_argument("--prefill-scale", type=float, default=None,
+                    help="episode: prefill time under load / profile (default: the live run's 1.5)")
     ap.add_argument("--trace", action="append", choices=sorted(mixes.TRACES), help="limit to these traces")
     ap.add_argument("--requests", type=int, default=3000, help="requests per simulated run")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--profiles", default=None, help="throughput profile table (default: packaged)")
     ap.add_argument("--format", choices=("md", "json"), default="md")
     args = ap.parse_args(argv)
+    if args.episode:
+        from . import episode
+        serving = episode.LIVE_SERVING
+        if args.prefill_scale is not None:
+            serving = episode.Serving(serving.max_inflight, args.prefill_scale, serving.random_prefill)
+        res = episode.episodes(prof.load(args.profiles), serving=serving, trace_dir=args.trace_dir, seed=args.seed)
+        print(json.dumps(res, indent=2) if args.format == "json" else episode.markdown(res))
+        return 0
     if not args.compare:
         ap.print_help()
         return 2

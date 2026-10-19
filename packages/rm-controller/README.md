@@ -66,6 +66,7 @@ rm-controller --spec spec.yaml --rebalance       # also move cards between prefi
 rm-controller --spec packages/rm-controller/examples/optimal.yaml --dry-run   # the optimal policy (W6)
 python -m rm_core.conformance airm.placements topology optimal
 python -m rm_controller.sim --compare            # topology vs optimal, simulated on trace statistics
+python -m rm_controller.sim --episode            # the W5 rebalancer episode replayed, linear vs predictive rule
 python -m rm_controller.baselines --compare      # DistServe- and HexGen-2-style baselines
 ```
 
@@ -147,7 +148,7 @@ pools:
     kv_transport: auto                 # optimal only: choose among implemented links
     workload: {trace: azure-conv}      # or {mean_input_tokens, mean_output_tokens, rate_rps, peak_ratio}
     budget: 6                          # most cards for this pool (optimal, rebalance)
-    rebalance: {metrics: http://<pod>:8000/metrics, band: 0.2, hold: 3, cooldown_s: 300}
+    rebalance: {metrics: http://<pod>:8000/metrics, band: 0.2, hold: 3, cooldown_s: 300, margin: 0.2}
 ```
 
 Examples: [`examples/spec.yaml`](examples/spec.yaml) (RNGD+RNGD over shm, with a rebalance section),
@@ -170,8 +171,22 @@ The changed decision bumps `generation`, and its `reason` names the lost card an
   `vllm:time_to_first_token_seconds` and `vllm:time_per_output_token_seconds` histograms (windowed between reads), or the
   gateway's `airm_ttft_p90_ms` / `airm_tpot_p90_ms`, the names Optimus Prime exposes with
   [aicomp #45](https://github.com/ai-computing/aicomp/issues/45). Each role's pressure is max(latency / SLO, waiting per
-  instance / 2); needed instances = current × pressure;
+  instance / 2). The arrival rate and mean lengths come from `vllm:request_success_total` and the
+  `vllm:request_prompt_tokens` / `vllm:request_generation_tokens` histograms, or the gateway's `airm_req_s` / `airm_tok_s`,
+  else from the pool's `workload` trace statistics;
 - or, without metrics, from the workload's trace statistics and the profiles (peak rate over one instance's capacity).
+
+With metrics and a profile for both device types, the target comes from a prediction
+([`predict.py`](rm_controller/predict.py)): both roles' pressure at every split of the budget, from `optimal`'s queueing
+model (prefill M/G/c for the TTFT p90; decode lanes at the TPOT-SLO batch, the lane wait counted in TPOT, and each
+admission stalling the decode loop for the KV load on a link marked `admit_blocking`, which `shm` is). The model is first
+fitted to the current split: the rate at which it reproduces what an over-SLO role shows is the pool's effective arrival
+rate (bursts the mean rate misses show up here), a calm role's own reading caps the rate it is predicted at, and decode is
+fed what prefill passes, so a split with more prefill lets more of a burst through to decode. The best split becomes the
+target only if its predicted worst-role pressure is below the current split's by `margin` (default 20 %); otherwise the
+split holds, and the round's log line says why, e.g. `hold: no split predicted better than now 1:2 P 2.44 D 0.66; best
+other 2:1 P 0.12 D inf at 6.37 req/s (prefill fit)`. A device type without a profile keeps the linear rule (needed
+instances = current × pressure).
 
 Hysteresis: nothing moves while both pressures are ≤ 1; a target must change the P:D ratio by more than `band`, be proposed
 `hold` rounds in a row and come `cooldown_s` after the last change (`--once` uses hold 1, no cooldown). A new generation is
@@ -234,6 +249,13 @@ What it shows, with these profiles:
 - The analytical model in `optimal` gives 0.68–0.93× the simulated goodput, conservative everywhere (column "Model est."
   in [the component card](../../docs/components/rm-controller.md)). Both read the same profiles; the live runs check the
   profiles themselves ([baselines](../../docs/baselines.md#calibration-w6)).
+
+**Episode replay (`--episode`).** [`episode.py`](rm_controller/episode.py) replays W5's live rebalancer run: 3 RNGD cards
+behind the rngd-pd gateway, Azure code ×3 and conversation ×2 replays alternating (real arrival times from the Azure 2023
+CSVs under `$RM_BENCH_TRACES`, else the windows' statistics), the rebalancer in the loop every 60 s on the gateway's gauges,
+with its hysteresis, a two-minute pod start and in-flight work lost on a moved card. On top of the profiles it models the
+client's 64 open requests, the in-loop KV load at decode admission, prefill pods reached at random through a Service, and
+prefill under load at 1.5× the idle profile (`--prefill-scale`). Results: [baselines](../../docs/baselines.md#the-predictive-rule).
 
 ## ⚖️ Baselines: DistServe- and HexGen-2-style placement
 
@@ -305,7 +327,7 @@ What it shows, with these profiles (RNGD, ATOM and `shm` measured, A100 partly e
 
 ## ✅ Verified
 
-- 74 tests (topology, optimal and mixed roles, rebalancer, health and re-placement, apply, simulator, baselines, document bytes identical to 0.1's);
+- 84 tests (topology, optimal and mixed roles, rebalancer and its predictor, health and re-placement, apply, simulator and episode replay, baselines, document bytes identical to 0.1's);
   `rm_core.conformance airm.placements topology optimal` PASS with rm-core v0.1.2; CI runs both.
 - Read-only dry run on the live cluster (2026-10-19, topology): the shm pool went to `etri-001/furiosa:0` + `furiosa:1`, the
   placement the end-to-end run had pinned by hand, with the cordoned node skipped; the p2p pool went to RNGD 0 + ATOM 0, 1.
@@ -318,6 +340,13 @@ What it shows, with these profiles (RNGD, ATOM and `shm` measured, A100 partly e
 - `--rebalance --apply` live on the RNGD+ATOM node (2026-10-19) from the rngd-pd gateway's `airm_*` gauges: three P:D changes in
   an hour, each toward the role under pressure; right for conversation (attainment ~10 % → 85 %), wrong for code ×3 (63–68 %
   → 45 %, the donor role's loss is not modelled). See [baselines](../../docs/baselines.md#w5-the-pd-rebalancer-live).
+- The predictive rule (2026-10-20): on the live run's signals it holds where the linear rule made the code ×3 move (2:1
+  predicted with decode saturated; measured 3.1–3.8) and still makes the conversation move. Replayed in
+  `python -m rm_controller.sim --episode` (W5's alternating load, real Azure arrival times), the linear rule moved 8 times
+  and averaged 74–76 % on code and 56 % on conversation; the predictive rule held 1P+2D (78 %, 99 %), and from 2P+1D it made
+  the conversation move and nothing else. Live re-check (2026-10-19, same load and cards, 50 min from 2P+1D): one move,
+  2:1 → 1:2 four minutes into conversation ×2, then 1P+2D held through both code ×3 phases, 77–81 % attainment on every code
+  run (the linear rule's move had given 40–45 %). See [baselines](../../docs/baselines.md#the-predictive-rule).
 
 ## 🗺 Roadmap
 
@@ -332,7 +361,8 @@ What it shows, with these profiles (RNGD, ATOM and `shm` measured, A100 partly e
 - [ ] A cross-node KV transport, so that `optimal` can span nodes
 - [x] Run `optimal` and `--apply` on the live cluster
 - [x] Run `--rebalance` on the live cluster ([baselines](../../docs/baselines.md#w5-the-pd-rebalancer-live))
-- [ ] Rebalancer: predict the donor role's pressure after a move (profiles or admission cost) and check moves against measured attainment
+- [x] Rebalancer: predict both roles' pressure after a move (profiles, admission cost) and hold when no split is predicted better
+- [ ] Rebalancer: check a move against the attainment measured after it (undo a move that made things worse)
 
 ## 📄 License
 
