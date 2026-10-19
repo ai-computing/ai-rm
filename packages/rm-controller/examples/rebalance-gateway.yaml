@@ -16,3 +16,4 @@ pools:
       band: 0.2
       hold: 3
       cooldown_s: 300
+      margin: 0.2                          # move only if the predicted worst-role pressure drops by 20 %

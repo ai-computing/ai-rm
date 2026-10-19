@@ -53,6 +53,10 @@ class Lengths:
     def constant(cls, value: float) -> "Lengths":
         return cls([(0.0, value), (1.0, value)])
 
+    def scaled(self, factor: float) -> "Lengths":
+        """The same shape with every length multiplied by `factor` (e.g. to an observed mean)."""
+        return Lengths([(u, max(1.0, x * factor)) for u, x in self.points])
+
     def quantile(self, u: float) -> float:
         u = min(max(u, 0.0), 1.0)
         i = max(1, min(bisect.bisect_left(self.us, u), len(self.points) - 1))
