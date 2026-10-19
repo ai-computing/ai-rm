@@ -11,12 +11,12 @@
 | 성과지표 | 측정 지표 키 (`interfaces.md`) | 주 계층 | 구성요소 | 근거가 쌓이는 곳 |
 |---|---|---|---|---|
 | MFU | `mfu_pct` (+ peak 출처 태그) | L3, L2 | rngd-pd, hetero-npu-p2p | PD 실험 run (MLflow), 실험 기록 |
-| 전력효율 | `gflops_per_w`, `power_w` | L3, L5 | rngd-pd, rm-bench, llm-d-setup(IPMI/DCGM exporter) | 측정 run, 전력 측정 구간 정의 |
-| 이종 자원 수 | 장치 종류 수 (Accelerator.vendor/model) | L1, L4 | rm_abstract_layer, llm-d-setup | 클러스터 구성 기록, 장치 등록·발견·할당 시연 |
-| SLO 달성률 | `ttft_p90_ms`, `tpot_p90_ms` | L4, L5 | llm-d-setup(EPP), rm-bench, lmd-top | 부하 시험 run |
+| 전력효율 | `gflops_per_w`, `power_w` | L3, L5 | rngd-pd, rm-bench, hetero-llm-d(IPMI/DCGM exporter) | 측정 run, 전력 측정 구간 정의 |
+| 이종 자원 수 | 장치 종류 수 (Accelerator.vendor/model) | L1, L4 | rm-accel, hetero-llm-d | 클러스터 구성 기록, 장치 등록·발견·할당 시연 |
+| SLO 달성률 | `ttft_p90_ms`, `tpot_p90_ms` | L4, L5 | hetero-llm-d(EPP), rm-bench, lmd-top | 부하 시험 run |
 | 메모리 통합 | `kv_transfer_ms`, 처리량 비 | L2 | duet, npu-offload, hetero-npu-p2p | 메모리 계층 실험 run |
-| 확장성 (최대 노드 수) | 노드·가속기 수 | L4 | llm-d-setup | 클러스터 구성 기록 |
-| 응용 서비스 수 | 서비스 수 | L3, L4 | rngd-pd, npu-offload, llm-d-setup(ModelService) | 서빙 구성 기록 |
+| 확장성 (최대 노드 수) | 노드·가속기 수 | L4 | hetero-llm-d | 클러스터 구성 기록 |
+| 응용 서비스 수 | 서비스 수 | L3, L4 | rngd-pd, npu-offload, hetero-llm-d(ModelService) | 서빙 구성 기록 |
 
 ## 증빙 원칙
 

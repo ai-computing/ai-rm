@@ -3,7 +3,7 @@
 # deploy
 
 ai-rm의 기본 대상은 Kubernetes + llm-d 클러스터입니다. 클러스터 자체(k8s, llm-d, Gateway, EPP, 모델 스토어,
-모니터링 스택)는 `components/l4-cluster/llm-d-setup`이 만들고, 다른 구성요소는 그 위에 올라갑니다.
+모니터링 스택)는 `components/l4-cluster/hetero-llm-d`가 만들고, 다른 구성요소는 그 위에 올라갑니다.
 
 ## 사이트 설정
 

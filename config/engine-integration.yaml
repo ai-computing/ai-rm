@@ -45,8 +45,8 @@ engine:
 # Paths are existing umbrella source submodules. Target areas are ownership
 # labels, not claims that Python packages or new adapters already exist.
 migration_sources:
-  - id: rm_abstract_layer
-    path: components/l1-accel/rm_abstract_layer
+  - id: rm-accel
+    path: components/l1-accel/rm-accel
     retain_role: resource-discovery-and-capabilities
     planned_engine_area: engine-facing-backend-adapters-only
   - id: hetero-npu-p2p
@@ -62,8 +62,8 @@ migration_sources:
     planned_engine_area: pd-serving-and-npu-backends
 
 external_workloads:
-  - id: npu-lora
-    path: components/l3-serving/npu-lora
+  - id: npu-train
+    path: components/l3-serving/npu-train
     role: training-workload
     future_engine_adapter: planned
   - id: duet
@@ -73,7 +73,7 @@ external_workloads:
     copy_into_public_engine: false
 
 cluster:
-  owner: llm-d-setup
+  owner: hetero-llm-d
   routing: [gateway, inferencepool, epp]
   fasop_output: reviewed-placement-proposal
   automatic_live_reconfiguration: false

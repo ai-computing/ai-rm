@@ -2,7 +2,7 @@
 
 [Documentation](../docs/README.md) · [한국어](README.ko.md)
 
-AI-RM targets Kubernetes + llm-d. `llm-d-setup` owns cluster setup, Gateway/EPP, model storage and monitoring. Other current components declare manifests for that environment where implemented.
+AI-RM targets Kubernetes + llm-d. `hetero-llm-d` owns cluster setup, Gateway/EPP, model storage and monitoring. Other current components declare manifests for that environment where implemented.
 
 **Optimus Prime transition:** the [engine/FASOP design](../docs/engine-integration.md) and [planning registry](../config/engine-integration.yaml) describe a future consolidated engine. They do not deploy it, create its branch or activate new adapters. Existing component sources remain the current deployment path until acceptance and an engine revision is pinned.
 

@@ -17,12 +17,12 @@ FASOP currently models training costs on heterogeneous GPUs. Inference-specific 
 | ai-rm | Public integration hub |
 | rm-core | Public shared protocol repository |
 | aicomp | Public source for Optimus Prime (`opt_prime`) and FASOP (`fasop`); not an active engine submodule yet |
-| rm_abstract_layer | Public |
+| rm-accel | Public |
 | hetero-npu-p2p | Public |
 | npu-offload | Public |
 | rngd-pd | Public |
-| npu-lora | Public |
-| llm-d-setup | Public |
+| npu-train | Public |
+| hetero-llm-d | Public |
 | rm-bench, rm-controller | In-tree under `packages/` (rm-bench moved here 2026-10-19; its old repository is archived) |
 | lmd-top | Public; sanitized history export, see below |
 | duet | **Private; optional**, access required |
@@ -49,12 +49,12 @@ component hosts where a check needs their environment.
 
 | Component | Pinned | Adapter / role | Result |
 |---|---|---|---|
-| rm_abstract_layer | `c72f356` (0.4.1, chart 0.4.2) | `airm.accelerator_providers:rm-abstract` | Conformance PASS; 3 RNGD + 4 ATOM on etri-001, matching the device plugins. *Correction:* the first record here said 2 ATOM matched the vendor tools; it did not — `rbln-stat` numbering, fixed in 0.4.1 |
+| rm-accel | `c72f356` (0.4.1, chart 0.4.2) | `airm.accelerator_providers:rm-abstract` | Conformance PASS; 3 RNGD + 4 ATOM on etri-001, matching the device plugins. *Correction:* the first record here said 2 ATOM matched the vendor tools; it did not — `rbln-stat` numbering, fixed in 0.4.1 |
 | hetero-npu-p2p | `9556e1a` | `airm.kv_transports:p2p` | 91 unit tests PASS; conformance **SKIP** (needs `HETERO_P2P_HELPER` and a live-buffer fixture) |
 | npu-offload | `486d1e7` | `airm.workloads:npu-offload`, memory tiers | 6/6 tests PASS with `RNGD_LLMD`; chart renders and lints |
 | rngd-pd | `83ba553` | `airm.kv_transports:shm`, `airm.workloads:rngd-pd` | `shm` conformance PASS; 44 tests PASS; chart renders and lints |
-| npu-lora | `f9b7bc5` | `airm.workloads:npu-lora`, `airm_tok_s` | Tests PASS; chart renders and lints |
-| llm-d-setup | `0f4f58e` | CRD, `airm_*` scrape, dashboard, placement ConfigMap | Server-side dry-run PASS on the live cluster |
+| npu-train | `f9b7bc5` | `airm.workloads:npu-lora`, `airm_tok_s` | Tests PASS; chart renders and lints |
+| hetero-llm-d | `0f4f58e` | CRD, `airm_*` scrape, dashboard, placement ConfigMap | Server-side dry-run PASS on the live cluster |
 | lmd-top | `73e07d7` | reads `AcceleratorProfile`, `airm_*`, placement | 447 + 11 cargo tests PASS, clippy clean |
 | rm-bench | in-tree | `airm.workloads:rm-bench`, measurements, trace replay | 26 tests PASS |
 | rm-controller | in-tree | `airm.placements:topology` | conformance PASS, 12 tests PASS |
@@ -73,7 +73,7 @@ Report PASS, FAIL and hardware SKIP separately. Preserve the actual component co
 
 ## Layout migration notes
 
-The previous `rm_monitor` roles are split: the monitoring stack and Grafana dashboards belong to `llm-d-setup/monitoring/`, trace/load generation to `rm-bench`, and the operations console to `lmd-top`. The old `rm_monitor` repository is archived. `rm_abstract_layer` resides under `components/l1-accel/`.
+The previous `rm_monitor` roles are split: the monitoring stack and Grafana dashboards belong to `hetero-llm-d/monitoring/`, trace/load generation to `rm-bench`, and the operations console to `lmd-top`. The old `rm_monitor` repository is archived. `rm-accel` resides under `components/l1-accel/`.
 
 ## lmd-top public history export
 

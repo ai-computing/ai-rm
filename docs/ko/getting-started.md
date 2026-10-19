@@ -25,12 +25,12 @@ python3 tools/check_sensitive.py .
 
 ```bash
 git submodule update --init -- \
-  components/l1-accel/rm_abstract_layer \
+  components/l1-accel/rm-accel \
   components/l2-memory/hetero-npu-p2p \
   components/l2-memory/npu-offload \
   components/l3-serving/rngd-pd \
-  components/l3-serving/npu-lora \
-  components/l4-cluster/llm-d-setup \
+  components/l3-serving/npu-train \
+  components/l4-cluster/hetero-llm-d \
   components/l5-ops/lmd-top
 ```
 
