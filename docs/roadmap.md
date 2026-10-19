@@ -38,10 +38,10 @@ requests. Everything else is done in the ai-rm repositories.
 |:-:|---|---|
 | W1 | rm-bench streaming client (TTFT/TPOT/ITL from SSE), GuideLLM and MLPerf import, `compare` | engine #41–#43 |
 | W2 | node-daemon image `ghcr.io/ai-computing/rm-accel`, umbrella chart `charts/ai-rm`, kind sim e2e on every PR, rngd-pd uses its allocated card | engine #44, #51; a cross-node KV link |
-| W3 | `HETERO_NPU` NIXL backend (hetero-npu-p2p #3): RNGD→ATOM DMA-BUF at ~41.5 GB/s flat from 0.1 to 4 GiB, byte-verified; 32-layer split costs nothing extra | engine #47, #48; rngd-pd `nixl` transport in progress |
+| W3 | `HETERO_NPU` NIXL backend (hetero-npu-p2p #3): RNGD→ATOM DMA-BUF at ~41.5 GB/s flat from 0.1 to 4 GiB, byte-verified; 32-layer split costs nothing extra | engine #47, #48 (serving pods stay on `shm` until the ATOM decode graph accepts a device-resident cache); rngd-pd `nixl` KV transport done (rngd-pd #8: 1.6 ms per request RNGD→ATOM, token-exact) |
 | W4 | EPP profiles measured on 2× A100 (hetero-llm-d #5): `approx-prefix-gpu` TTFT p50 0.225 → 0.127 s on shared prefixes; precise prefix works with the corrected event contract; [KV tier evaluation](kv-tier-evaluation.md) | engine #46, #52 |
-| W5 | rm-controller placed and moved the live PD pods (`--apply`); KEDA on A100: 1→2 in 21 s, cold start 110–121 s; rngd-pd decode survives backlogs (rngd-pd #6: 1,153 requests, 0 failed) | engine #45, #49; live `--rebalance` in progress |
+| W5 | rm-controller placed and moved the live PD pods (`--apply`); KEDA on A100: 1→2 in 21 s, cold start 110–121 s; rngd-pd decode survives backlogs (rngd-pd #6: 1,153 requests, 0 failed) | engine #45, #49; live predictive `--rebalance` done ([baselines](baselines.md) W5: moves to decode when conversation dominates, holds under code, 77–81 % vs 45 % before) |
 | W6 | `optimal` with mixed types per role, profiles calibrated from live runs, DistServe/HexGen-2-style baselines in the simulator; placement document normative (rm-core v0.1.2, §5.4) | engine #50 |
-| W7 | [same-budget baselines](baselines.md): replication best goodput/card at 2 cards, PD best tok/J (1.17), calibrated `optimal` 1P+2D 100 % SLO at 3 cards; RNGD→ATOM limited by the ATOM decode graph (108 ms/token) | furiosa-llm vendor baseline in progress |
+| W7 | [same-budget baselines](baselines.md): replication best goodput/card at 2 cards, PD best tok/J (1.17), calibrated `optimal` 1P+2D 100 % SLO at 3 cards; RNGD→ATOM limited by the ATOM decode graph (108 ms/token) | furiosa-llm vendor baseline done (same goodput/card and tok/J as `solo`, lower latency; furiosa-llm has no PD) |
 
 Progress is tracked in the hub's Plane project (modules W1–W7) and summarized in [status](status.md).
