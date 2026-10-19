@@ -1,0 +1,13 @@
+{{- if .Values.controller.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ai-rm.controller" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ai-rm.labels" . | nindent 4 }}
+    app.kubernetes.io/name: rm-controller
+data:
+  spec.yaml: |
+    {{- include "ai-rm.controllerSpec" . | nindent 4 }}
+{{- end }}

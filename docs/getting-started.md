@@ -83,6 +83,22 @@ The current dispatcher applies `deploy.manifests` with `kubectl apply`; a site o
 
 After reviewing the actual resources and the selected cluster, omit `--dry-run` only when you intend to apply them. See [deployment](../deploy/README.md).
 
+## 6. Try the stack on a simulated cluster
+
+No accelerator or site cluster needed: Docker, [kind](https://kind.sigs.k8s.io/), kubectl and Helm on Linux (or
+WSL with Docker). The umbrella chart runs with rm-core's `sim` accelerators and a fake OpenAI-compatible PD pool.
+
+```bash
+git submodule update --init components/l1-accel/rm-accel
+python3 -m pip install PyYAML -e packages/rm-controller -e packages/rm-bench
+make e2e-sim NO_CLUSTER=1   # placement + rm-bench in-process (no Docker): a quick first check
+make up-sim                 # kind cluster airm-sim with charts/ai-rm
+make e2e-sim                # AcceleratorProfiles -> rm-controller -> airm-placement, rm-bench pd-smoke
+make down-sim
+```
+
+On a real cluster the same chart installs with site values; see [deployment](../deploy/README.md#umbrella-chart).
+
 ## Troubleshooting
 
 | Symptom | Check |
@@ -94,5 +110,6 @@ After reviewing the actual resources and the selected cluster, omit `--dry-run` 
 | Deployment says `no manifests` | The pinned component has no `deploy.manifests`; check its README and work card. |
 | P2P is unsupported | Verify same-host devices, ABI and declared support; select host staging explicitly if appropriate. |
 | Conformance skips hardware | Record SKIP and the reason; it is not a hardware PASS. |
+| `make up-sim` says `missing tools` or rm-accel has no Dockerfile | Install Docker, kind, kubectl, Helm; fetch `components/l1-accel/rm-accel` at the pinned revision. |
 
 Next: [architecture](architecture.md), [integration guide](integration-guide.md), [status](status.md).
