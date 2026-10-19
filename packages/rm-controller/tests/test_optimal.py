@@ -31,7 +31,8 @@ def test_profile_table_loads_and_marks_estimates():
     assert RNGD.tpot_ms(1) == 30.0 and RNGD.tpot_ms(8) == 30.3 and RNGD.batch_for(20) < RNGD.max_batch
     assert ATOM.max_batch == 4 and ATOM.batch_for(100) == 0         # measured ATOM TPOT misses a 100 ms SLO
     assert PERF.links["shm"].transfer_ms(1) == pytest.approx(41.9, abs=0.5)     # the measured 67 MB load
-    assert not PERF.links["tcp"].implemented and PERF.links["p2p"].serves("furiosa.RNGD", "rebellions.ATOM")
+    assert PERF.links["tcp"].implemented and PERF.links["tcp"].scope == "cluster"         # measured, cross-node
+    assert PERF.links["tcp"].transfer_ms(1) > 800 and PERF.links["p2p"].serves("furiosa.RNGD", "rebellions.ATOM")
     assert not PERF.links["p2p"].serves("furiosa.RNGD", "furiosa.RNGD")
 
 
@@ -102,12 +103,19 @@ def test_used_and_unhealthy_cards_are_not_offered():
     assert "npu-node-1/furiosa:1" not in p.accelerator_ids + d.accelerator_ids
 
 
-def test_cluster_link_may_span_nodes_only_when_planned_links_are_allowed():
+def test_cluster_link_may_span_nodes_only_when_implemented_or_planned_links_are_allowed():
     pool = [rngd("a", 0), rngd("a", 1), rngd("b", 0), rngd("b", 1)]
-    plain = OptimalPlacement(objective="goodput").place_pd(PS, DS, pool, kv_transport="auto")
-    assert {i.split("/")[0] for i in plain[0].accelerator_ids + plain[1].accelerator_ids} == {"a"}
-    wide = OptimalPlacement(objective="goodput", allow_planned_links=True).place_pd(PS, DS, pool, kv_transport="auto")
-    assert wide[0].kv_transport == "tcp" and len(wide[0].accelerator_ids) + len(wide[1].accelerator_ids) == 4
+    nodes = lambda d: {i.split("/")[0] for i in d[0].accelerator_ids + d[1].accelerator_ids}   # noqa: E731
+    # tcp is measured and implemented: max goodput spans both nodes over it
+    wide = OptimalPlacement(objective="goodput").place_pd(PS, DS, pool, kv_transport="auto")
+    assert wide[0].kv_transport == "tcp" and nodes(wide) == {"a", "b"}
+    # the same link marked planned is used only when planned links are allowed
+    planned = replace(PERF, links={**PERF.links, "tcp": replace(PERF.links["tcp"], implemented=False)})
+    plain = OptimalPlacement(profiles=planned, objective="goodput").place_pd(PS, DS, pool, kv_transport="auto")
+    assert nodes(plain) == {"a"}
+    what_if = OptimalPlacement(profiles=planned, objective="goodput", allow_planned_links=True).place_pd(
+        PS, DS, pool, kv_transport="auto")
+    assert what_if[0].kv_transport == "tcp" and nodes(what_if) == {"a", "b"}
 
 
 @pytest.mark.parametrize("transport, cards, needle", [

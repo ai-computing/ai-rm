@@ -89,12 +89,17 @@ links:
     pairs: [furiosa.RNGD->rebellions.ATOM]   # prefill->decode types verified; other pairs are not offered
     implemented: true
     source: estimate
-  tcp:
-    scope: cluster
-    gb_s: 0.5                        # estimate: host-staged on both ends like shm (0.6 GB/s), plus the wire
-    latency_ms: 5
-    implemented: false               # no cross-node airm.kv_transports plugin yet
-    source: estimate
+  tcp:                               # rngd-pd `tcp` (airm.kv_transports): host-staged on both ends, pooled TCP,
+    scope: cluster                   #   CRC-checked; measured RNGD -> CPU relay on another node -> RNGD, S=512
+    gb_s: 0.08                       # measured: 67 MB in 832 ms (pull) / 758 ms (push) per request, one request at a
+                                     #   time; the NPU node's 1 GbE NIC is the limit (0.117 GB/s per direction with 8 in
+                                     #   flight, 0.095-0.108 with CRC off) (docs/baselines.md, cross-node KV)
+    latency_ms: 14                   # derived: 64 blob round trips x 0.22 ms node-to-node RTT
+    min_bytes: 67108864              # measured: the whole S=512 buffer goes over the wire whatever the prompt length
+    admit_blocking: true             # measured: with PD_PREFETCH=0 the decode worker pulls the KV at admission
+                                     #   (816 ms p50 in serving), as with shm
+    implemented: true
+    source: measured
   cuda-ipc:                          # GPU->GPU on one node, as vLLM's NixlConnector does it (UCX cuda_ipc)
     scope: host
     gb_s: 20.0                       # estimate: PCIe Gen4 x16 peer-to-peer; NVLink would be ~10x more

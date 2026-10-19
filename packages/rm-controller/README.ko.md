@@ -116,7 +116,8 @@ condition)와 Disk/Memory/PID pressure 노드도 cordon 노드처럼 제외합�
 
 `kv_transport: auto`는 구현된 링크 중에서 고릅니다. `p2p`는 검증된 RNGD → ATOM에만 제시합니다.
 프로파일 수치마다 파일에 측정(measured)·유도(derived)·추정(estimate)을 표시했습니다. RNGD와 ATOM decode는 실제 S=512 그래프에서
-측정했고([기준선](../../docs/ko/baselines.md)), ATOM prefill, A100과 `p2p`·`tcp`·`cuda-ipc` 링크는 FASOP NPU 비용 모델
+측정했고([기준선](../../docs/ko/baselines.md)), 노드 간 `tcp` 링크(다른 노드의 relay를 거치는 rngd-pd TCP 전송, 1 GbE)도 측정값입니다.
+ATOM prefill, A100과 `p2p`·`cuda-ipc` 링크는 FASOP NPU 비용 모델
 ([aicomp #50](https://github.com/ai-computing/aicomp/issues/50))이나 sweep으로 바꿀 때까지 추정치입니다.
 
 ## 📝 Spec
@@ -147,9 +148,26 @@ pools:
     rebalance: {metrics: http://<pod>:8000/metrics, band: 0.2, hold: 3, cooldown_s: 300, margin: 0.2}
 ```
 
+**여러 풀, 여러 모델 (HUB-35).** spec에는 풀을 몇 개든 쓸 수 있고 풀마다 모델이 다릅니다. 순서대로 배치하며 한 카드를
+두 풀에 주지 않습니다. 풀은 prefill/decode(위와 같음)이거나, 두 단계를 한 카드에서 모두 도는 엔진(furiosa-llm, vLLM)의
+단일 카드 레플리카로 된 aggregated 풀입니다:
+
+```yaml
+  - pool: qwen3-4b-pool
+    model: furiosa-ai/Qwen3-4B-FP8
+    serve: {accelerator: furiosa.RNGD, count: 1}   # `serve` 결정 하나; kv_transport, rebalance 없음
+```
+
+aggregated 풀은 어느 정책에서든 그 종류의 빈 카드 `count`장을 가져갑니다(그런 카드가 가장 많은 노드부터). 프로파일은
+prefill/decode 경로를 기술할 뿐 다른 모델의 단일 카드 서빙은 기술하지 않기 때문입니다. Deployment에는 `role: serve`를
+붙입니다. 한 풀의 spec이 바뀌면 그 풀은 직전 세대에 다른 풀이 쓰던 카드를 피해 들어갈 수 있으면 그렇게 배치되고, 다른
+풀은 결정을 그대로 유지합니다. 그래서 다시 실행해도 바뀐 풀만 움직입니다
+(라이브: [baselines](../../docs/ko/baselines.md#w2-한-노드의-두-모델-풀-hub-35)).
+
 예시: [`examples/spec.yaml`](examples/spec.yaml)(shm으로 RNGD+RNGD, rebalance 포함),
 [`examples/hetero-p2p.yaml`](examples/hetero-p2p.yaml)(같은 호스트 P2P로 RNGD prefill, ATOM ×2 decode),
-[`examples/optimal.yaml`](examples/optimal.yaml)(optimal, `kv_transport: auto`, budget 6).
+[`examples/optimal.yaml`](examples/optimal.yaml)(optimal, `kv_transport: auto`, budget 6),
+[`examples/multi-pool.yaml`](examples/multi-pool.yaml)(두 모델: Llama-3.1-8B PD와 Qwen3-4B aggregated).
 
 ## 🔁 제어 루프
 
@@ -210,25 +228,27 @@ BurstGPT 2초/100 ms, Azure 코드 4초/100 ms, Mooncake 15초/100 ms(긴 프롬
 
 **2 nodes: 2 x (2 RNGD + 4 ATOM)** — goodput req/s (카드당 req/s), optimal은 숫자 아래에 배치
 
-| 트레이스 | topology RNGD/RNGD shm | topology RNGD/ATOM×2 p2p | optimal (per card) | optimal (max goodput) | optimal (max goodput, planned tcp) |
+| 트레이스 | topology RNGD/RNGD shm | topology RNGD/ATOM×2 p2p | optimal (per card) | optimal (max goodput) | optimal (max goodput, `tcp` only) |
 |---|--:|--:|--:|--:|--:|
-| azure-conv | 0.813 (0.406) | 0.000 (0.000) | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 2.724 (0.681)<br>P 1x RNGD / D 3x RNGD, tcp, 2 nodes |
-| azure-code | 0.943 (0.472) | 0.000 (0.000) | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 2.270 (0.567)<br>P 3x RNGD / D 1x RNGD, tcp, 2 nodes |
-| burstgpt | 0.025 (0.013) | 0.000 (0.000) | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.087 (0.022)<br>P 1x RNGD / D 3x RNGD, tcp, 2 nodes |
-| mooncake-conv | 0.563 (0.281) | 0.000 (0.000) | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 1.132 (0.283)<br>P 2x RNGD / D 2x RNGD, tcp, 2 nodes |
-| mooncake-tool | 0.950 (0.475) | 0.000 (0.000) | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 1.948 (0.487)<br>P 2x RNGD / D 2x RNGD, tcp, 2 nodes |
+| azure-conv | 0.813 (0.406) | 0.000 (0.000) | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 0.813 (0.406)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, tcp |
+| azure-code | 0.943 (0.472) | 0.000 (0.000) | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 0.943 (0.472)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, tcp |
+| burstgpt | 0.025 (0.013) | 0.000 (0.000) | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.025 (0.013)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, tcp |
+| mooncake-conv | 0.563 (0.281) | 0.000 (0.000) | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 0.563 (0.281)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, tcp |
+| mooncake-tool | 0.950 (0.475) | 0.000 (0.000) | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 0.950 (0.475)<br>P 1x RNGD / D 1x RNGD, shm | 0.000 (0.000)<br>P 1x RNGD / D 1x RNGD, tcp |
 
 이 프로파일로 보면:
 
 - **프로파일은 이제 대부분 측정값**입니다. 실제 기준선 실험의 S=512 그래프에서 쟀습니다([기준선](../../docs/ko/baselines.md)):
   RNGD prefill 66 ms + 12K tok/s, RNGD decode는 batch 8까지 토큰당 30 ms(continuous B=8 그래프는 폭이 고정), ATOM decode는 카드 한 장에서
-  batch 4까지 토큰당 108 ms, `shm` 1.6 GB/s. ATOM prefill과 `p2p`·`tcp` 링크는 아직 추정치입니다.
+  batch 4까지 토큰당 108 ms, `shm` 1.6 GB/s, `tcp` 0.08 GB/s + 14 ms(NPU 노드의 1 GbE 링크로 노드 간 측정). ATOM prefill과 `p2p`는 아직 추정치입니다.
 - **노드 하나에서는 optimal이 RNGD/RNGD 풀**입니다. ATOM decode는 어떤 batch에서도 TPOT SLO 100 ms를 넘으므로 ATOM으로 decode하는
   풀은 goodput이 0입니다. 실제 RNGD → ATOM 기준선도 SLO를 지킨 요청이 0 %였습니다.
-- **노드 둘에서는 노드 간 KV 전송이 있어야만 이득**이 납니다. 아직 없습니다(표의 `tcp`는 0.5 GB/s로 추정한 계획 링크). 있으면
-  goodput 2.0–3.5배, 카드당 최대 1.7배입니다. 이제 대화형은 decode가 병목이고(Azure 대화와 BurstGPT에서 optimal이 decode를 늘림)
-  Azure 코드는 prefill이 병목입니다. 역할 내 혼합은 여기에 더 이상 ATOM decode를 더하지 않으므로(TPOT SLO를 못 지킴) "one type per
-  role" 행이 따로 없습니다.
+- **노드 둘에서는 측정한 `tcp` 링크로 얻는 것이 없습니다.** 요청당 67 MB(S=512 버퍼 전체, 1 GbE)를 ~0.85초에 옮기고 트레이스
+  프롬프트의 KV는 몇 초가 걸리므로 TTFT SLO를 지키는 2노드 계획이 없습니다. optimal은 `shm`으로 한 노드에 머물고, 가장 좋은
+  `tcp` 계획(마지막 열; SLO를 지키는 계획이 없어 topology의 1P+1D)은 goodput이 0입니다. 예전 추정치(0.5 GB/s, 계획 링크)로는 같은
+  열이 0.087–2.724 req/s, 한 노드의 2.0–3.5배였습니다. 대역폭을 바꿔 보면 2노드 배치는 0.15–0.25 GB/s 사이(2.5 GbE 이상)에서
+  돌아오고, 0.8 GB/s에서는 Azure 대화 2.73 req/s(P 1 / D 3 RNGD), Azure 코드 2.39(P 3 / D 1)로 추정치 때와 같습니다. 두 노드 사이
+  NPU 간 전송은 측정하지 않았습니다. 두 번째 NPU 노드가 cordon 상태여서 RNGD → CPU relay 노드 → RNGD로 쟀습니다.
 - Mooncake 행은 외삽입니다. S=512 그래프는 그 프롬프트를 아예 처리하지 못하고, prefill 속도를 512 토큰 너머로 선형 연장했으므로
   (attention의 제곱 항 무시) 낙관적입니다.
 - 용량을 트레이스별 60초 peak(BurstGPT 69배)에 맞추므로 절대값이 낮습니다.
@@ -309,7 +329,7 @@ A100 수치는 일부 추정입니다(prefill 속도와 batch 1 TPOT는 데이�
 
 ## ✅ 검증
 
-- 테스트 84개(topology, optimal과 역할 내 혼합, 재조정과 예측기, 상태·재배치, 적용, 시뮬레이터와 에피소드 재생, 기준선, 0.1과 같은 바이트의 문서), rm-core v0.1.2로
+- 테스트 90개(topology, optimal과 역할 내 혼합, PD 풀 옆의 aggregated `serve` 풀, 재조정과 예측기, 상태·재배치, 적용, 시뮬레이터와 에피소드 재생, 기준선, 0.1과 같은 바이트의 문서), rm-core v0.1.2로
   `rm_core.conformance airm.placements topology optimal` PASS, CI에서 둘 다 실행.
 - 실제 클러스터 읽기 전용 dry-run(2026-10-19, topology): shm 풀은 `npu-node-1/furiosa:0` + `furiosa:1`(end-to-end 실행에서 손으로 고정했던 배치와
   같음, cordon된 노드는 제외), p2p 풀은 RNGD 0 + ATOM 0, 1.
