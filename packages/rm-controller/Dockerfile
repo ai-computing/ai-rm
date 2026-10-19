@@ -7,7 +7,7 @@
 # re-resolving its git dependency.
 FROM python:3.11-slim
 
-ARG RM_CORE_REF=v0.1.1
+ARG RM_CORE_REF=v0.1.2
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

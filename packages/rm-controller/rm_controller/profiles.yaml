@@ -1,0 +1,72 @@
+# Throughput profiles for the `optimal` policy and the simulator (rm_controller/sim.py).
+#
+# One entry per device type (`vendor.model`, as in the node labels) for ONE model class: Llama-3.1-8B-class
+# models in bf16/fp16 on the host-staged serving path as of 2026-10-19. Every number says where it comes from:
+#   measured  -- read off a run recorded in ai-rm docs (docs/e2e.md, docs/workload-traces.md)
+#   derived   -- arithmetic on measured numbers (the derivation is in `source`)
+#   estimate  -- not measured; a placeholder until FASOP's NPU cost model (aicomp #50) or a sweep replaces it
+# Lengths beyond the compiled S=512 graphs are extrapolated linearly (attention's quadratic term is ignored).
+model: llama-3.1-8b
+kv_bytes_per_token: 131072           # derived: 32 layers x 8 KV heads x 128 dim x 2 (K,V) x 2 bytes = 128 KiB
+
+devices:
+  furiosa.RNGD:
+    group: 1                         # cards per serving instance; 48 GB holds the 16 GB of weights
+    prefill_tok_s: 2500              # derived: ~0.2 s for 200-400-token prompts (docs/workload-traces.md)
+    prefill_overhead_ms: 60          #   with a 60 ms fixed cost; at S=512 the graph is padded, so this is a fit
+    tpot_ms_b1: 17.0                 # measured: server TPOT 15.8-19.5 ms at batch 1 (docs/e2e.md)
+    tpot_ms_bmax: 24.0               # estimate: decode is memory-bound; batch 8 adds KV reads only
+    max_batch: 8                     # estimate: the batch verified on ATOM; RNGD batch > 1 unmeasured in PD
+    kv_tokens: 250000                # derived: ~32 GB free after weights / 128 KiB per token (workload-traces.md)
+    source:
+      prefill_tok_s: derived
+      tpot_ms_b1: measured
+      tpot_ms_bmax: estimate
+      max_batch: estimate
+      kv_tokens: derived
+  rebellions.ATOM:
+    group: 2                         # 16 GB of bf16 weights do not fit one 15.7 GiB card; PD verified on 2-3 ATOM
+    prefill_tok_s: 600               # estimate: RNGD's rate x (2 x 32 / 256) peak TFLOPS, unmeasured
+    prefill_overhead_ms: 80          # estimate
+    tpot_ms_b1: 40.0                 # estimate: 8 GB of weights per card over ~256 GB/s GDDR6
+    tpot_ms_bmax: 52.0               # derived: batch 8 gave 135-177 tok/s on 1 RNGD + 2-3 ATOM -> 8 / 154 tok/s
+    max_batch: 8                     # measured: batch 8 uses ~15.0 of 15.7 GiB, batch 16 does not fit
+    kv_tokens: 4096                  # derived: what batch 8 at S=512 leaves room for
+    source:
+      prefill_tok_s: estimate
+      tpot_ms_b1: estimate
+      tpot_ms_bmax: derived
+      max_batch: measured
+      kv_tokens: derived
+
+# KV handoff from a prefill instance to a decode instance. scope: card (same card), host (same node),
+# cluster (any two nodes). `pairs` limits a link to the prefill->decode types it was verified for (absent =
+# any). `implemented: false` links exist only for what-if simulation; the controller never
+# picks them for `kv_transport: auto`.
+links:
+  loopback:
+    scope: card
+    gb_s: 0                          # no copy
+    latency_ms: 0
+    implemented: true
+    source: rm-core reference transport
+  shm:
+    scope: host
+    gb_s: 0.6                        # measured: 67 MB in 111-112 ms p90 (docs/e2e.md)
+    latency_ms: 0
+    min_bytes: 67108864              # measured: copies the whole S=512 buffer whatever the prompt length
+    implemented: true
+    source: measured
+  p2p:
+    scope: host
+    gb_s: 8.0                        # estimate: RNGD->ATOM PCIe device-to-device; exactness verified at 512,
+    latency_ms: 2                    #   bandwidth not yet measured (hetero-npu-p2p)
+    pairs: [furiosa.RNGD->rebellions.ATOM]   # prefill->decode types verified; other pairs are not offered
+    implemented: true
+    source: estimate
+  tcp:
+    scope: cluster
+    gb_s: 0.5                        # estimate: host-staged on both ends like shm (0.6 GB/s), plus the wire
+    latency_ms: 5
+    implemented: false               # no cross-node airm.kv_transports plugin yet
+    source: estimate

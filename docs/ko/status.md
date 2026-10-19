@@ -30,7 +30,7 @@
 | 영역 | 현재 기능 | 한계 |
 |---|---|---|
 | 구조 | 5계층 서브모듈과 문서 | 실제 동작은 각 저장소에서 구현 |
-| in-tree 패키지 | `packages/rm-bench`(측정, 트레이스 재생), `packages/rm-controller`(토폴로지 배치), CI에서 테스트·계약 검사 | controller는 결정을 쓰지만 서빙 파드는 아직 따르지 않음 |
+| in-tree 패키지 | `packages/rm-bench`(측정, 트레이스 재생), `packages/rm-controller`(토폴로지·최적 배치, P:D 재조정, 재배치, `--apply`), CI에서 테스트·계약 검사 | `optimal`·`--rebalance`·`--apply`는 시뮬레이션과 가짜 클러스터 IO로만 검증, 처리량 프로파일 일부 추정치 |
 | 탐색 | `list`, `doctor`, 매니페스트 읽기 | 매니페스트가 없어 0 steps여도 검증 완료가 아님 |
 | 설치·테스트 | 구성요소가 선언한 명령 실행 | 받은 커밋과 로컬 요구 사항에 의존 |
 | 배포 | `deploy.manifests`를 kubectl로 적용, 사이트 Kustomize overlay | `deploy.chart`를 자동 Helm 배포하지 않음 |
@@ -54,7 +54,7 @@ Umbrella chart, 시뮬레이션 클러스터 명령, 서빙 파드가 따르는 
 | hetero-llm-d | `0f4f58e` | CRD, `airm_*` 수집, 대시보드, 배치 ConfigMap | 실제 클러스터에서 server dry-run PASS |
 | lmd-top | `73e07d7` | `AcceleratorProfile`·`airm_*`·배치 결정 표시 | cargo 테스트 447 + 11개 PASS, clippy 경고 0 |
 | rm-bench | in-tree | `airm.workloads:rm-bench`, 측정, 트레이스 재생 | 테스트 26개 PASS |
-| rm-controller | in-tree | `airm.placements:topology` | 적합성 PASS, 테스트 12개 PASS |
+| rm-controller | in-tree | `airm.placements:topology`, `airm.placements:optimal` | 적합성 PASS, 테스트 51개 PASS |
 
 L1 → L5 연결 검사(탐지 → 프로파일 → 배치 → 이름으로 고른 전송 → 전송 → 측정 → 워크로드 실행기 확인)는 rm-core만으로
 통과하며, 2026-10-19에는 실제 클러스터에서 모든 계층을 함께 실행했습니다(L1 프로파일로 PD 파드 배치, llm-d 게이트웨이·EPP 경유,
