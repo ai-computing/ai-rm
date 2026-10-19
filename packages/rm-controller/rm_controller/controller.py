@@ -197,14 +197,22 @@ class Rebalancing:
         self.overrides: Dict[str, Tuple[int, int]] = {}
         self.scrapes: Dict[Tuple[str, str], list] = {}
 
-    def _observe(self, pool: str, cfg: dict) -> Optional[rb.Observation]:
+    def _observe(self, pool: str, cfg: dict, notes: Optional[List[str]] = None) -> Optional[rb.Observation]:
         src = cfg.get("metrics")
         if not src:
             return None
         sources = src.items() if isinstance(src, dict) else [(None, src)]
         obs = rb.Observation()
         for role, s in sources:
-            samples = rb.parse_prometheus(rb.read_source(str(s)))
+            try:
+                text = rb.read_source(str(s))
+            except OSError as e:
+                # No signal from this source (the gateway is not up yet, or restarting): the role
+                # counts as unpressured, so the split holds, and placement still runs this round.
+                if notes is not None:
+                    notes.append(f"{pool}: metrics {s} unreadable ({e}); split held")
+                continue
+            samples = rb.parse_prometheus(text)
             o = rb.observe(samples, role_label=cfg.get("role_label"), role=role,
                            previous=self.scrapes.get((pool, str(s))))
             self.scrapes[(pool, str(s))] = samples
@@ -227,7 +235,7 @@ class Rebalancing:
             groups = (_group(self.perf, kinds[0]), _group(self.perf, kinds[1]))
             budget = int(p.get("budget") or cfg.get("budget") or current[0] * groups[0] + current[1] * groups[1])
             slo = dict(p.get("slo") or {})
-            obs = self._observe(name, cfg)
+            obs = self._observe(name, cfg, notes)
             if obs is not None:
                 qref = float(cfg.get("queue_ref", 2))
                 want = rb.target(current, budget, groups, obs=obs, slo=slo, queue_ref=qref)
