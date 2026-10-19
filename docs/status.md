@@ -34,7 +34,7 @@ Use explicit submodule paths for a public-only checkout. `git clone --recursive`
 | Area | What is present | Boundary |
 |---|---|---|
 | Layer organization | Five-layer submodule layout, integration and interface guides | Each component's behavior lives in its own repository |
-| In-tree packages | `packages/rm-bench` (measurement, real-trace replay), `packages/rm-controller` (topology placement); CI runs their tests and contract checks | The controller writes decisions; serving pods do not follow them yet |
+| In-tree packages | `packages/rm-bench` (measurement, real-trace replay), `packages/rm-controller` (topology and optimal placement, P:D rebalancer, re-placement, `--apply`); CI runs their tests and contract checks | `optimal`, `--rebalance` and `--apply` verified in simulation and with fake cluster IO, not yet on the cluster; throughput profiles partly estimates |
 | Component inspection | `list`, `doctor` and manifest discovery | A missing manifest may produce no steps; this is not a test PASS |
 | Installation / quick tests | Dispatch component-declared `install` / `test` commands | Depends on fetched revisions and local prerequisites |
 | Deployment | `kubectl apply` for `deploy.manifests`; local Kustomize overlay support | No automatic Helm invocation from `deploy.chart` |
@@ -57,7 +57,7 @@ component hosts where a check needs their environment.
 | hetero-llm-d | `0f4f58e` | CRD, `airm_*` scrape, dashboard, placement ConfigMap | Server-side dry-run PASS on the live cluster |
 | lmd-top | `73e07d7` | reads `AcceleratorProfile`, `airm_*`, placement | 447 + 11 cargo tests PASS, clippy clean |
 | rm-bench | in-tree | `airm.workloads:rm-bench`, measurements, trace replay | 26 tests PASS |
-| rm-controller | in-tree | `airm.placements:topology` | conformance PASS, 12 tests PASS |
+| rm-controller | in-tree | `airm.placements:topology`, `airm.placements:optimal` | conformance PASS, 51 tests PASS |
 
 The L1 → L5 wiring check passes through rm-core alone, and on 2026-10-19 the layers ran together on the live
 cluster: L1 profiles placed rngd-pd's PD pods, requests went through the llm-d gateway and EPP, KV moved over
