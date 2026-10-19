@@ -1,0 +1,29 @@
+name: packages
+
+on:
+  push:
+    paths: ["packages/**", ".github/workflows/packages.yml"]
+  pull_request:
+    paths: ["packages/**", ".github/workflows/packages.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [rm-bench, rm-controller]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: python -m pip install -e "packages/${{ matrix.package }}" pytest
+      - name: Tests
+        working-directory: packages/${{ matrix.package }}
+        run: python -m pytest -q tests
+      - name: Contract checks
+        run: python -m rm_core.conformance

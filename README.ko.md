@@ -152,7 +152,7 @@ make deploy CLUSTER=local DRY_RUN=1                 # 적용 전 검토
 | 🟣 | **자원 탐지** | [rm_abstract_layer](https://github.com/ai-computing/rm_abstract_layer) |
 | 🔵 | **엔진 이전 소스** | [rngd-pd](https://github.com/ai-computing/rngd-pd) · [hetero-npu-p2p](https://github.com/ai-computing/hetero-npu-p2p) · [npu-offload](https://github.com/ai-computing/npu-offload) |
 | 🟡 | **클러스터 통합** | [llm-d-setup](https://github.com/ai-computing/llm-d-setup) · [rm-core 계약](https://github.com/ai-computing/rm-core) |
-| 🟠 | **운영·측정** | [lmd-top](https://github.com/ai-computing/lmd-top) · [rm-bench](https://github.com/ai-computing/rm-bench) |
+| 🟠 | **운영·측정** | [lmd-top](https://github.com/ai-computing/lmd-top) · [rm-bench](packages/rm-bench) · [rm-controller](packages/rm-controller) |
 | 🟢 | **학습·검색 워크로드** | [npu-lora](https://github.com/ai-computing/npu-lora) · **duet** *(비공개·선택 사항)* |
 
 역할, 소스 이전 방향, 통합 작업은 [구성요소 디렉터리](docs/components/README.md)에 정리했습니다.
