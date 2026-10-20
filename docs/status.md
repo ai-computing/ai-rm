@@ -51,9 +51,9 @@ component hosts where a check needs their environment.
 |---|---|---|---|
 | rm-accel | `c72f356` (0.4.1, chart 0.4.2) | `airm.accelerator_providers:rm-abstract` | Conformance PASS; 3 RNGD + 4 ATOM on npu-node-1, matching the device plugins. *Correction:* the first record here said 2 ATOM matched the vendor tools; it did not — `rbln-stat` numbering, fixed in 0.4.1 |
 | hetero-npu-p2p | `4096573` | `airm.kv_transports:p2p` | 91 unit tests PASS; conformance **SKIP** (needs `HETERO_P2P_HELPER` and a live-buffer fixture) |
-| npu-offload | `486d1e7` | `airm.workloads:npu-offload`, memory tiers | 6/6 tests PASS with `RNGD_LLMD`; chart renders and lints |
+| npu-offload | `7094711` | `airm.workloads:npu-offload`, memory tiers | 6/6 tests PASS with `RNGD_LLMD`; chart renders and lints |
 | rngd-pd | `9a58da1` | `airm.kv_transports:shm`, `airm.workloads:rngd-pd` | `shm` conformance PASS; 44 tests PASS; chart renders and lints |
-| npu-train | `f9b7bc5` | `airm.workloads:npu-lora`, `airm_tok_s` | Tests PASS; chart renders and lints |
+| npu-train | `c50281b` | `airm.workloads:npu-lora`, `airm_tok_s` | Tests PASS; chart renders and lints |
 | hetero-llm-d | `39a341d` | CRD, `airm_*` scrape, dashboard, placement ConfigMap | Server-side dry-run PASS on the live cluster |
 | lmd-top | `29d599b` | reads `AcceleratorProfile`, `airm_*`, placement | 447 + 11 cargo tests PASS, clippy clean |
 | rm-bench | in-tree | `airm.workloads:rm-bench`, measurements, trace replay | 26 tests PASS |
