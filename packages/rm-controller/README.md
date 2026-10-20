@@ -349,7 +349,7 @@ What it shows, with these profiles (RNGD, ATOM and `shm` measured, A100 partly e
 
 - 90 tests (topology, optimal and mixed roles, aggregated `serve` pools beside PD pools, rebalancer and its predictor, health and re-placement, apply, simulator and episode replay, baselines, document bytes identical to 0.1's);
   `rm_core.conformance airm.placements topology optimal` PASS with rm-core v0.1.2; CI runs both.
-- Read-only dry run on the live cluster (2026-10-19, topology): the shm pool went to `etri-001/furiosa:0` + `furiosa:1`, the
+- Read-only dry run on the live cluster (2026-10-19, topology): the shm pool went to `npu-node-1/furiosa:0` + `furiosa:1`, the
   placement the end-to-end run had pinned by hand, with the cordoned node skipped; the p2p pool went to RNGD 0 + ATOM 0, 1.
 - Live on the RNGD+ATOM node (2026-10-19, [baselines](../../docs/baselines.md)): `optimal` (`examples/optimal.yaml`,
   budget 6) wrote generation 2 (prefill 2× RNGD, decode 1× RNGD, `shm`) and `--apply` patched the annotated rngd-pd

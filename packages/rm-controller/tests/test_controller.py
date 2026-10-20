@@ -25,9 +25,9 @@ def atom(node, i):
                        peak_source="datasheet")
 
 
-# etri-001: RNGD 0,1,3 + ATOM 0-3; esc8000: RNGD 0,1 (cordoned during the end-to-end run)
-POOL = ([rngd("etri-001", i) for i in (0, 1, 3)] + [atom("etri-001", i) for i in range(4)]
-        + [rngd("etri-esc8000-e11", i) for i in (0, 1)])
+# npu-node-1: RNGD 0,1,3 + ATOM 0-3; npu-node-2: RNGD 0,1 (cordoned during the end-to-end run)
+POOL = ([rngd("npu-node-1", i) for i in (0, 1, 3)] + [atom("npu-node-1", i) for i in range(4)]
+        + [rngd("npu-node-2", i) for i in (0, 1)])
 M = "meta-llama/Llama-3.1-8B-Instruct"
 P, D = Workload(kind="prefill", model=M), Workload(kind="decode", model=M)
 
@@ -38,30 +38,30 @@ def test_conformance():
 
 
 def test_shm_pair_lands_on_one_node_distinct_cards():
-    p, d = TopologyPlacement({"etri-esc8000-e11"}).place_pd(
+    p, d = TopologyPlacement({"npu-node-2"}).place_pd(
         P, D, POOL, kv_transport="shm", prefill_spec=RoleSpec("furiosa.RNGD"), decode_spec=RoleSpec("furiosa.RNGD"))
-    assert p.accelerator_ids == ["etri-001/furiosa:0"] and d.accelerator_ids == ["etri-001/furiosa:1"]
-    assert p.kv_transport == d.kv_transport == "shm" and "on etri-001" in p.reason
+    assert p.accelerator_ids == ["npu-node-1/furiosa:0"] and d.accelerator_ids == ["npu-node-1/furiosa:1"]
+    assert p.kv_transport == d.kv_transport == "shm" and "on npu-node-1" in p.reason
 
 
 def test_without_node_state_the_node_with_more_free_cards_wins():
     p, d = TopologyPlacement().place_pd(P, D, POOL, kv_transport="shm",
                                         prefill_spec=RoleSpec("furiosa.RNGD"), decode_spec=RoleSpec("furiosa.RNGD"))
-    assert p.accelerator_ids[0].startswith("etri-001/") and d.accelerator_ids[0].startswith("etri-001/")
+    assert p.accelerator_ids[0].startswith("npu-node-1/") and d.accelerator_ids[0].startswith("npu-node-1/")
 
 
 def test_greedy_reference_failure_is_avoided():
     # rm-core's greedy put prefill and decode on the same card of the cordoned node with loopback.
-    p, d = TopologyPlacement({"etri-esc8000-e11"}).place_pd(P, D, POOL, kv_transport="shm")
+    p, d = TopologyPlacement({"npu-node-2"}).place_pd(P, D, POOL, kv_transport="shm")
     assert not set(p.accelerator_ids) & set(d.accelerator_ids)
-    assert all(not i.startswith("etri-esc8000-e11/") for i in p.accelerator_ids + d.accelerator_ids)
+    assert all(not i.startswith("npu-node-2/") for i in p.accelerator_ids + d.accelerator_ids)
 
 
 def test_hetero_p2p_rngd_prefill_atom_decode_one_to_two():
     p, d = TopologyPlacement().place_pd(P, D, POOL, kv_transport="p2p", prefill_spec=RoleSpec("furiosa.RNGD"),
                                         decode_spec=RoleSpec("rebellions.ATOM", 2))
-    assert p.accelerator_ids == ["etri-001/furiosa:0"]
-    assert d.accelerator_ids == ["etri-001/rebellions:0", "etri-001/rebellions:1"]
+    assert p.accelerator_ids == ["npu-node-1/furiosa:0"]
+    assert d.accelerator_ids == ["npu-node-1/rebellions:0", "npu-node-1/rebellions:1"]
 
 
 def test_loopback_may_share_a_card():
@@ -70,21 +70,21 @@ def test_loopback_may_share_a_card():
 
 
 def test_used_cards_are_not_offered_again_and_empty_has_a_reason():
-    pl = TopologyPlacement({"etri-esc8000-e11"})
+    pl = TopologyPlacement({"npu-node-2"})
     spec = dict(prefill_spec=RoleSpec("furiosa.RNGD"), decode_spec=RoleSpec("furiosa.RNGD", 2))
     p, d = pl.place_pd(P, D, POOL, kv_transport="shm", **spec)
-    assert p.accelerator_ids == ["etri-001/furiosa:0"] and d.accelerator_ids == ["etri-001/furiosa:1", "etri-001/furiosa:3"]
+    assert p.accelerator_ids == ["npu-node-1/furiosa:0"] and d.accelerator_ids == ["npu-node-1/furiosa:1", "npu-node-1/furiosa:3"]
     p2, d2 = pl.place_pd(P, D, POOL, kv_transport="shm", used=p.accelerator_ids + d.accelerator_ids, **spec)
     assert p2.accelerator_ids == d2.accelerator_ids == []
-    assert "furiosa.RNGD" in p2.reason and "etri-esc8000-e11" in p2.reason and "already placed" in p2.reason
+    assert "furiosa.RNGD" in p2.reason and "npu-node-2" in p2.reason and "already placed" in p2.reason
 
 
 def test_place_single_respects_label_and_node_state():
-    pl = TopologyPlacement({"etri-001"})
+    pl = TopologyPlacement({"npu-node-1"})
     d = pl.place(Workload(kind="decode", model=M, labels={ACCEL_LABEL: "rebellions.ATOM"}), POOL)
-    assert d.accelerator_ids == [] and "skipped unschedulable etri-001" in d.reason
+    assert d.accelerator_ids == [] and "skipped unschedulable npu-node-1" in d.reason
     d = TopologyPlacement().place(Workload(kind="prefill", model=M), POOL)
-    assert d.accelerator_ids == ["etri-001/furiosa:0"]
+    assert d.accelerator_ids == ["npu-node-1/furiosa:0"]
 
 
 def test_document_generation_moves_only_on_change():
@@ -105,7 +105,7 @@ def test_document_bytes_match_rm_controller_0_1():
     old = {"protocol": "0.1", "generation": 4, "updatedAt": "2026-10-19T00:00:00Z", "placement": "topology",
            "decisions": [{"pool": "pool", "workload": {"kind": "prefill", "model": M, "slo": {"tpot_p90_ms": 100},
                                                        "labels": {ACCEL_LABEL: "furiosa.RNGD"}},
-                          "acceleratorIds": ["etri-001/furiosa:0"], "kvTransport": "shm", "reason": "r"}]}
+                          "acceleratorIds": ["npu-node-1/furiosa:0"], "kvTransport": "shm", "reason": "r"}]}
     raw = json.dumps(old, indent=2) + "\n"
     doc = document.parse({"data": {"decisions.json": raw}})
     same, changed = document.build(list(doc.decisions), doc, "topology")
@@ -121,7 +121,7 @@ class FakeIO:
         return POOL
 
     def unschedulable_nodes(self):
-        return {"etri-esc8000-e11"}
+        return {"npu-node-2"}
 
     def placement_configmap(self, namespace):
         return self.cm
@@ -146,7 +146,7 @@ def test_run_once_writes_then_stays_quiet(tmp_path, capsys):
     assert controller.run_once(spec, io, namespace="llm-serving", dry_run=False) == 0
     doc = document.parse(io.cm)
     assert doc.generation == 1 and [x.accelerator_ids for x in doc.decisions] == [
-        ["etri-001/furiosa:0"], ["etri-001/furiosa:1"]]
+        ["npu-node-1/furiosa:0"], ["npu-node-1/furiosa:1"]]
     assert controller.run_once(spec, io, namespace="llm-serving", dry_run=False) == 0
     assert len(io.applied) == 1 and "unchanged" in capsys.readouterr().err
 
@@ -186,13 +186,13 @@ def _ids(io):
 
 
 def test_serve_pool_gets_disjoint_cards():
-    p = TopologyPlacement({"etri-esc8000-e11"})
+    p = TopologyPlacement({"npu-node-2"})
     d = p.place_serve(Workload(kind="serve", model=Q), POOL, spec=RoleSpec("furiosa.RNGD", 2),
-                      used={"etri-001/furiosa:0"})
-    assert d.accelerator_ids == ["etri-001/furiosa:1", "etri-001/furiosa:3"] and "aggregated" in d.reason
+                      used={"npu-node-1/furiosa:0"})
+    assert d.accelerator_ids == ["npu-node-1/furiosa:1", "npu-node-1/furiosa:3"] and "aggregated" in d.reason
     none = p.place_serve(Workload(kind="serve", model=Q), POOL, spec=RoleSpec("furiosa.RNGD", 3),
-                         used={"etri-001/furiosa:0"})
-    assert none.accelerator_ids == [] and "skipped unschedulable etri-esc8000-e11" in none.reason
+                         used={"npu-node-1/furiosa:0"})
+    assert none.accelerator_ids == [] and "skipped unschedulable npu-node-2" in none.reason
 
 
 def test_two_pools_no_card_shared(tmp_path):
@@ -200,9 +200,9 @@ def test_two_pools_no_card_shared(tmp_path):
     assert controller.run_once(_two_pools(tmp_path, decode="furiosa.RNGD"), io, namespace="llm-serving",
                                dry_run=False) == 0
     ids = _ids(io)
-    assert ids == {("llama8b-pd-pool", "prefill"): ["etri-001/furiosa:0"],
-                   ("llama8b-pd-pool", "decode"): ["etri-001/furiosa:1"],
-                   ("qwen3-4b-pool", "serve"): ["etri-001/furiosa:3"]}
+    assert ids == {("llama8b-pd-pool", "prefill"): ["npu-node-1/furiosa:0"],
+                   ("llama8b-pd-pool", "decode"): ["npu-node-1/furiosa:1"],
+                   ("qwen3-4b-pool", "serve"): ["npu-node-1/furiosa:3"]}
     flat = [i for v in ids.values() for i in v]
     assert len(flat) == len(set(flat))
 
@@ -211,8 +211,8 @@ def test_changed_spec_moves_only_that_pool(tmp_path):
     io = FakeIO()
     controller.run_once(_two_pools(tmp_path), io, namespace="llm-serving", dry_run=False)
     before = _ids(io)
-    assert before[("llama8b-pd-pool", "decode")] == ["etri-001/rebellions:0"]
-    assert before[("qwen3-4b-pool", "serve")] == ["etri-001/furiosa:1"]
+    assert before[("llama8b-pd-pool", "decode")] == ["npu-node-1/rebellions:0"]
+    assert before[("qwen3-4b-pool", "serve")] == ["npu-node-1/furiosa:1"]
     # decode moves ATOM -> RNGD. Placed afresh, the llama pool would take furiosa:1 (most memory, lowest
     # index); it avoids the card the qwen pool holds, so qwen keeps it.
     controller.run_once(_two_pools(tmp_path, decode="furiosa.RNGD", name="b.yaml"), io,
@@ -220,7 +220,7 @@ def test_changed_spec_moves_only_that_pool(tmp_path):
     after = _ids(io)
     assert after[("qwen3-4b-pool", "serve")] == before[("qwen3-4b-pool", "serve")]
     assert after[("llama8b-pd-pool", "prefill")] == before[("llama8b-pd-pool", "prefill")]
-    assert after[("llama8b-pd-pool", "decode")] == ["etri-001/furiosa:3"]
+    assert after[("llama8b-pd-pool", "decode")] == ["npu-node-1/furiosa:3"]
     assert document.parse(io.cm).generation == 2
 
 

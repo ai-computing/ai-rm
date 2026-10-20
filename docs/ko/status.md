@@ -46,7 +46,7 @@ Umbrella chart, 시뮬레이션 클러스터 명령, 서빙 파드가 따르는 
 
 | 구성요소 | 고정 커밋 | Adapter / 역할 | 결과 |
 |---|---|---|---|
-| rm-accel | `c72f356` (0.4.1, chart 0.4.2) | `airm.accelerator_providers:rm-abstract` | 적합성 PASS, etri-001에서 RNGD 3 + ATOM 4 탐지(device plugin과 일치). *정정:* 처음 기록한 "ATOM 2, 벤더 도구와 일치"는 틀렸습니다. `rbln-stat` 번호 문제였고 0.4.1에서 수정 |
+| rm-accel | `c72f356` (0.4.1, chart 0.4.2) | `airm.accelerator_providers:rm-abstract` | 적합성 PASS, npu-node-1에서 RNGD 3 + ATOM 4 탐지(device plugin과 일치). *정정:* 처음 기록한 "ATOM 2, 벤더 도구와 일치"는 틀렸습니다. `rbln-stat` 번호 문제였고 0.4.1에서 수정 |
 | hetero-npu-p2p | `9556e1a` | `airm.kv_transports:p2p` | 단위 테스트 91개 PASS, 적합성 **SKIP** (`HETERO_P2P_HELPER`와 실제 버퍼 fixture 필요) |
 | npu-offload | `486d1e7` | `airm.workloads:npu-offload`, 메모리 계층 | `RNGD_LLMD` 설정 시 6/6 PASS, chart 렌더·lint 통과 |
 | rngd-pd | `83ba553` | `airm.kv_transports:shm`, `airm.workloads:rngd-pd` | `shm` 적합성 PASS, 테스트 44개 PASS, chart 렌더·lint 통과 |

@@ -13,7 +13,7 @@
 
 | 계층 | 구성요소 (고정 버전) | 클러스터에서 |
 |---|---|---|
-| L1 | rm-accel v0.4.1, chart 0.4.2 | DaemonSet `airm-system/rm-abstract-node`. etri-001에 `AcceleratorProfile` 7개(RNGD 3 + ATOM 4), etri-esc8000-e11에 2개. 노드 레이블 `airm.ai-computing.io/<vendor>.<model>` |
+| L1 | rm-accel v0.4.1, chart 0.4.2 | DaemonSet `airm-system/rm-abstract-node`. npu-node-1에 `AcceleratorProfile` 7개(RNGD 3 + ATOM 4), npu-node-2에 2개. 노드 레이블 `airm.ai-computing.io/<vendor>.<model>` |
 | L4 | hetero-llm-d | CRD v0.1.1, `ScrapeConfig airm-pods`, `airm-placement` ConfigMap, airm 대시보드. 기존 Gateway → `llama8b-pd-pool` → EPP |
 | L3 | rngd-pd | 릴리스 `airm-e2e`: 게이트웨이(`app: llama8b-pd`로 풀에 합류), RNGD 0에 prefill, RNGD 1에 decode. 파드는 L1 레이블(`furiosa.RNGD`와 `rebellions.ATOM`이 모두 있는 노드)로 배치 |
 | L2 | rngd-pd `shm` 전송 (`airm.kv_transports:shm`) | 8B 요청당 KV 67 MB가 `/dev/shm`으로 이동 |

@@ -45,7 +45,7 @@ def test_topology_skips_unhealthy_cards_and_says_so():
 
 
 class LiveIO(FakeIO):
-    def __init__(self, cards, unschedulable=("etri-esc8000-e11",)):
+    def __init__(self, cards, unschedulable=("npu-node-2",)):
         super().__init__()
         self.cards, self.unsched = list(cards), set(unschedulable)
 
@@ -75,12 +75,12 @@ def run(spec, io):
 def test_lost_decode_card_re_places_decode_only(tmp_path):
     spec, io = _spec(tmp_path), LiveIO(POOL)
     run(spec, io)
-    assert _ids(io) == [["etri-001/furiosa:0"], ["etri-001/furiosa:1"]]
-    io.cards = [a for a in POOL if a.id != "etri-001/furiosa:1"]          # the decode card disappears
+    assert _ids(io) == [["npu-node-1/furiosa:0"], ["npu-node-1/furiosa:1"]]
+    io.cards = [a for a in POOL if a.id != "npu-node-1/furiosa:1"]          # the decode card disappears
     run(spec, io)
     doc = document.parse(io.cm)
-    assert doc.generation == 2 and _ids(io) == [["etri-001/furiosa:0"], ["etri-001/furiosa:3"]]
-    assert "re-placed decode (etri-001/furiosa:1 gone)" in doc.decisions[1].reason
+    assert doc.generation == 2 and _ids(io) == [["npu-node-1/furiosa:0"], ["npu-node-1/furiosa:3"]]
+    assert "re-placed decode (npu-node-1/furiosa:1 gone)" in doc.decisions[1].reason
     run(spec, io)
     assert document.parse(io.cm).generation == 2                            # stable afterwards
 
@@ -88,24 +88,24 @@ def test_lost_decode_card_re_places_decode_only(tmp_path):
 def test_unhealthy_prefill_card_re_places_prefill_only(tmp_path):
     spec, io = _spec(tmp_path), LiveIO(POOL)
     run(spec, io)
-    io.cards = [sick(a) if a.id == "etri-001/furiosa:0" else a for a in POOL]
+    io.cards = [sick(a) if a.id == "npu-node-1/furiosa:0" else a for a in POOL]
     run(spec, io)
     doc = document.parse(io.cm)
-    assert doc.generation == 2 and _ids(io) == [["etri-001/furiosa:3"], ["etri-001/furiosa:1"]]
+    assert doc.generation == 2 and _ids(io) == [["npu-node-1/furiosa:3"], ["npu-node-1/furiosa:1"]]
     assert "unhealthy" in doc.decisions[0].reason and "decode kept" in doc.decisions[0].reason
 
 
 def test_node_lost_re_places_both_and_a_recovered_node_does_not_cause_churn(tmp_path):
     spec, io = _spec(tmp_path), LiveIO(POOL)
     run(spec, io)
-    io.unsched = {"etri-001"}
+    io.unsched = {"npu-node-1"}
     io.cards = POOL
     run(spec, io)
-    assert _ids(io) == [["etri-esc8000-e11/furiosa:0"], ["etri-esc8000-e11/furiosa:1"]]
-    assert "node etri-001 unschedulable" in document.parse(io.cm).decisions[0].reason
-    io.unsched = set()                                                      # etri-001 is back
+    assert _ids(io) == [["npu-node-2/furiosa:0"], ["npu-node-2/furiosa:1"]]
+    assert "node npu-node-1 unschedulable" in document.parse(io.cm).decisions[0].reason
+    io.unsched = set()                                                      # npu-node-1 is back
     run(spec, io)
-    assert document.parse(io.cm).generation == 2 and _ids(io)[0] == ["etri-esc8000-e11/furiosa:0"]
+    assert document.parse(io.cm).generation == 2 and _ids(io)[0] == ["npu-node-2/furiosa:0"]
 
 
 def test_spec_change_is_placed_fresh(tmp_path):
@@ -113,4 +113,4 @@ def test_spec_change_is_placed_fresh(tmp_path):
     run(spec, io)
     spec["pools"][0]["decode"]["count"] = 2
     run(spec, io)
-    assert _ids(io) == [["etri-001/furiosa:0"], ["etri-001/furiosa:1", "etri-001/furiosa:3"]]
+    assert _ids(io) == [["npu-node-1/furiosa:0"], ["npu-node-1/furiosa:1", "npu-node-1/furiosa:3"]]

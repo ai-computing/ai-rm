@@ -14,7 +14,7 @@ the Optimus Prime engine is not involved.
 
 | Layer | Component (pinned) | On the cluster |
 |---|---|---|
-| L1 | rm-accel v0.4.1, chart 0.4.2 | DaemonSet `airm-system/rm-abstract-node`; 7 `AcceleratorProfile`s on etri-001 (3 RNGD + 4 ATOM), 2 on etri-esc8000-e11; node labels `airm.ai-computing.io/<vendor>.<model>` |
+| L1 | rm-accel v0.4.1, chart 0.4.2 | DaemonSet `airm-system/rm-abstract-node`; 7 `AcceleratorProfile`s on npu-node-1 (3 RNGD + 4 ATOM), 2 on npu-node-2; node labels `airm.ai-computing.io/<vendor>.<model>` |
 | L4 | hetero-llm-d | CRD v0.1.1, `ScrapeConfig airm-pods`, `airm-placement` ConfigMap, airm dashboard; existing Gateway → `llama8b-pd-pool` → EPP |
 | L3 | rngd-pd | Release `airm-e2e`: gateway (`app: llama8b-pd`, joins the pool), prefill on RNGD 0, decode on RNGD 1, pods placed by the L1 labels (`furiosa.RNGD` and `rebellions.ATOM` both present) |
 | L2 | rngd-pd `shm` transport (`airm.kv_transports:shm`) | 67 MB of KV per 8B request through `/dev/shm` |

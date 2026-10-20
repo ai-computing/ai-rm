@@ -12,7 +12,7 @@ AcceleratorProfile(L1)과 노드 상태를 읽어 prefill/decode 풀을 배치�
   풀은 순서대로 배치하고 카드를 공유하지 않습니다. 들어갈 곳이 없으면 이유와 함께 빈 결정(종료 코드 1).
 - `generation`은 결정이 바뀔 때만 증가합니다.
 - 검증: 테스트 12개(실제 클러스터 모양의 풀), `rm_core.conformance airm.placements topology` PASS, 실제 클러스터 dry-run에서
-  shm 풀 → `etri-001/furiosa:0` + `furiosa:1`(e2e 수동 배치와 동일), p2p 풀 → RNGD 0 + ATOM 0,1.
+  shm 풀 → `npu-node-1/furiosa:0` + `furiosa:1`(e2e 수동 배치와 동일), p2p 풀 → RNGD 0 + ATOM 0,1.
 
 ## 2차 구현 (2026-10-19, 로드맵 W5·W6, rm-controller 0.2.0)
 - 문서 형식은 rm-core v0.1.2 `rm_core.placement`(PROTOCOL §5.4)를 그대로 씁니다. 0.1이 쓴 ConfigMap과 바이트가 같아 generation이
