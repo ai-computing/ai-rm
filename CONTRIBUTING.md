@@ -2,6 +2,12 @@
 
 [English](README.md) · [한국어](README.ko.md) · [Documentation](docs/README.md)
 
+Follow the organization's [contributing workflow](https://github.com/ai-computing/.github/blob/main/CONTRIBUTING.md):
+Issue (problem, evidence, scope, done-when, owner) → purpose branch (`fix/42-…`, `feat/…`, `docs/…`, `exp/…`) →
+PR with the verification evidence (the PR template asks for it; `Closes #N` only when it finishes the Issue) →
+review and green checks → **squash and merge** → delete the branch. Small doc fixes can start at the PR. This file adds
+what is specific to ai-rm.
+
 Use a focused branch and PR. The umbrella owns architecture, component pointers, integration tools, the in-tree packages under `packages/` (rm-bench, rm-controller) and public documentation; other implementation changes belong in the appropriate component repository.
 
 The [Optimus Prime direction](docs/engine-integration.md) consolidates inference-engine technology into `aicomp/opt_prime` with `fasop` as a planner element. Keep new engine work aligned with that owner; existing source cards remain transition requirements. `config/engine-integration.yaml` is planning metadata, not a runtime activation mechanism. Do not change live setup to a proposed branch before it exists and is validated.
@@ -43,5 +49,7 @@ git diff --check
 Review rendered diagrams and both language entry points. Do not report that a documentation check validated accelerator hardware or deployed a cluster.
 
 ## 한국어 안내
+
+조직 공통 [기여 절차](https://github.com/ai-computing/.github/blob/main/CONTRIBUTING.md)를 따릅니다: Issue(문제·근거·범위·완료 조건·담당자) → 목적별 브랜치 → 검증 근거를 담은 PR → 리뷰와 검사 통과 → Squash and merge → 브랜치 삭제. 작은 문서 수정은 PR부터 시작해도 됩니다.
 
 문서와 구조 변경은 영문·한국어를 함께 갱신하고, 설치·접근 권한·현재 상태가 두 언어에서 일치하도록 해주세요. 구현 변경은 해당 구성요소 저장소에서 진행합니다. 작업 카드와 rm-core 계약을 따르고 실제 검증 결과의 PASS·FAIL·SKIP을 구분해 기록합니다. 사이트 값·자격 증명·미공개 과제 증빙은 공개 문서에 넣지 않습니다.
