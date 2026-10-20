@@ -331,7 +331,7 @@ A100 수치는 일부 추정입니다(prefill 속도와 batch 1 TPOT는 데이�
 
 - 테스트 90개(topology, optimal과 역할 내 혼합, PD 풀 옆의 aggregated `serve` 풀, 재조정과 예측기, 상태·재배치, 적용, 시뮬레이터와 에피소드 재생, 기준선, 0.1과 같은 바이트의 문서), rm-core v0.1.2로
   `rm_core.conformance airm.placements topology optimal` PASS, CI에서 둘 다 실행.
-- 실제 클러스터 읽기 전용 dry-run(2026-10-19, topology): shm 풀은 `etri-001/furiosa:0` + `furiosa:1`(end-to-end 실행에서 손으로 고정했던 배치와
+- 실제 클러스터 읽기 전용 dry-run(2026-10-19, topology): shm 풀은 `npu-node-1/furiosa:0` + `furiosa:1`(end-to-end 실행에서 손으로 고정했던 배치와
   같음, cordon된 노드는 제외), p2p 풀은 RNGD 0 + ATOM 0, 1.
 - RNGD+ATOM 노드에서 실제 실행(2026-10-19, [기준선](../../docs/ko/baselines.md)): `optimal`(`examples/optimal.yaml`, budget 6)이
   generation 2(prefill RNGD 2장, decode RNGD 1장, `shm`)를 쓰고, `--apply`가 annotation된 rngd-pd Deployment를 patch했습니다(replicas

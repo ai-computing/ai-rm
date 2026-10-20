@@ -37,7 +37,7 @@ def _spec(tmp_path):
 def test_patches_follow_decisions_and_atom_groups():
     io = ApplyIO([dep("pre", "prefill", replicas=1), dep("dec", "decode", replicas=3), dep("other", "serve")])
     groups = {**{k: d.group for k, d in profiles.load().devices.items()}, "rebellions.ATOM": 2}   # a TP-2 ATOM
-    entries, _ = controller.plan(_spec_obj(), POOL, {"etri-esc8000-e11"})
+    entries, _ = controller.plan(_spec_obj(), POOL, {"npu-node-2"})
     doc, _ = document.build(entries, document.parse(None), "topology")
     out = {p["name"]: p for p in apply.patches(doc, io.deps, POOL, groups)}
     dec = out["dec"]["patch"]
@@ -46,9 +46,9 @@ def test_patches_follow_decisions_and_atom_groups():
         "requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"]
     assert terms == [{"matchExpressions": [
         {"key": "airm.ai-computing.io/rebellions.ATOM", "operator": "Exists"},
-        {"key": "kubernetes.io/hostname", "operator": "In", "values": ["etri-001"]}]}]
+        {"key": "kubernetes.io/hostname", "operator": "In", "values": ["npu-node-1"]}]}]
     assert dec["spec"]["template"]["metadata"]["annotations"][apply.IDS_ANNOTATION] == \
-        "etri-001/rebellions:0,etri-001/rebellions:1"
+        "npu-node-1/rebellions:0,npu-node-1/rebellions:1"
     assert dec["metadata"]["annotations"][apply.GENERATION_ANNOTATION] == "1"
     assert out["pre"]["patch"]["spec"]["replicas"] == 1 and out["other"]["patch"] is None
     # a Deployment already matching gets nothing
@@ -104,4 +104,4 @@ def test_serve_pool_deployment_follows_its_decision(tmp_path):
     assert controller.run_once(spec, io, namespace="llm-serving", dry_run=False, apply=True, perf=perf) == 0
     got = dict(io.patched)
     assert {n: p["spec"]["replicas"] for n, p in got.items()} == {"qwen": 1, "pre": 1, "dec": 1}
-    assert got["qwen"]["spec"]["template"]["metadata"]["annotations"][apply.IDS_ANNOTATION] == "etri-001/furiosa:3"
+    assert got["qwen"]["spec"]["template"]["metadata"]["annotations"][apply.IDS_ANNOTATION] == "npu-node-1/furiosa:3"

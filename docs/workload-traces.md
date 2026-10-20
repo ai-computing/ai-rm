@@ -96,7 +96,7 @@ RNGD prefill + RNGD decode over `shm`.
    benchmark tools (GuideLLM, MLPerf LoadGen) cannot see TTFT until streaming exists.
 8. **Efficiency.** Measured whole-system MFU upper bound 0.15–4.5 % and 3.9–120 GFLOPS/W on the host-staged path,
    against a 341 GFLOPS/W target; every limit above also lowers goodput per card and per watt.
-9. **One node.** etri-esc8000-e11 (2 RNGD, 2 GPU) was cordoned and GPU/GB10 nodes unavailable during the analysis,
+9. **One node.** npu-node-2 (2 RNGD, 2 GPU) was cordoned and GPU/GB10 nodes unavailable during the analysis,
    so scale-out and RNGD+GPU mixes could not be exercised.
 
 ### Where to start, by trace

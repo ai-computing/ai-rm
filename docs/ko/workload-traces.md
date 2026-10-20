@@ -89,7 +89,7 @@ BurstGPT는 1초 단위입니다.
    도구(GuideLLM, MLPerf LoadGen)가 TTFT를 볼 수 없습니다.
 8. **효율.** host-staged 경로에서 측정한 전체 MFU 상한은 0.15–4.5 %, 3.9–120 GFLOPS/W로 목표 341 GFLOPS/W에 못 미칩니다. 위의 모든
    한계가 카드당·와트당 goodput도 낮춥니다.
-9. **노드 하나.** 분석 시점에 etri-esc8000-e11(RNGD 2, GPU 2)은 cordon 상태였고 GPU/GB10 노드는 쓸 수 없어 scale-out과 RNGD+GPU
+9. **노드 하나.** 분석 시점에 npu-node-2(RNGD 2, GPU 2)은 cordon 상태였고 GPU/GB10 노드는 쓸 수 없어 scale-out과 RNGD+GPU
    조합을 시험하지 못했습니다.
 
 ### 트레이스별 첫 번째 지렛대

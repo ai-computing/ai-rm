@@ -5,7 +5,11 @@
 
 Scans tracked and staged text files (git ls-files) of each repo and exits 1 if anything is found.
 Allow a known-safe line by adding a regex to `.sensitive-allow` at the repo root (one per line),
-e.g. a fake token in a unit test. Python 3.6+, stdlib only.
+e.g. a fake token in a unit test.
+
+Site names that are not secret by shape (node hostnames, a personal home directory) are checked from a
+private list that is never committed: one regex per line in the file named by $SENSITIVE_PRIVATE_LIST,
+or ~/.config/ai-computing/sensitive-private.txt when that exists. Python 3.6+, stdlib only.
 """
 import os
 import re
@@ -39,8 +43,20 @@ def allowlist(repo):
     return [re.compile(l.strip()) for l in open(path, encoding="utf-8") if l.strip() and not l.startswith("#")]
 
 
+def private_patterns():
+    """Regexes from the untracked private list; matched case-insensitively."""
+    path = os.environ.get("SENSITIVE_PRIVATE_LIST") or os.path.expanduser(
+        os.path.join("~", ".config", "ai-computing", "sensitive-private.txt"))
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as f:
+        return [("private site name", re.compile(l.strip(), re.I))
+                for l in f if l.strip() and not l.lstrip().startswith("#")]
+
+
 def scan(repo):
     allow = allowlist(repo)
+    patterns = PATTERNS + private_patterns()
     findings = []
     for rel in tracked(repo):
         if BINARY.search(rel):
@@ -54,7 +70,7 @@ def scan(repo):
         for n, line in enumerate(lines, 1):
             if any(a.search(line) for a in allow):
                 continue
-            for kind, pat in PATTERNS:
+            for kind, pat in patterns:
                 m = pat.search(line)
                 if m and not SAFE.search(m.group(0)):
                     findings.append((rel, n, kind, m.group(0)[:48]))

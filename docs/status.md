@@ -49,7 +49,7 @@ component hosts where a check needs their environment.
 
 | Component | Pinned | Adapter / role | Result |
 |---|---|---|---|
-| rm-accel | `c72f356` (0.4.1, chart 0.4.2) | `airm.accelerator_providers:rm-abstract` | Conformance PASS; 3 RNGD + 4 ATOM on etri-001, matching the device plugins. *Correction:* the first record here said 2 ATOM matched the vendor tools; it did not — `rbln-stat` numbering, fixed in 0.4.1 |
+| rm-accel | `c72f356` (0.4.1, chart 0.4.2) | `airm.accelerator_providers:rm-abstract` | Conformance PASS; 3 RNGD + 4 ATOM on npu-node-1, matching the device plugins. *Correction:* the first record here said 2 ATOM matched the vendor tools; it did not — `rbln-stat` numbering, fixed in 0.4.1 |
 | hetero-npu-p2p | `9556e1a` | `airm.kv_transports:p2p` | 91 unit tests PASS; conformance **SKIP** (needs `HETERO_P2P_HELPER` and a live-buffer fixture) |
 | npu-offload | `486d1e7` | `airm.workloads:npu-offload`, memory tiers | 6/6 tests PASS with `RNGD_LLMD`; chart renders and lints |
 | rngd-pd | `83ba553` | `airm.kv_transports:shm`, `airm.workloads:rngd-pd` | `shm` conformance PASS; 44 tests PASS; chart renders and lints |

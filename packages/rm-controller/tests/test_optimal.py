@@ -61,9 +61,9 @@ def test_trivial_pool_matches_topology():
 
 
 def test_lab_pool_picks_rngd_pair_and_skips_unschedulable_node():
-    p, d = OptimalPlacement({"etri-esc8000-e11"}).place_pd(PS, DS, POOL, kv_transport="auto")
+    p, d = OptimalPlacement({"npu-node-2"}).place_pd(PS, DS, POOL, kv_transport="auto")
     ids = p.accelerator_ids + d.accelerator_ids
-    assert p.accelerator_ids == ["etri-001/furiosa:0"] and all(i.startswith("etri-001/furiosa:") for i in ids)
+    assert p.accelerator_ids == ["npu-node-1/furiosa:0"] and all(i.startswith("npu-node-1/furiosa:") for i in ids)
     assert len(set(ids)) == len(ids) == 3  # decode-bound default mix (1 K in, 128 out): one prefill, two decode
     assert p.kv_transport == "shm"       # p2p is verified only for RNGD -> ATOM; tcp is not implemented
     assert "profiles measured" in p.reason
@@ -74,7 +74,7 @@ def test_role_filters_are_constraints_and_atom_groups_stay_whole():
                                                    decode_spec=RoleSpec("rebellions.ATOM"))
     assert all("furiosa" in i for i in p.accelerator_ids)
     assert d.accelerator_ids and len(d.accelerator_ids) % 2 == 0 and all("rebellions" in i for i in d.accelerator_ids)
-    assert {i.split("/")[0] for i in p.accelerator_ids + d.accelerator_ids} == {"etri-001"}   # p2p is host-local
+    assert {i.split("/")[0] for i in p.accelerator_ids + d.accelerator_ids} == {"npu-node-1"}   # p2p is host-local
 
 
 def test_known_rate_takes_the_fewest_cards_that_cover_it():
@@ -93,14 +93,14 @@ def test_budget_and_fixed_counts():
 
 
 def test_used_and_unhealthy_cards_are_not_offered():
-    sick = Accelerator(id="etri-001/furiosa:0", node="etri-001", vendor="furiosa", model="RNGD", memory_bytes=48 * GB,
+    sick = Accelerator(id="npu-node-1/furiosa:0", node="npu-node-1", vendor="furiosa", model="RNGD", memory_bytes=48 * GB,
                        memory_kind="hbm", peak_tflops={"bf16": 256.0}, peak_source="datasheet",
                        extra={"health": "Unhealthy"})
     pool = [sick] + [a for a in POOL if a.id != sick.id]
-    p, d = OptimalPlacement({"etri-esc8000-e11"}).place_pd(P, D, pool, kv_transport="shm",
-                                                           used=["etri-001/furiosa:1"])
-    assert p.accelerator_ids + d.accelerator_ids and "etri-001/furiosa:0" not in p.accelerator_ids + d.accelerator_ids
-    assert "etri-001/furiosa:1" not in p.accelerator_ids + d.accelerator_ids
+    p, d = OptimalPlacement({"npu-node-2"}).place_pd(P, D, pool, kv_transport="shm",
+                                                           used=["npu-node-1/furiosa:1"])
+    assert p.accelerator_ids + d.accelerator_ids and "npu-node-1/furiosa:0" not in p.accelerator_ids + d.accelerator_ids
+    assert "npu-node-1/furiosa:1" not in p.accelerator_ids + d.accelerator_ids
 
 
 def test_cluster_link_may_span_nodes_only_when_implemented_or_planned_links_are_allowed():
@@ -142,5 +142,5 @@ def test_infeasible_mix_falls_back_with_the_why():
 def test_place_single_by_profiled_throughput():
     o = OptimalPlacement(profiles=TP2)
     assert o.place(Workload(kind="decode", model=M, labels={"airm.ai-computing.io/accelerator": "rebellions.ATOM"}),
-                   POOL).accelerator_ids == ["etri-001/rebellions:0", "etri-001/rebellions:1"]
-    assert o.place(Workload(kind="prefill", model=M), POOL).accelerator_ids == ["etri-001/furiosa:0"]
+                   POOL).accelerator_ids == ["npu-node-1/rebellions:0", "npu-node-1/rebellions:1"]
+    assert o.place(Workload(kind="prefill", model=M), POOL).accelerator_ids == ["npu-node-1/furiosa:0"]

@@ -19,6 +19,8 @@ python3 tools/airm.py list
 python3 tools/check_sensitive.py .
 ```
 
+`check_sensitive.py`는 커밋하지 않는 비공개 정규식 목록에서 사이트 이름(노드 호스트명, 홈 경로)도 읽어 검사합니다: `$SENSITIVE_PRIVATE_LIST` 또는 `~/.config/ai-computing/sensitive-private.txt`.
+
 공개 구성요소만 사용한다면 `--recursive`를 붙이지 마세요. 비공개 `duet`까지 받으려 합니다.
 
 ## 공개 구성요소 선택 초기화
