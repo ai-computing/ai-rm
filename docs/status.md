@@ -55,7 +55,7 @@ component hosts where a check needs their environment.
 | rngd-pd | `9a58da1` | `airm.kv_transports:shm`, `airm.workloads:rngd-pd` | `shm` conformance PASS; 44 tests PASS; chart renders and lints |
 | npu-train | `f9b7bc5` | `airm.workloads:npu-lora`, `airm_tok_s` | Tests PASS; chart renders and lints |
 | hetero-llm-d | `39a341d` | CRD, `airm_*` scrape, dashboard, placement ConfigMap | Server-side dry-run PASS on the live cluster |
-| lmd-top | `73e07d7` | reads `AcceleratorProfile`, `airm_*`, placement | 447 + 11 cargo tests PASS, clippy clean |
+| lmd-top | `29d599b` | reads `AcceleratorProfile`, `airm_*`, placement | 447 + 11 cargo tests PASS, clippy clean |
 | rm-bench | in-tree | `airm.workloads:rm-bench`, measurements, trace replay | 26 tests PASS |
 | rm-controller | in-tree | `airm.placements:topology`, `airm.placements:optimal` | conformance PASS, 51 tests PASS |
 
