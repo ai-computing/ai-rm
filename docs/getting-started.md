@@ -25,6 +25,8 @@ python3 tools/airm.py list
 python3 tools/check_sensitive.py .
 ```
 
+`check_sensitive.py` also reads site names (node hostnames, home paths) from a private regex list that is never committed: `$SENSITIVE_PRIVATE_LIST`, or `~/.config/ai-computing/sensitive-private.txt`.
+
 Do not add `--recursive` for a public-only checkout: it also attempts private `duet`.
 
 ## 3. Initialize selected components

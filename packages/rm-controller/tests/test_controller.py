@@ -25,7 +25,7 @@ def atom(node, i):
                        peak_source="datasheet")
 
 
-# npu-node-1: RNGD 0,1,3 + ATOM 0-3; esc8000: RNGD 0,1 (cordoned during the end-to-end run)
+# npu-node-1: RNGD 0,1,3 + ATOM 0-3; npu-node-2: RNGD 0,1 (cordoned during the end-to-end run)
 POOL = ([rngd("npu-node-1", i) for i in (0, 1, 3)] + [atom("npu-node-1", i) for i in range(4)]
         + [rngd("npu-node-2", i) for i in (0, 1)])
 M = "meta-llama/Llama-3.1-8B-Instruct"
