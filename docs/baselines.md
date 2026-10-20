@@ -6,7 +6,7 @@ Live evidence for roadmap items W5 (the controller places and moves the serving 
 (measured profiles for the `optimal` policy) and W7 (same-budget baselines with energy, including the vendor's own
 engine), run on 2026-10-19 on the node that carries both RNGD and ATOM cards (3 RNGD and 4 ATOM free at the start; a
 second RNGD node was cordoned). The W2 sections (two model pools at once; KV across nodes over `tcp`) ran the same evening
-on the same node, the second RNGD node still cordoned; one attempt to use the second RNGD node followed on 2026-10-20
+on the same node, the second RNGD node still cordoned; on 2026-10-20 the second RNGD node was opened for the NPU-to-NPU run
 ([below](#the-second-npu-node-2026-10-20)).
 
 **Scope.** Llama-3.1-8B-Instruct, the graphs rngd-pd has compiled today (S=512), one node, KV over `shm`. Two real
@@ -23,7 +23,7 @@ engine generation, not a performance claim for the hardware.
 | W7 vendor | **furiosa-llm 2026.3.0 aggregated** (one card per replica, FuriosaAI's pre-compiled Llama-3.1-8B) met the SLO for every request on both traces with 2 and 3 cards. It tied `solo` on goodput per card (offered-load bound) and on tokens per joule (0.74 against 0.76), with TPOT p90 17–19 ms against rngd-pd's 30–69 ms. **furiosa-llm has no PD mode** (no disaggregation option, no KV-transfer code, and FuriosaAI's llm-d guide lists it as unsupported), so there is no vendor PD row. |
 | W5 rebalancer | `rm-controller --rebalance --apply` on the gateway's `airm_*` gauges moved P:D three times in an hour, each time toward the role under pressure (generations 5–7). Moving a card to decode for conversation ×2 raised attainment from ~10 % to 85 %. Moving one to prefill for code ×3 lowered it from 63–68 % to 45 %, because the rule does not model what the donor role loses. The predictive rule (both roles predicted after a move) made only the conversation move in a 50-minute live re-check and held 1P+2D through code ×3: 77–81 % there. |
 | W2 multi-pool | Two models at once on disjoint cards, both placed by `rm-controller` (`--apply`, a PD pool and an aggregated `serve` pool): Llama-3.1-8B rngd-pd 1P+1D met the SLO for 97.6 % of Azure conversation ×1 with Qwen3-4B (furiosa-llm, one card) under the same load next to it, 98.0 % alone; Qwen 100 % in both. A re-run with one pool's spec changed (Llama decode RNGD → ATOM) patched only that pool's Deployments; the Qwen pod kept running untouched. |
-| W2 cross-node KV | rngd-pd's new `tcp` transport carried real prefill KV (67 MB per request) from the RNGD prefill pod to a relay pod on a CPU node and back to the RNGD decode pod: 2,112/2,112 blobs byte-identical, 32/32 outputs identical to `shm`. The NPU node's 1 GbE link sets the speed: 0.08–0.09 GB/s per request, 0.117 GB/s per direction with 8 in flight, ~0.8 s per 67 MB leg. `profiles.yaml` `tcp` is now measured (0.08 GB/s, implemented); with it the two-node simulator rows no longer gain over one node (they would from 0.15–0.25 GB/s). **NPU to NPU across two NPU nodes is still unverified.** On 2026-10-20 the second RNGD node was opened for this run alone (uncordoned behind a temporary taint): the link between the two NPU nodes is the same 1 GbE (raw TCP 0.117 GB/s each way; the `tcp` transport 0.081–0.087 GB/s per request, byte-exact, so the `tcp` profile stands), but the decode worker there failed with `EBUSY`: both of that node's RNGD cards had been taken a minute earlier by processes outside Kubernetes. Stopped, cleaned up, node re-cordoned. |
+| W2 cross-node KV | rngd-pd's new `tcp` transport carried real prefill KV (67 MB per request) from the RNGD prefill pod to a relay pod on a CPU node and back to the RNGD decode pod: 2,112/2,112 blobs byte-identical, 32/32 outputs identical to `shm`. The NPU node's 1 GbE link sets the speed: 0.08–0.09 GB/s per request, 0.117 GB/s per direction with 8 in flight, ~0.8 s per 67 MB leg. `profiles.yaml` `tcp` is now measured (0.08 GB/s, implemented); with it the two-node simulator rows no longer gain over one node (they would from 0.15–0.25 GB/s). **NPU to NPU across two NPU nodes (2026-10-20):** RNGD prefill on one NPU node, RNGD decode on the second, the `tcp` server beside decode. 2,112/2,112 blobs byte-identical, 32/32 outputs identical to `shm`. Only the push crosses the link (758 ms p50 per request); the decode's local pull takes 242 ms instead of 816 ms through a third-node relay. Azure conversation ×0.5: **96.7 %** SLO attainment (TTFT p90 1.67 s, TPOT p90 40 ms) against 89.2 % through the relay and 100 % on one node over `shm`. |
 | Found | rngd-pd's gateway `airm_tpot_p90_ms` was the engine step and did not see decode queueing ([rngd-pd#7](https://github.com/ai-computing/rngd-pd/pull/7)). rm-bench's trace prompts shared prefixes by accident (72 distinct texts), which a prefix cache exploits (fixed here). rngd-pd addressed an allocated card by its host index (`npu3` → `rngd:3`, out of range): fixed in [rngd-pd#5](https://github.com/ai-computing/rngd-pd/pull/5). The continuous decode worker stops serving for good once more than 8 requests wait with `PD_PREFETCH=1`: [rngd-pd#4](https://github.com/ai-computing/rngd-pd/issues/4). A process outside Kubernetes held one RNGD card, so a pod allocated that card failed with `EBUSY`; on the second RNGD node the device plugin and the AcceleratorProfiles showed both cards free (allocatable 2, none allocated) while host processes held both, so neither the scheduler nor `rm-controller` can see that use. |
 
 ## Setup
@@ -527,39 +527,81 @@ the two-node layouts come back between 0.15 and 0.25 GB/s and reach 2.73 (conver
 
 ### The second NPU node (2026-10-20)
 
-**Not verified: NPU to NPU across two NPU nodes.** The second RNGD node (two RNGD cards, cordoned since 2026-10-15) was
-opened for this run alone, 23:55–00:08 UTC. Before: Ready, no memory/disk/PID pressure, the furiosa device plugin and
-exporter running, both cards in the rm-accel AcceleratorProfiles, allocatable 2 and none allocated, 38 W and 0 %
-utilisation each, and no host process holding `/dev/rngd`. The one Pending Deployment pod in the cluster (no node
-affinity, no tolerations) could have landed there, so the node got a temporary `airm.ai-computing.io/experiment=true:NoSchedule`
-taint before `kubectl uncordon`, and only the experiment's pods tolerated it.
+**Layout.** Release `airm-exp-xnode` (rngd-pd `main` chart, the values of the relay run, `PD_PREFETCH=0`): gateway and
+RNGD prefill on the RNGD+ATOM node (npu-node-1), RNGD decode (`--B 8 --sched continuous`) and the `kvRelay` pod on the
+second RNGD node (npu-node-2). The prefill worker pushes each request's KV across the 1 GbE link to the relay; the decode
+worker pulls it from the relay on its own node. The second node was opened only for the run (08:17–08:44 UTC), behind a
+temporary `airm.ai-computing.io/experiment=true:NoSchedule` taint that only the experiment's pods tolerated, and cordoned
+again afterwards. The worker's host runtimes (Python packages, the furiosa venv, the compiled-graph cache, rngd-pd `main`;
+22 GB) are not installed on the second node and were copied to a staging directory there for the run (188 s). Node
+placement and the toleration were patched per Deployment: the chart has one `nodeAffinity` for every role and no
+tolerations, and `rm-controller` cannot ask for prefill and decode on given nodes (with the measured `tcp` link `optimal`
+finds no SLO-feasible two-node layout and falls back to `topology`, which does not choose nodes). The decode came up on the
+second node's first card in 167 s.
 
-The release `airm-exp-xnode` (the chart from rngd-pd#9, the values of the relay run) placed the gateway and the RNGD
-prefill on the RNGD+ATOM node, and the RNGD decode and the `kvRelay` pod on the second RNGD node, so the push would cross
-the network once and the decode's pull stay on its node. The host runtimes the worker mounts (Python packages, the
-furiosa venv, the compiled-graph cache, rngd-pd `main`) are not installed on the second node; 22 GB of them were copied to a
-staging directory there (216 s at 0.101 GB/s). The prefill worker came up in 63 s. The decode worker loaded its weights and
-then failed to open its card: `Npu npu0pe0-3: EBUSY`. Both RNGD cards of the second node had been opened at 00:00:56 and
-00:00:59 UTC, a minute before the decode pod started, by two training processes run directly on that host for another
-project (outside Kubernetes, with an 8.3 h timeout). The device plugin still advertised both cards as free. The run stopped
-there: decode scaled to 0, the release and every helper pod removed, the staging directory deleted, the taint removed and
-the node cordoned again.
+**Byte-exact.** With `AIRM_KV_TCP_LOG=1`, 33 requests (1 + 16 sequential + 16 at concurrency 8): **2,112 of 2,112 blobs**
+(2.215 GB) have the same size and SHA-256 at the prefill's push and the decode's pull; the relay counted 0 CRC errors.
 
-**What was measured.** The link between the two NPU nodes, from the hosts and through the `tcp` transport:
+**Token-exact.** The same 16 prompts (5–479 tokens, 32 output tokens, greedy), sequential and 8 at a time, then decode moved
+to the RNGD+ATOM node and the release switched to `shm` (pods restarted): **32 of 32 outputs identical** in text and token
+count.
 
-| | Result |
-|---|---|
-| NICs | 1 GbE on both: the RNGD+ATOM node as before; the second node's port negotiated 1 Gb/s (its other port has no link) |
-| RTT | 0.175 ms average, 0.115–0.242 ms (20 pings) |
-| Raw TCP, host to host | 0.1176 GB/s (940 Mbit/s) each way, 1 or 4 streams, 1 GB per run |
-| `tcp` transport, prefill pod → relay on the second NPU node and back (`kv_tcp_bench.py`, 8 requests per level) | 1 in flight: push 769 ms (0.087 GB/s), pull 829 ms (0.081 GB/s); 2: 0.113 GB/s both ways; 4: 0.114; 8: 0.119, push p50 4,264 ms. Byte-exact at every level, CRC on |
+**Per request, in serving** (rngd-pd gateway `pd` timings, 16 prompts; save = the push still running after prefill compute,
+load = the pull at decode admission):
 
-These are the relay numbers of the CPU-node run within 2 %: the second NPU node sits on the same 1 GbE fabric, so the
-`tcp` profile (0.08 GB/s, 14 ms) holds for an NPU-to-NPU pool and `profiles.yaml` is unchanged; the simulator's two-node
-rows (no gain over one node at this link) stand as well. With the server beside decode only the push crosses the network,
-which would take one ~0.8 s leg off each request's load at admission; that saving, the token-exact outputs, and the
-per-request transfer in serving are what remain to be measured. They need the second node's cards free of the host jobs
-(or those jobs moved into Kubernetes, where the device plugin would account for them).
+| | NPU→NPU `tcp`, server beside decode | via a CPU relay node (2026-10-19) | `shm`, one node (same day) |
+|---|--:|--:|--:|
+| sequential: KV save p50 / p90 | 758 / 795 ms | 678 / 724 ms | 1.6 / 6.7 ms |
+| sequential: KV load at admission p50 / p90 | **242 / 272 ms** | 816 / 896 ms | 28 / 42 ms |
+| sequential: server TTFT p50 / p90 | 844 / 900 ms | 778 / 839 ms | 97 / 128 ms |
+| 8 concurrent: KV save p50 / p90 | 3,527 / 4,252 ms | 3,266 / 4,304 ms | 1.9 / 7.1 ms |
+| 8 concurrent: KV load p50 / p90 | **295 / 340 ms** | 1,305 / 1,378 ms | 35 / 43 ms |
+| 8 concurrent: server TTFT p50 / p90 | 3,738 / 4,764 ms | 3,330 / 4,766 ms | 407 / 821 ms |
+
+**Link, measured** (`bench/kv_tcp_bench.py`, S=512-shaped bf16 KV, 8 requests per level, byte-exact at every level):
+
+| | 1 in flight | 8 in flight, both directions |
+|---|--:|--:|
+| Hosts: NICs 1 GbE on both (the second node's port negotiated 1 Gb/s, its other port has no link); RTT 0.175 ms; raw TCP | 0.1176 GB/s each way | 0.117 GB/s each way |
+| Prefill pod → relay on the second NPU node → back (both legs cross the link) | push 768 ms (0.087 GB/s), pull 824 ms (0.081 GB/s) | 0.119 GB/s |
+| Decode pod → relay on its own node (local) | push 120 ms (0.56 GB/s), pull 153 ms (0.44 GB/s) | 1.67 GB/s |
+
+The cross-node numbers equal the CPU-relay run's within 2 %, so the `tcp` profile (0.08 GB/s, 14 ms) holds for an NPU-to-NPU
+pool and `profiles.yaml` is unchanged. Putting the server beside decode removes one of the two network legs: the load
+the decode loop waits for at each admission drops from ~0.8 s to ~0.25 s (the local leg plus deserialising), while the
+push, which sets TTFT, is unchanged.
+
+**A live trace over it.** Azure conversation ×0.5 (212 requests, 0.71 req/s), pods restarted first (`AIRM_KV_TCP_LOG=0`),
+`pd-smoke` warm-up, power of the two cards in use from Prometheus (prefill card on one node, decode card on the other):
+
+| Deployment | Cards | SLO attainment | TTFT p90 | TPOT p90 | Goodput req/s | per card | Power W (peak) | tok/J |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| PD 1P+1D RNGD, **decode on the second NPU node**, KV `tcp`, server beside decode | 2 | **96.7 %** | 1,673 ms | 40.5 ms | 0.68 | 0.34 | 148.1 (166) | 0.60 |
+| PD 1P+1D RNGD, KV `tcp` via a CPU relay node (2026-10-19) | 2 | 89.2 % | 1,727 ms | 83.3 ms | 0.62 | 0.31 | 151.7 (165) | 0.59 |
+| PD 1P+1D RNGD, one node, KV `shm` (same day, same release) | 2 | 100.0 % | 151 ms | 33.8 ms | 0.70 | 0.35 | 156.7 (171) | 0.57 |
+| PD 1P+1D RNGD, one node, KV `shm` (W7) | 2 | 100.0 % | 246 ms | 33.1 ms | 0.70 | 0.35 | 155.9 (176) | 0.57 |
+
+All 212 requests completed in every run. The issue's hypothesis (attainment near the relay's 89.2 %) is refuted on the
+TPOT side: with the pull local, each admission stalls the decode loop for ~0.25 s instead of ~0.8 s, and TPOT p90 falls from
+83 ms to 40 ms; the misses left (7 of 212) are TTFT, where the 0.76 s push and the queue behind it at the trace's bursts
+reach the 2 s SLO. A `pd-smoke` (32 requests in 4 s) still sees TTFT p90 16.7 s: 8 req/s × 67 MB is 4.6× the link.
+Tokens per joule are the same within noise (0.60 against 0.57).
+
+**Against the simulator.** `rm_controller.sim.simulate` with the measured profiles, this layout (P 1 RNGD on one node, D 1
+RNGD on another, `tcp`) and the replayed requests' length quantiles (input p50/p90 203/399, output 132/217) at 0.71 req/s:
+100 % attainment, TTFT p90 983 ms, TPOT p90 30 ms (the one-node `shm` layout: 100 %, 172 ms, 30 ms); highest rate within
+the SLO 1.57 req/s against 1.76 on one node. Measured: 96.7 %, 1,673 ms, 40.5 ms. The simulator is optimistic, as for the
+relay run: its arrivals are smoother than the trace's bursts, it charges one KV time per request (0.85 s) where pushes
+queue behind each other on the link, and its replay does not charge the admission load to TPOT. A link model that splits
+the push (network) from the admission load (local, ~0.25 s here) would describe this layout; that change is not made here.
+
+**First attempt, the same day (00:00 UTC): blocked.** Two training processes run directly on the second node's host for
+another project had opened both of its RNGD cards a minute before the decode pod started, which failed with
+`Npu npu0pe0-3: EBUSY`; the device plugin still advertised both cards as free. That attempt measured only the link (the
+same numbers as above within 1 %) and was stopped and cleaned up. For this run rm-accel v0.5.0 marks such cards
+(`airm.ai-computing.io/host-held`); its label read 0 at the start although a host process had held the second card since
+08:13:59 UTC (the label caught up within two minutes, and the process ended at 08:23). The decode pod was given the free
+card. Card occupancy outside Kubernetes is tracked in rm-accel.
 
 NIXL: the installed `nixl_cu12` wheel on the NPU node ships `libplugin_UCX.so` and a UCX agent instantiates there with
 `UCX_TLS=tcp`, but no NIXL-over-UCX KV path was built or measured here; rngd-pd's `nixl` transport stays the same-host
@@ -587,8 +629,10 @@ HETERO_NPU path ([rngd-pd#8](https://github.com/ai-computing/rngd-pd/pull/8)).
   footnote to the tables. They ran after the rngd-pd rows, on the same cards, the same afternoon.
 - **W2 runs** are single runs too. The multi-pool load came from one client host for both pools; the cross-node path had a
   relay on a third node (two network legs per request, one where the server sits beside decode), on a 1 GbE link, and both
-  NPU workers on one NPU node because the second NPU node is cordoned; the 2026-10-20 attempt on the second NPU node
-  measured the link only (its cards were held by host processes).
+  NPU workers on one NPU node because the second NPU node was cordoned. The 2026-10-20 NPU-to-NPU run used the second
+  NPU node with runtimes copied to it for the run; that 22 GB staging brought the node's disk to its kubelet eviction
+  threshold once (DiskPressure at 08:20 UTC, cleared without evicting anything there), so a node meant for these runs
+  needs the runtimes installed (or an image that carries them).
 - **Rebalancer run** is one sequence (code ×3, conversation ×2, code ×3), above capacity on purpose; the first
   conversation phase ran with the old TPOT gauge and is reported only for that finding.
 
@@ -610,11 +654,11 @@ HETERO_NPU path ([rngd-pd#8](https://github.com/ai-computing/rngd-pd/pull/8)).
 | `airm-exp-qwen` (Deployment, Service) | furiosa-llm Qwen3-4B-FP8 for the second pool, a copy of `serve-furiosa-ai-qwen3-4b-fp8` (which was only read); model cache on a hostPath under `/var/tmp` (5.4 GB) | deleted; cache removed (`airm-exp-cleanup` Pod, deleted) |
 | `airm-exp-decode-atom` (Deployment) | ATOM decode for the Llama pool, the move to generation 5 | deleted |
 | `llm-serving/airm-exp-xnode` (Helm) | rngd-pd chart from rngd-pd#9: RNGD prefill + RNGD decode on the NPU node, `kvRelay` pod on a CPU-only node, own gateway Service; switched between `tcp` and `shm`, restarts between runs | uninstalled |
-| Second RNGD node (2026-10-20, 23:55–00:08 UTC) | taint `airm.ai-computing.io/experiment=true:NoSchedule`, then uncordon; re-cordoned at the end | taint removed, cordoned: spec, labels and annotations equal to the recorded ones (the `unschedulable` taint carries a new `timeAdded`) |
-| `llm-serving/airm-exp-xnode` (Helm, 2026-10-20) | prefill + gateway on the RNGD+ATOM node, decode + `kvRelay` on the second RNGD node (affinity and toleration patched per Deployment) | uninstalled |
+| Second RNGD node (2026-10-19 23:55 – 10-20 00:08 UTC, blocked; 2026-10-20 08:17–08:44 UTC, NPU-to-NPU run) | taint `airm.ai-computing.io/experiment=true:NoSchedule`, then uncordon; re-cordoned at the end | taint removed, cordoned: spec, labels and annotations equal to the recorded ones (the `unschedulable` taint carries a new `timeAdded`) |
+| `llm-serving/airm-exp-xnode` (Helm, 2026-10-20, twice) | prefill + gateway on the RNGD+ATOM node, decode + `kvRelay` on the second RNGD node (affinity and toleration patched per Deployment); for the `shm` comparison decode moved to the RNGD+ATOM node with `AIRM_KV_TRANSPORT=shm`; restarts between runs | uninstalled |
 | `airm-exp-xnode-probe`, `-xfer`, `-cleanup` (Pods), `airm-exp-xnode-xfer` (ConfigMap) | read-only host checks, link test and copy of the worker runtimes to `/var/tmp` on the second RNGD node, then its removal | deleted; staging directories removed on both nodes |
 
-No other Deployment or EPP was touched, and apart from the 2026-10-20 attempt (last rows) no node was cordoned, uncordoned or targeted by name: the cordoned RNGD
+No other Deployment or EPP was touched, and apart from the 2026-10-20 runs (last rows) no node was cordoned, uncordoned or targeted by name: the cordoned RNGD
 node stayed cordoned and nothing was scheduled on it. Raw results (`results/` is not tracked in this repository) stay with the
 experiment logs on the node.
 
