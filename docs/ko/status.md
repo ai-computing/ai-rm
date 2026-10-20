@@ -52,7 +52,7 @@ Umbrella chart, 시뮬레이션 클러스터 명령, 서빙 파드가 따르는 
 | rngd-pd | `9a58da1` | `airm.kv_transports:shm`, `airm.workloads:rngd-pd` | `shm` 적합성 PASS, 테스트 44개 PASS, chart 렌더·lint 통과 |
 | npu-train | `f9b7bc5` | `airm.workloads:npu-lora`, `airm_tok_s` | 테스트 PASS, chart 렌더·lint 통과 |
 | hetero-llm-d | `39a341d` | CRD, `airm_*` 수집, 대시보드, 배치 ConfigMap | 실제 클러스터에서 server dry-run PASS |
-| lmd-top | `73e07d7` | `AcceleratorProfile`·`airm_*`·배치 결정 표시 | cargo 테스트 447 + 11개 PASS, clippy 경고 0 |
+| lmd-top | `29d599b` | `AcceleratorProfile`·`airm_*`·배치 결정 표시 | cargo 테스트 447 + 11개 PASS, clippy 경고 0 |
 | rm-bench | in-tree | `airm.workloads:rm-bench`, 측정, 트레이스 재생 | 테스트 26개 PASS |
 | rm-controller | in-tree | `airm.placements:topology`, `airm.placements:optimal` | 적합성 PASS, 테스트 51개 PASS |
 
