@@ -65,6 +65,10 @@ cluster: L1 profiles placed rngd-pd's PD pods, requests went through the llm-d g
 the fixes it produced and what remains (placement controller, P2P with live buffers, RNGD→ATOM decode).
 Sensitive-data scans of every component tree are clean.
 
+## Blocked on hardware
+
+**RDMA for cross-node KV** ([#46](https://github.com/ai-computing/ai-rm/issues/46)) has no RDMA device on the NPU nodes (Intel X550/X710, no link on the 10G ports, one 1 GbE port up), and we have no root to add soft-RoCE. The code path is ready: rngd-pd `nixl-ucx` ([rngd-pd#13](https://github.com/ai-computing/rngd-pd/pull/13)) moves KV with NIXL READs over UCX, verified across two nodes over UCX-TCP (byte-exact, link-bound). RDMA then needs only `UCX_TLS=rc,ud,sm,self`. The Issue lists what an admin must do for each option. Its done-when needs a run with verbs, byte- and token-exact, and the measured GB/s in [baselines](baselines.md) and `profiles.yaml`.
+
 ## Work still requiring independent validation
 
 Component adapters, device-profile publication, charts and metrics readers have their own work cards and acceptance criteria. A combined umbrella chart, simulation cluster command, load-aware placement that serving pods follow, and a compatibility registry are integration directions, **not available capabilities**. The placement controller exists as a first version (dry-run verified on the cluster).

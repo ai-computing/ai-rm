@@ -44,4 +44,10 @@ requests. Everything else is done in the ai-rm repositories.
 | W6 | `optimal` with mixed types per role, profiles calibrated from live runs, DistServe/HexGen-2-style baselines in the simulator; placement document normative (rm-core v0.1.2, §5.4) | engine #50 |
 | W7 | [same-budget baselines](baselines.md): replication best goodput/card at 2 cards, PD best tok/J (1.17), calibrated `optimal` 1P+2D 100 % SLO at 3 cards; RNGD→ATOM limited by the ATOM decode graph (108 ms/token) | furiosa-llm vendor baseline done (same goodput/card and tok/J as `solo`, lower latency; furiosa-llm has no PD); conversation ×1 repeated 3–5 times per layout ([repeated runs](baselines.md#repeated-runs-2026-10-2021-43): the ordering holds, PD 1P+1D tok/J 1.06 in every run, but its attainment ranges 25.5–98.0 %); A100 same-budget row still to run (A100s busy) |
 
+## Blocked on hardware
+
+| Item | Blocked by | Ready on the software side | What unblocks it |
+|---|---|---|---|
+| Cross-node KV over RDMA ([#46](https://github.com/ai-computing/ai-rm/issues/46)) | The NPU nodes have no RDMA device. Their NICs are Intel X550/X710 10GBASE-T with no RDMA. The 10G ports have no link, so all traffic goes over one 1 GbE port: 0.117 GB/s per direction, ~0.8 s per 67 MB request. | rngd-pd `nixl-ucx` transport ([rngd-pd#13](https://github.com/ai-computing/rngd-pd/pull/13)): NIXL READ over UCX between registered host buffers. RDMA is a `UCX_TLS` change. Cross-node over UCX-TCP: byte-exact, link-bound like `tcp` (0.085 GB/s one request). | (a) RoCE v2 / InfiniBand NICs on both NPU nodes plus switch configuration (25 GbE ~2.9 GB/s). (b) Cable the existing 10G ports: ~1.1 GB/s, no RDMA, the cheapest step past the simulator's 0.15–0.25 GB/s break-even. (c) Soft-RoCE `rdma link add` by an admin, for a functional check of the verbs path only. |
+
 Progress is tracked in the hub's Plane project (modules W1–W7) and summarized in [status](status.md).
