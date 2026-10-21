@@ -13,7 +13,7 @@ AI-RM은 자원 표현, 데이터 이동, 워크로드 실행, 클러스터 연�
 | 계층 | 책임 | 구성요소·연결 지점 |
 |---|---|---|
 | L1 가속기 추상화 | 장치 탐지·메모리·정밀도·peak 출처·전력·인터커넥트 | rm-accel, AcceleratorProfile과 노드 레이블 |
-| L2 메모리·전송 | 메모리 계층과 워크로드 데이터 이동 | Optimus Prime KV/offload 모듈 계획, 기존 hetero-npu-p2p/npu-offload 소스, 별도 비공개 duet |
+| L2 메모리·전송 | 메모리 계층과 워크로드 데이터 이동 | Optimus Prime KV/offload 모듈 계획, 기존 hetero-npu-p2p/npu-offload 소스, onggi 모델·컴파일 결과물 저장소, 별도 비공개 duet |
 | L3 통합 엔진·워크로드 | 단일 런타임 책임으로 추론 실행, 학습 연결 | Optimus Prime 목표, rngd-pd 이전 소스, npu-train workload |
 | L4 클러스터·계획 | 라우팅·검토된 배치 제안·스토어·모니터링 | hetero-llm-d의 Gateway/InferencePool/EPP, 엔진 내부 FASOP adapter 계획 |
 | L4 배치 | 서빙 풀마다 가속기를 고르고 결정을 게시 | rm-controller (`airm-placement`) |
@@ -36,6 +36,7 @@ L1은 능력 모델을 제공하며 모든 요청이 거치는 네트워크 hop�
 
 - **hetero-npu-p2p:** 동일 호스트의 호환 NPU 사이 KV 전송과 완료 fence.
 - **npu-offload:** NPU HBM과 호스트 CPU/DRAM에 전문가 실행 분담. v0.1은 KVTransport가 아닌 workload·memory-tier 계약으로 연결합니다.
+- **onggi:** 모델 가중치와 NPU 컴파일 결과물을 내용 기반 청크로 한 번만 저장하고 엔진에 파일로 넘김. P0는 중복 제거 측정. KV가 아니라 결과물을 옮깁니다.
 - **duet:** GB10에서 CPU 그래프 순회와 GPU 거리 계산을 공유 메모리로 연결하는 비공개 선택 검색 workload입니다.
 
 ## 저장소와 계약 경계

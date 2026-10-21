@@ -17,6 +17,7 @@
 | ai-rm, rm-core, rm-accel | 공개 |
 | aicomp | Optimus Prime·FASOP 공개 소스, 아직 활성 엔진 서브모듈은 아님 |
 | hetero-npu-p2p, npu-offload | 공개 |
+| onggi | 공개(2026-10-21부터) |
 | rngd-pd, npu-train | 공개 |
 | hetero-llm-d | 공개 |
 | rm-bench, rm-controller | ai-rm `packages/`에 포함 (rm-bench는 2026-10-19 이전, 기존 저장소는 archive) |
@@ -48,6 +49,7 @@ Umbrella chart, 시뮬레이션 클러스터 명령, 서빙 파드가 따르는 
 |---|---|---|---|
 | rm-accel | `c72f356` (0.4.1, chart 0.4.2) | `airm.accelerator_providers:rm-abstract` | 적합성 PASS, npu-node-1에서 RNGD 3 + ATOM 4 탐지(device plugin과 일치). *정정:* 처음 기록한 "ATOM 2, 벤더 도구와 일치"는 틀렸습니다. `rbln-stat` 번호 문제였고 0.4.1에서 수정 |
 | hetero-npu-p2p | `4096573` | `airm.kv_transports:p2p` | 단위 테스트 91개 PASS, 적합성 **SKIP** (`HETERO_P2P_HELPER`와 실제 버퍼 fixture 필요) |
+| onggi | `de1de4f` | CLI `onggi dedup-report`(P0), rm-core 어댑터 아직 없음 | CI gofmt·vet·`test -race` PASS; RNGD + ATOM 노드에서 330 GB → 고유 64.0 GB(Llama-3.1-8B 한 벌), 1.73 TB → 0.94 TB(모델 저장소) |
 | npu-offload | `7094711` | `airm.workloads:npu-offload`, 메모리 계층 | `RNGD_LLMD` 설정 시 6/6 PASS, chart 렌더·lint 통과 |
 | rngd-pd | `783cb1d` | `airm.kv_transports:shm`, `airm.workloads:rngd-pd` | `shm` 적합성 PASS, 테스트 44개 PASS, chart 렌더·lint 통과 |
 | npu-train | `c50281b` | `airm.workloads:npu-lora`, `airm_tok_s` | 테스트 PASS, chart 렌더·lint 통과 |

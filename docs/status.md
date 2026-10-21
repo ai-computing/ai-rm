@@ -20,6 +20,7 @@ FASOP currently models training costs on heterogeneous GPUs. Inference-specific 
 | rm-accel | Public |
 | hetero-npu-p2p | Public |
 | npu-offload | Public |
+| onggi | Public (since 2026-10-21) |
 | rngd-pd | Public |
 | npu-train | Public |
 | hetero-llm-d | Public |
@@ -52,6 +53,7 @@ component hosts where a check needs their environment.
 | rm-accel | `c72f356` (0.4.1, chart 0.4.2) | `airm.accelerator_providers:rm-abstract` | Conformance PASS; 3 RNGD + 4 ATOM on npu-node-1, matching the device plugins. *Correction:* the first record here said 2 ATOM matched the vendor tools; it did not — `rbln-stat` numbering, fixed in 0.4.1 |
 | hetero-npu-p2p | `4096573` | `airm.kv_transports:p2p` | 91 unit tests PASS; conformance **SKIP** (needs `HETERO_P2P_HELPER` and a live-buffer fixture) |
 | npu-offload | `7094711` | `airm.workloads:npu-offload`, memory tiers | 6/6 tests PASS with `RNGD_LLMD`; chart renders and lints |
+| onggi | `de1de4f` | CLI `onggi dedup-report` (P0); no rm-core adapter yet | CI: gofmt, vet, `test -race` PASS; on the RNGD + ATOM node 330 GB → 64.0 GB distinct (Llama-3.1-8B set), 1.73 TB → 0.94 TB (model stores) |
 | rngd-pd | `783cb1d` | `airm.kv_transports:shm`, `airm.workloads:rngd-pd` | `shm` conformance PASS; 44 tests PASS; chart renders and lints |
 | npu-train | `c50281b` | `airm.workloads:npu-lora`, `airm_tok_s` | Tests PASS; chart renders and lints |
 | hetero-llm-d | `9cfa670` | CRD, `airm_*` scrape, dashboard, placement ConfigMap | Server-side dry-run PASS on the live cluster |
