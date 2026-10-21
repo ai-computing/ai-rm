@@ -41,7 +41,7 @@ KV의 레이아웃·정밀도·소유권을 명시한 계약입니다. 동시에
 | W4 | A100 2장 실측(hetero-llm-d #5): `approx-prefix-gpu`로 공유 prefix TTFT p50 0.225 → 0.127 s, 수정한 이벤트 계약으로 precise prefix 동작, [KV 계층 평가](kv-tier-evaluation.md) | 엔진 #46, #52 |
 | W5 | rm-controller가 실제 PD 파드를 배치·이동(`--apply`), A100 KEDA 1→2 21초, 콜드 스타트 110–121초, rngd-pd decode가 적체를 견딤(rngd-pd #6: 1,153요청 0 실패) | 엔진 #45, #49, 예측형 `--rebalance` 실환경 완료 ([기준선](baselines.md) W5: 대화가 많으면 decode로 이동, 코드에서는 유지해 77–81 %, 이전 45 %) |
 | W6 | 역할 내 타입 혼합 `optimal`, 실측 보정 프로파일, 시뮬레이터의 DistServe·HexGen-2식 기준선, 배치 문서 규범화 (rm-core v0.1.2, §5.4) | 엔진 #50 |
-| W7 | [같은 예산 기준선](baselines.md): 2장에서는 복제가 카드당 goodput 최고, PD가 tok/J 최고(1.17), 3장에서는 보정된 `optimal` 1P+2D가 SLO 100 %, RNGD→ATOM은 ATOM decode graph(토큰당 108 ms)가 한계 | furiosa-llm 벤더 기준선 완료 (카드당 goodput·tok/J는 `solo`와 같고 지연은 더 낮음, furiosa-llm은 PD 미지원). 대화 ×1을 배치마다 3–5번 반복([반복 실행](baselines.md#반복-실행-2026-10-2021-43): 순서는 유지, PD 1P+1D tok/J는 모든 실행 1.06이지만 달성률은 25.5–98.0 %). 같은 예산의 A100 행은 아직(A100 사용 중) |
+| W7 | [같은 예산 기준선](baselines.md): 2장에서는 복제가 카드당 goodput 최고, PD가 tok/J 최고(1.17), 3장에서는 보정된 `optimal` 1P+2D가 SLO 100 %, RNGD→ATOM은 ATOM decode graph(토큰당 108 ms)가 한계 | furiosa-llm 벤더 기준선 완료 (카드당 goodput·tok/J는 `solo`와 같고 지연은 더 낮음, furiosa-llm은 PD 미지원). 대화 ×1을 배치마다 3–5번 반복([반복 실행](baselines.md#반복-실행-2026-10-2021-43): 순서는 유지, PD 1P+1D tok/J는 모든 실행 1.06이지만 달성률은 25.5–98.0 %). 같은 예산의 A100 행 측정([A100](baselines.md#같은-예산의-a100-2026-10-21-45): A100 한 장의 vLLM이 카드당 1.51 req/s로 SLO를 지키고 0.67 tok/J, tok/J는 카드 2장 RNGD 행 모두보다 낮음) |
 
 ## 하드웨어 대기
 

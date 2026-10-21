@@ -21,7 +21,8 @@ engine generation, not a performance claim for the hardware.
 | W7 | **2 cards:** replication (two single-card `solo` instances) beats PD 1P+1D on goodput per card: Azure conversation at 1.52 req/s with 100 % SLO attainment (0.75 req/s per card) where 1P+1D reached 87.7 %; 1P+1D gives the most tokens per joule (1.17 tok/J against 0.76). **3 cards:** the calibrated `optimal` layout, PD 1P+2D, met the SLO for every request on both traces, like `solo` ×3, at 1.2× its tokens per joule; the shipped-profile choice 2P+1D reached 93.6 % and 77.5 %. **RNGD prefill → ATOM decode cannot meet a 100 ms TPOT SLO**: the ATOM decode graph takes 108 ms per token. |
 | W6 | The profile table was off by 2× and more: RNGD prefill of a 400-token prompt takes 100 ms, not the 220 ms the old derived numbers gave, RNGD decode on the batched graph is 30 ms per token at any batch (not 17–24), ATOM decode is 108 ms on one card (not 40–52 on two). `profiles.yaml` now carries the measured values; `optimal` changes its choice from 2P+1D to 1P+2D, and 1P+2D did better on the cluster (100 % against 93.6 % and 77.5 %). |
 | W7 vendor | **furiosa-llm 2026.3.0 aggregated** (one card per replica, FuriosaAI's pre-compiled Llama-3.1-8B) met the SLO for every request on both traces with 2 and 3 cards. It tied `solo` on goodput per card (offered-load bound) and on tokens per joule (0.74 against 0.76), with TPOT p90 17–19 ms against rngd-pd's 30–69 ms. **furiosa-llm has no PD mode** (no disaggregation option, no KV-transfer code, and FuriosaAI's llm-d guide lists it as unsupported), so there is no vendor PD row. |
-| W7 repeats | Conversation ×1 was re-run 3–5 times per layout ([below](#repeated-runs-2026-10-2021-43)). **PD 1P+1D** gave 98.0, 25.5, 94.3, 93.4 and 96.7 %: it runs at the edge of its capacity, and one run in five collapsed into a backlog the engine cannot cancel. Its tok/J was 1.06 in every run (the single run read 1.17), still 1.3× `solo` ×2 and 1.5× furiosa-llm ×2. **`solo` ×2**: 97.1 ± 4.9 %, 0.73 per card. **furiosa-llm ×2**: 100 % in every run, 0.76 per card. **PD 1P+2D**: 100 % in every run, 0.67 tok/J. The single-run ordering holds; the 87.7 % cell does not describe 1P+1D. Freshly started rngd-pd pods need the idle-probe warm-up: with `pd-smoke` alone, 1P+1D fell to 7 %. The A100 same-budget row was not run: another project held the A100s for the whole session. |
+| W7 repeats | Conversation ×1 was re-run 3–5 times per layout ([below](#repeated-runs-2026-10-2021-43)). **PD 1P+1D** gave 98.0, 25.5, 94.3, 93.4 and 96.7 %: it runs at the edge of its capacity, and one run in five collapsed into a backlog the engine cannot cancel. Its tok/J was 1.06 in every run (the single run read 1.17), still 1.3× `solo` ×2 and 1.5× furiosa-llm ×2. **`solo` ×2**: 97.1 ± 4.9 %, 0.73 per card. **furiosa-llm ×2**: 100 % in every run, 0.76 per card. **PD 1P+2D**: 100 % in every run, 0.67 tok/J. The single-run ordering holds; the 87.7 % cell does not describe 1P+1D. Freshly started rngd-pd pods need the idle-probe warm-up: with `pd-smoke` alone, 1P+1D fell to 7 %. |
+| W7 A100 | Same load and procedure, 3 runs each ([below](#a100-at-the-same-budget-2026-10-21-45)): **vLLM on one A100** met the SLO for every request (TTFT p90 61 ms, TPOT p90 13.9 ms), 1.51 req/s per card, twice any 2-card NPU row, at 268 W and **0.67 tok/J**: below furiosa-llm ×2 (0.72), `solo` ×2 (0.82) and PD 1P+1D (1.06), level with PD 1P+2D. Two A100s: 0.76 per card (offered-load bound) at 0.39 tok/J. |
 | W5 rebalancer | `rm-controller --rebalance --apply` on the gateway's `airm_*` gauges moved P:D three times in an hour, each time toward the role under pressure (generations 5–7). Moving a card to decode for conversation ×2 raised attainment from ~10 % to 85 %. Moving one to prefill for code ×3 lowered it from 63–68 % to 45 %, because the rule does not model what the donor role loses. The predictive rule (both roles predicted after a move) made only the conversation move in a 50-minute live re-check and held 1P+2D through code ×3: 77–81 % there. |
 | W2 multi-pool | Two models at once on disjoint cards, both placed by `rm-controller` (`--apply`, a PD pool and an aggregated `serve` pool): Llama-3.1-8B rngd-pd 1P+1D met the SLO for 97.6 % of Azure conversation ×1 with Qwen3-4B (furiosa-llm, one card) under the same load next to it, 98.0 % alone; Qwen 100 % in both. A re-run with one pool's spec changed (Llama decode RNGD → ATOM) patched only that pool's Deployments; the Qwen pod kept running untouched. |
 | W2 cross-node KV | rngd-pd's new `tcp` transport carried real prefill KV (67 MB per request) from the RNGD prefill pod to a relay pod on a CPU node and back to the RNGD decode pod: 2,112/2,112 blobs byte-identical, 32/32 outputs identical to `shm`. The NPU node's 1 GbE link sets the speed: 0.08–0.09 GB/s per request, 0.117 GB/s per direction with 8 in flight, ~0.8 s per 67 MB leg. `profiles.yaml` `tcp` is now measured (0.08 GB/s, implemented); with it the two-node simulator rows no longer gain over one node (they would from 0.15–0.25 GB/s). **NPU to NPU across two NPU nodes (2026-10-20):** RNGD prefill on one NPU node, RNGD decode on the second, the `tcp` server beside decode. 2,112/2,112 blobs byte-identical, 32/32 outputs identical to `shm`. Only the push crosses the link (758 ms p50 per request); the decode's local pull takes 242 ms instead of 816 ms through a third-node relay. Azure conversation ×0.5: **96.7 %** SLO attainment (TTFT p90 1.67 s, TPOT p90 40 ms) against 89.2 % through the relay and 100 % on one node over `shm`. |
@@ -352,15 +353,68 @@ in the W6 probe it was ~25 ms.
 | Calibrated `optimal` 1P+2D meets the SLO on three cards | **Holds** (100 % in 3 of 3 runs). Its tok/J is 0.67, not 0.70. Against the W7 `solo` ×3 single run (0.57) that is 1.17×; `solo` ×3 was not repeated. |
 | 1P+1D's 87.7 % is the layout's attainment | **Does not hold.** Over 5 runs the mean is 81.6 ± 31.4 % and the median 94.3 %: the outcome is bimodal, not a fixed number. |
 
-**A100 at the same budget: not run.** The paper lists this row as missing. Throughout the session, both A100s on the
-second NPU node were in use by the training-evidence experiments of another project:
-- DCGM showed up to 100 % utilisation in every 30-minute window checked.
-- At the end, 69 GB was in use on one GPU.
-- That project had taken the node out of cordon for its runs and had not returned it.
+### A100 at the same budget (2026-10-21, [#45](https://github.com/ai-computing/ai-rm/issues/45))
 
-The runbook kept the A100s off limits until that work had released them, so the row stays missing. The method is ready
-(the existing `vllm-a100-llama31-8b` Deployment at 1 and 2 replicas, the same trace and SLO, `--api completions-stream`,
-DCGM `DCGM_FI_DEV_POWER_USAGE` of the GPUs in use; [Reproduce](#reproduce)).
+#43 left this row missing because another project held both A100s on the second NPU node (npu-node-2). On 2026-10-21
+both were idle (DCGM utilisation 0 over 30 minutes, 16 MiB in use, no pod asking for `nvidia.com/gpu`), and the row was
+run with the procedure of the repeated runs above:
+- Engine: the cluster's existing `vllm-a100-llama31-8b` Deployment, unchanged: vLLM v0.11.0, one A100 80GB PCIe per
+  replica, `--max-model-len 8192`, `--gpu-memory-utilization 0.90`, prefix caching on (as furiosa-llm). 1 and 2 replicas
+  behind its Service.
+- Load, SLO and client: Azure conversation ×1 (455 requests, 1.52 req/s, `--max-total-tokens 511`, 300 s), TTFT p90 ≤ 2 s
+  and TPOT p90 ≤ 100 ms, `--api completions-stream` (like the furiosa-llm rows; the rngd-pd rows are non-streaming).
+- Procedure: three rounds, ×1 then ×2 in each. Every run started on freshly created pods, with `pd-smoke` and the idle
+  probe as warm-up.
+- Power: `--power prom` on `DCGM_FI_DEV_POWER_USAGE` of the GPUs the pods held (read from DCGM framebuffer use), the
+  same 1 s sampling of a 15 s scrape as the RNGD exporter. Card power only; the idle second A100 in the ×1 runs
+  (49–53 W) is not counted, as idle NPU cards are not.
+- Gate: before each run, both A100s idle (DCGM utilisation 0 over the last minute, < 1 GiB in use, no other GPU pod).
+  It held before all six runs.
+
+| Deployment | Cards | Runs | SLO attainment | TTFT p90 ms | TPOT p90 ms | Goodput per card | Power W | tok/J |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| **vLLM ×1 A100**¹ | 1 | 3 | 100.0 % ± 0.0 (100.0–100.0) | 61 ± 0 (60–61) | 13.9 ± 0.1 (13.8–14.0) | **1.51 ± 0.00** | 268 ± 14 (252–280) | 0.67 ± 0.04 (0.64–0.71) |
+| vLLM ×2 A100¹ | 2 | 3 | 100.0 % ± 0.0 (100.0–100.0) | 58 ± 1 (57–58) | 13.4 ± 0.0 (13.3–13.4) | 0.76 ± 0.00 | 458 ± 31 (428–489) | 0.39 ± 0.03 (0.37–0.42) |
+| *repeated runs above, for comparison:* | | | | | | | | |
+| PD 1P+1D RNGD | 2 | 5 | 81.6 % ± 31.4 (25.5–98.0) | 1,504 ± 2,743 | 98.4 ± 62.8 | 0.61 ± 0.24 | 165 ± 8 | **1.06 ± 0.00** |
+| replication: `solo` ×2 RNGD | 2 | 3 | 97.1 % ± 4.9 (91.4–100.0) | 240 ± 85 | 52.5 ± 34.7 | 0.73 ± 0.04 | 222 ± 32 | 0.82 ± 0.13 |
+| vendor: furiosa-llm ×2 RNGD¹ | 2 | 3 | 100.0 % ± 0.0 | 103 ± 1 | 17.8 ± 0.1 | 0.76 ± 0.00 | 251 ± 5 | 0.72 ± 0.02 |
+| PD 1P+2D RNGD (optimal, calibrated) | 3 | 3 | 100.0 % ± 0.0 | 358 ± 29 | 38.5 ± 0.6 | 0.50 ± 0.00 | 268 ± 2 | 0.67 ± 0.00 |
+
+Mean ± sample standard deviation (min–max), as above. ¹ streaming client (`--api completions-stream`).
+
+| Run | GPU | SLO attainment | TTFT p90 ms | TPOT p90 ms | Per card | Power W (peak) | tok/J | GPU util | Counter: power W / tok/J |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ×1, 1 | 1 | 100.0 % | 60 | 14.0 | 1.51 | 280 (351) | 0.64 | 86 % | 277 / 0.65 |
+| ×1, 2 | 0 | 100.0 % | 61 | 13.8 | 1.51 | 272 (304) | 0.66 | 80 % | 274 / 0.66 |
+| ×1, 3 | 0 | 100.0 % | 61 | 13.9 | 1.51 | 252 (308) | 0.71 | 69 % | 276 / 0.65 |
+| ×2, 1 | 0, 1 | 100.0 % | 57 | 13.4 | 0.76 | 458 (609) | 0.39 | 63 / 67 % | 478 / 0.38 |
+| ×2, 2 | 0, 1 | 100.0 % | 58 | 13.4 | 0.76 | 428 (611) | 0.42 | 57 / 51 % | 491 / 0.37 |
+| ×2, 3 | 0, 1 | 100.0 % | 58 | 13.3 | 0.76 | 489 (604) | 0.37 | 79 / 59 % | 486 / 0.37 |
+
+Every run answered all 455 requests (54,129 output tokens, as in the NPU runs). "GPU util" is the DCGM average over the
+run. "Counter" is the GPU's own energy counter (`DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION`) over the 300 s, a check on the
+sampled power.
+
+**Findings**
+- **H4 holds for SLO and latency.** One A100 met the SLO for every request in all three runs. TTFT p90 was 61 ms and
+  TPOT p90 13.9 ms, against 103 ms and 17.8 ms for furiosa-llm ×2, the other streaming row. The rngd-pd runs had
+  189–6,408 ms and 32–210 ms, measured non-streaming (not like for like).
+- **One A100 carries the load that the NPU rows spread over two cards.** Its goodput per card is 1.51, twice every
+  2-card row. A 1-card NPU layout was not run at this rate, so whether one RNGD card would also hold it is open. With 2 replicas it is 0.76, the same as
+  furiosa-llm ×2: that cell is bound by the offered load, not by the cards.
+- **On energy the RNGD rows are ahead.** One A100 drew 268 W, about what two furiosa-llm RNGD cards drew (251 W). Its
+  tok/J was 0.67, below furiosa-llm ×2 (0.72) and `solo` ×2 (0.82), and 0.63× PD 1P+1D (1.06). It is level with PD 1P+2D
+  on three cards (0.67). A second replica adds power and no goodput: 458 W and 0.39 tok/J. The A100 stayed busy
+  (69–86 % DCGM utilisation) at a load it serves with a large margin.
+- **The sampled power is noisy, the energy is not.** With 1 s sampling of a 15 s scrape, the ×1 runs read 252–280 W.
+  The GPU's energy counter gave 274–277 W over the same windows (0.65–0.66 tok/J): the spread in the table is sampling,
+  not the GPU. On ×2 the sampled reading was 1–13 % low (counter 478–491 W, 0.37–0.38 tok/J). The NPU rows use the same
+  sampling (15 s scrape), so the table compares like with like; their card power was not checked against a counter.
+
+**Limits.** The A100 is a different budget in every way except card count: a 300 W PCIe GPU of another
+generation and vendor. vLLM is not limited to S=512 (the same clipped requests were sent). Host power is not counted, and neither is
+the idle second A100 in the ×1 runs. The CUDA driver version was not recorded.
 
 ### Vendor-only baseline: furiosa-llm (W7)
 
@@ -717,8 +771,8 @@ HETERO_NPU path ([rngd-pd#8](https://github.com/ai-computing/rngd-pd/pull/8)).
 - **Routing.** Several prefill or decode pods behind one rngd-pd gateway are reached through a Kubernetes Service
   (connection-level spreading), and `solo` replicas the same way; no load-aware routing was involved.
 - **Not run:** ATOM prefill, the `p2p` and `nixl` transports with live serving (`nixl` is verified byte- and
-  token-exact outside serving, [rngd-pd#8](https://github.com/ai-computing/rngd-pd/pull/8)), RNGD decode at B > 8, GPUs (the A100
-  same-budget row waits for the A100s; see [repeated runs](#repeated-runs-2026-10-2021-43)).
+  token-exact outside serving, [rngd-pd#8](https://github.com/ai-computing/rngd-pd/pull/8)), RNGD decode at B > 8, GPUs other than the A100 row
+  ([A100 at the same budget](#a100-at-the-same-budget-2026-10-21-45)), a 1-card NPU layout at conversation ×1.
 - **Vendor rows** differ in client API (streaming completions) and engine defaults (prefix caching on); see the
   footnote to the tables. They ran after the rngd-pd rows, on the same cards, the same afternoon.
 - **W2 runs** are single runs too. The multi-pool load came from one client host for both pools; the cross-node path had a
@@ -753,9 +807,11 @@ HETERO_NPU path ([rngd-pd#8](https://github.com/ai-computing/rngd-pd/pull/8)).
 | `airm-exp-xnode-probe`, `-xfer`, `-cleanup` (Pods), `airm-exp-xnode-xfer` (ConfigMap) | read-only host checks, link test and copy of the worker runtimes to `/var/tmp` on the second RNGD node, then its removal | deleted; staging directories removed on both nodes |
 | `llm-serving/airm-e2e` (repeated runs, 2026-10-20 09:16 – 10-21 02:06 UTC) | gateway env `PD_PREFETCH=0`; prefill/decode/gateway scaled to 1/1/1 or 1/2/1 per run and back to 0; pods on the host-held card deleted before a run (10-21); while the control host was unreachable (10-20 10:54 – 10-21 00:00 UTC) the 1P+2D pods stayed up and were scaled to 0 by the lead | Deployments replaced with the objects saved before the runs (all at 0 replicas, `PD_PREFETCH=1`); `airm-placement` not touched (generation 3, byte for byte) |
 | `airm-exp-solo`, `airm-exp-solo-gw`, `airm-exp-flm` (Deployments, Services; repeated runs) | recreated from the W7 manifests for each run | deleted; furiosa-llm model cache under `/var/tmp` removed (`airm-exp-cleanup` Pod, deleted) |
-| `vllm-a100-llama31-8b` | state recorded (0 replicas); not scaled: the A100s were in use by another project | unchanged |
+| `vllm-a100-llama31-8b` (repeated runs) | state recorded (0 replicas); not scaled: the A100s were in use by another project | unchanged |
+| `vllm-a100-llama31-8b` (A100 row, 2026-10-21 04:22–05:30 UTC) | spec saved; node selector for the second NPU node and a toleration for the temporary taint patched in; scaled to 1 or 2 per run and back to 0 | both removed again, 0 replicas: spec and labels equal to the saved ones; only the revision annotation (6 → 8) and resourceVersion moved |
+| Second NPU node (2026-10-21 04:22–05:30 UTC, A100 row) | taint `airm.ai-computing.io/experiment=true:NoSchedule`, then uncordon; only the vLLM pods tolerated it; RNGD cards not used | re-cordoned, taint removed: spec, labels and annotations equal to the recorded ones (the `unschedulable` taint carries a new `timeAdded`); pods on the node the same as before |
 
-No other Deployment or EPP was touched, and apart from the 2026-10-20 runs (last rows) no node was cordoned, uncordoned or targeted by name: the cordoned RNGD
+No other Deployment or EPP was touched, and apart from the 2026-10-20 runs and the 2026-10-21 A100 row no node was cordoned, uncordoned or targeted by name: the cordoned RNGD
 node stayed cordoned and nothing was scheduled on it. Raw results (`results/` is not tracked in this repository) stay with the
 experiment logs on the node.
 
@@ -778,8 +834,9 @@ rm-bench e2e --scenario <conversation scenario> --api completions-stream --gatew
 
 # W7 repeats: fresh pods per run, then pd-smoke AND the idle probe as warm-up (without the probe a cold rngd-pd pod
 # can start the run with a backlog it never clears); interleave layouts; report mean ± std over the runs
-# A100 row (not run yet): vllm-a100-llama31-8b at 1 and 2 replicas, --api completions-stream,
-#   --power-query 'sum(DCGM_FI_DEV_POWER_USAGE{gpu=~"<GPUs in use>"})'
+# A100 row: vllm-a100-llama31-8b at 1 and 2 replicas, fresh pods, pd-smoke + idle probe, --api completions-stream,
+#   --cards 1|2 --power-query 'sum(DCGM_FI_DEV_POWER_USAGE{gpu=~"<GPUs in use>"})'
+#   check: increase(DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION[300s]) over the run (mJ)
 
 # W5 rebalancer: loop with --apply, then alternate the mix through the rngd-pd gateway
 rm-controller --spec packages/rm-controller/examples/rebalance-gateway.yaml --rebalance --apply --interval 60

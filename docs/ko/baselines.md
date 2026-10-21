@@ -20,7 +20,8 @@ RNGD 노드는 여전히 cordon 상태였습니다. 2026-10-20에는 NPU 간 실
 | W7 | **카드 2장:** 복제(카드 한 장짜리 `solo` 인스턴스 2개)가 카드당 goodput에서 PD 1P+1D를 이깁니다. Azure 대화 1.52 req/s에서 SLO 달성 100 %(카드당 0.75 req/s), 1P+1D는 87.7 %. 줄당 토큰(tok/J)은 1P+1D가 가장 높습니다(1.17 대 0.76). **카드 3장:** 보정한 `optimal` 배치 PD 1P+2D가 두 트레이스 모두 모든 요청에서 SLO를 지켰고(`solo` ×3과 같음) tok/J는 그 1.2배입니다. 기존 프로파일의 선택 2P+1D는 93.6 %와 77.5 %. **RNGD prefill → ATOM decode는 TPOT SLO 100 ms를 지킬 수 없습니다**: ATOM decode 그래프가 토큰당 108 ms입니다. |
 | W6 | 프로파일 표가 2배 이상 틀렸습니다. 400 토큰 프롬프트의 RNGD prefill은 예전 유도값의 220 ms가 아니라 100 ms, batch 그래프의 RNGD decode는 batch와 무관하게 토큰당 30 ms(17–24 아님), ATOM decode는 카드 한 장에서 108 ms(두 장에서 40–52 아님). `profiles.yaml`을 측정값으로 바꾸자 `optimal`의 선택이 2P+1D에서 1P+2D로 바뀌었고, 클러스터에서도 1P+2D가 더 좋았습니다(100 % 대 93.6 %, 77.5 %). |
 | W7 벤더 | **furiosa-llm 2026.3.0 집약 서빙**(replica 하나에 카드 한 장, FuriosaAI가 미리 컴파일한 Llama-3.1-8B)이 카드 2장과 3장 모두 두 트레이스의 모든 요청에서 SLO를 지켰습니다. 카드당 goodput(제공 부하에 묶임)과 tok/J(0.74 대 0.76)는 `solo`와 같고, TPOT p90은 17–19 ms로 rngd-pd의 30–69 ms보다 낮습니다. **furiosa-llm에는 PD 모드가 없습니다**(disaggregation 옵션도, KV 전송 코드도 없고 FuriosaAI llm-d 가이드도 미지원으로 적음). 그래서 벤더 PD 행은 없습니다. |
-| W7 반복 | 대화 ×1을 배치마다 3–5번 다시 돌렸습니다([아래](#반복-실행-2026-10-2021-43)). **PD 1P+1D**는 98.0, 25.5, 94.3, 93.4, 96.7 %: 용량의 경계에서 돌고, 다섯 번 중 한 번은 엔진이 취소할 수 없는 backlog로 무너졌습니다. tok/J는 모든 실행에서 1.06(단일 실행은 1.17)으로 여전히 `solo` ×2의 1.3배, furiosa-llm ×2의 1.5배입니다. **`solo` ×2**: 97.1 ± 4.9 %, 카드당 0.73. **furiosa-llm ×2**: 모든 실행 100 %, 카드당 0.76. **PD 1P+2D**: 모든 실행 100 %, 0.67 tok/J. 단일 실행의 순서는 유지되지만 87.7 % 칸은 1P+1D를 설명하지 못합니다. 새로 뜬 rngd-pd 파드에는 유휴 측정 워밍업이 필요합니다: `pd-smoke`만 하면 1P+1D가 7 %로 떨어졌습니다. 같은 예산의 A100 행은 돌리지 못했습니다: 다른 프로젝트가 작업 내내 A100을 쓰고 있었습니다. |
+| W7 반복 | 대화 ×1을 배치마다 3–5번 다시 돌렸습니다([아래](#반복-실행-2026-10-2021-43)). **PD 1P+1D**는 98.0, 25.5, 94.3, 93.4, 96.7 %: 용량의 경계에서 돌고, 다섯 번 중 한 번은 엔진이 취소할 수 없는 backlog로 무너졌습니다. tok/J는 모든 실행에서 1.06(단일 실행은 1.17)으로 여전히 `solo` ×2의 1.3배, furiosa-llm ×2의 1.5배입니다. **`solo` ×2**: 97.1 ± 4.9 %, 카드당 0.73. **furiosa-llm ×2**: 모든 실행 100 %, 카드당 0.76. **PD 1P+2D**: 모든 실행 100 %, 0.67 tok/J. 단일 실행의 순서는 유지되지만 87.7 % 칸은 1P+1D를 설명하지 못합니다. 새로 뜬 rngd-pd 파드에는 유휴 측정 워밍업이 필요합니다: `pd-smoke`만 하면 1P+1D가 7 %로 떨어졌습니다. |
+| W7 A100 | 같은 부하와 절차로 3번씩([아래](#같은-예산의-a100-2026-10-21-45)): **A100 한 장의 vLLM**이 모든 요청에서 SLO를 지켰고(TTFT p90 61 ms, TPOT p90 13.9 ms) 카드당 1.51 req/s로 카드 2장 NPU 행 모두의 두 배, 268 W에 **0.67 tok/J**: furiosa-llm ×2(0.72), `solo` ×2(0.82), PD 1P+1D(1.06)보다 낮고 PD 1P+2D와 같습니다. A100 두 장: 카드당 0.76(보낸 부하에 묶임), 0.39 tok/J. |
 | W5 재조정기 | 게이트웨이 `airm_*` 지표를 읽는 `rm-controller --rebalance --apply`가 한 시간에 P:D를 세 번 바꿨고, 매번 부하가 걸린 역할 쪽이었습니다(generation 5–7). 대화 ×2에서 decode로 카드를 옮기자 달성률이 약 10 %에서 85 %로 올랐습니다. 코드 ×3에서 prefill로 옮기자 63–68 %에서 45 %로 내려갔습니다. 규칙이 카드를 내준 역할의 손실을 모델링하지 않기 때문입니다. 예측 규칙(이동 뒤 두 역할을 예측)은 50분 실제 재확인에서 대화 이동만 하고 코드 ×3 동안 1P+2D를 유지했습니다(77–81 %). |
 | W2 멀티 풀 | 두 모델을 겹치지 않는 카드에서 동시에 서빙하고 둘 다 `rm-controller`가 배치했습니다(`--apply`, PD 풀과 aggregated `serve` 풀). Llama-3.1-8B rngd-pd 1P+1D는 옆에서 Qwen3-4B(furiosa-llm, 카드 한 장)가 같은 부하를 받는 동안 Azure 대화 ×1의 97.6 %, 단독으로 98.0 %에서 SLO를 지켰고 Qwen은 둘 다 100 %. 한 풀의 spec만 바꿔(Llama decode RNGD → ATOM) 다시 실행하자 그 풀의 Deployment만 patch됐고 Qwen 파드는 손대지 않은 채 계속 돌았습니다. |
 | W2 노드 간 KV | rngd-pd의 새 `tcp` 전송이 실제 prefill KV(요청당 67 MB)를 RNGD prefill 파드에서 CPU 노드의 relay 파드를 거쳐 RNGD decode 파드로 옮겼습니다. blob 2,112/2,112개가 바이트 단위로 같고, 출력 32/32개가 `shm`과 같습니다. 속도는 NPU 노드의 1 GbE 링크가 정합니다: 요청당 0.08–0.09 GB/s, 동시 8개면 방향마다 0.117 GB/s, 67 MB 구간마다 약 0.8초. `profiles.yaml`의 `tcp`는 이제 측정값(0.08 GB/s, 구현됨)이고, 그 값으로는 2노드 시뮬레이터 행이 한 노드보다 나아지지 않습니다(0.15–0.25 GB/s부터 나아짐). **두 NPU 노드 사이 NPU 간 전송(2026-10-20):** 한 NPU 노드의 RNGD prefill, 두 번째 NPU 노드의 RNGD decode, `tcp` 서버는 decode 옆. blob 2,112/2,112개가 바이트 단위로 같고 출력 32/32개가 `shm`과 같습니다. 링크를 건너는 것은 push뿐이고(요청당 p50 758 ms), decode의 로컬 pull은 세 번째 노드 relay를 거칠 때의 816 ms 대신 242 ms입니다. Azure 대화 ×0.5: SLO 달성률 **96.7 %**(TTFT p90 1.67초, TPOT p90 40 ms). relay를 거친 실행은 89.2 %, 한 노드 `shm`은 100 %입니다. |
@@ -334,15 +335,67 @@ rm-bench는 위의 프롬프트 수정이 들어간 ai-rm `master`를 썼습니�
 | 보정한 `optimal` 1P+2D는 카드 3장에서 SLO를 지킨다 | **유지**(3번 중 3번 100 %). tok/J는 0.70이 아니라 0.67입니다. W7 `solo` ×3 단일 실행(0.57) 대비 1.17배이며, `solo` ×3은 반복하지 않았습니다. |
 | 1P+1D의 87.7 %가 이 배치의 달성률이다 | **유지되지 않음.** 5번의 평균 81.6 ± 31.4 %, 중앙값 94.3 %. 결과는 정해진 숫자가 아니라 두 갈래로 나뉩니다. |
 
-**같은 예산의 A100: 실행하지 않음.** 논문은 이 행을 빠진 항목으로 적고 있습니다. 이번 작업 내내 두 번째 NPU 노드의 A100 두 장은
-다른 프로젝트의 학습 근거 실험이 쓰고 있었습니다:
-- DCGM은 확인한 30분 구간마다 이용률이 100 %까지 올랐습니다.
-- 마지막 확인 때 GPU 하나에 69 GB가 쓰이고 있었습니다.
-- 그 프로젝트는 실험을 위해 노드의 cordon을 풀었고 아직 되돌리지 않았습니다.
+### 같은 예산의 A100 (2026-10-21, [#45](https://github.com/ai-computing/ai-rm/issues/45))
 
-작업 지침은 그 작업이 A100을 내줄 때까지 쓰지 않도록 했으므로 이 행은 여전히 비어 있습니다. 방법은 준비돼 있습니다: 기존
-`vllm-a100-llama31-8b` Deployment를 replica 1과 2로, 같은 트레이스와 SLO, `--api completions-stream`, 사용 중인 GPU의 DCGM
-`DCGM_FI_DEV_POWER_USAGE`([재현](#재현)).
+#43에서는 다른 프로젝트가 두 번째 NPU 노드(npu-node-2)의 A100 두 장을 쓰고 있어 이 행이 비어 있었습니다. 2026-10-21에는 두 장
+모두 비어 있었고(30분 동안 DCGM 이용률 0, 사용 메모리 16 MiB, `nvidia.com/gpu`를 요청한 파드 없음), 위 반복 실행의 절차로
+돌렸습니다:
+- 엔진: 클러스터에 이미 있는 `vllm-a100-llama31-8b` Deployment를 그대로 썼습니다. vLLM v0.11.0, replica마다 A100 80GB PCIe
+  한 장, `--max-model-len 8192`, `--gpu-memory-utilization 0.90`, prefix caching 켜짐(furiosa-llm과 같음). replica 1과 2를
+  그 Service 뒤에 두었습니다.
+- 부하·SLO·클라이언트: Azure 대화 ×1(요청 455개, 1.52 req/s, `--max-total-tokens 511`, 300초), TTFT p90 ≤ 2초,
+  TPOT p90 ≤ 100 ms, `--api completions-stream`(furiosa-llm 행과 같음, rngd-pd 행은 비스트리밍).
+- 절차: 라운드 셋, 라운드마다 ×1 다음 ×2. 실행마다 새로 만든 파드에서 시작했고, 워밍업은 `pd-smoke`와 유휴 측정입니다.
+- 전력: 파드가 잡은 GPU(DCGM 메모리 사용으로 확인)의 `DCGM_FI_DEV_POWER_USAGE`에 `--power prom`. RNGD exporter와 같이
+  15초 수집값을 1초마다 읽었습니다. 카드 전력만 셉니다. ×1 실행의 놀고 있는 두 번째 A100(49–53 W)은 유휴 NPU 카드처럼
+  넣지 않았습니다.
+- 확인: 실행마다 시작 전에 두 A100이 비어 있어야 했습니다(최근 1분 DCGM 이용률 0, 사용 메모리 1 GiB 미만, 다른 GPU 파드 없음).
+  여섯 번 모두 그랬습니다.
+
+| 구성 | 카드 | 실행 수 | SLO 달성 | TTFT p90 ms | TPOT p90 ms | 카드당 goodput | 전력 W | tok/J |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| **vLLM ×1 A100**¹ | 1 | 3 | 100.0 % ± 0.0 (100.0–100.0) | 61 ± 0 (60–61) | 13.9 ± 0.1 (13.8–14.0) | **1.51 ± 0.00** | 268 ± 14 (252–280) | 0.67 ± 0.04 (0.64–0.71) |
+| vLLM ×2 A100¹ | 2 | 3 | 100.0 % ± 0.0 (100.0–100.0) | 58 ± 1 (57–58) | 13.4 ± 0.0 (13.3–13.4) | 0.76 ± 0.00 | 458 ± 31 (428–489) | 0.39 ± 0.03 (0.37–0.42) |
+| *비교: 위 반복 실행* | | | | | | | | |
+| PD 1P+1D RNGD | 2 | 5 | 81.6 % ± 31.4 (25.5–98.0) | 1,504 ± 2,743 | 98.4 ± 62.8 | 0.61 ± 0.24 | 165 ± 8 | **1.06 ± 0.00** |
+| 복제: `solo` ×2 RNGD | 2 | 3 | 97.1 % ± 4.9 (91.4–100.0) | 240 ± 85 | 52.5 ± 34.7 | 0.73 ± 0.04 | 222 ± 32 | 0.82 ± 0.13 |
+| 벤더: furiosa-llm ×2 RNGD¹ | 2 | 3 | 100.0 % ± 0.0 | 103 ± 1 | 17.8 ± 0.1 | 0.76 ± 0.00 | 251 ± 5 | 0.72 ± 0.02 |
+| PD 1P+2D RNGD (optimal, 보정) | 3 | 3 | 100.0 % ± 0.0 | 358 ± 29 | 38.5 ± 0.6 | 0.50 ± 0.00 | 268 ± 2 | 0.67 ± 0.00 |
+
+위와 같이 평균 ± 표본 표준편차 (최소–최대)입니다. ¹ 스트리밍 클라이언트(`--api completions-stream`).
+
+| 실행 | GPU | SLO 달성 | TTFT p90 ms | TPOT p90 ms | 카드당 | 전력 W (최대) | tok/J | GPU 이용률 | 카운터: 전력 W / tok/J |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ×1, 1 | 1 | 100.0 % | 60 | 14.0 | 1.51 | 280 (351) | 0.64 | 86 % | 277 / 0.65 |
+| ×1, 2 | 0 | 100.0 % | 61 | 13.8 | 1.51 | 272 (304) | 0.66 | 80 % | 274 / 0.66 |
+| ×1, 3 | 0 | 100.0 % | 61 | 13.9 | 1.51 | 252 (308) | 0.71 | 69 % | 276 / 0.65 |
+| ×2, 1 | 0, 1 | 100.0 % | 57 | 13.4 | 0.76 | 458 (609) | 0.39 | 63 / 67 % | 478 / 0.38 |
+| ×2, 2 | 0, 1 | 100.0 % | 58 | 13.4 | 0.76 | 428 (611) | 0.42 | 57 / 51 % | 491 / 0.37 |
+| ×2, 3 | 0, 1 | 100.0 % | 58 | 13.3 | 0.76 | 489 (604) | 0.37 | 79 / 59 % | 486 / 0.37 |
+
+모든 실행이 455개 요청에 다 응답했습니다(출력 토큰 54,129개, NPU 실행과 같음). "GPU 이용률"은 실행 동안의 DCGM 평균입니다.
+"카운터"는 GPU 자체의 에너지 카운터(`DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION`)로 300초 동안 잰 값이고, 샘플링한 전력을
+검산하는 데 썼습니다.
+
+**발견**
+- **SLO와 지연에서는 H4가 맞습니다.** A100 한 장이 세 번 모두 모든 요청에서 SLO를 지켰습니다. TTFT p90 61 ms,
+  TPOT p90 13.9 ms로, 같은 스트리밍 행인 furiosa-llm ×2의 103 ms와 17.8 ms보다 낮습니다. rngd-pd 실행은 189–6,408 ms와
+  32–210 ms였지만 비스트리밍으로 잰 값이라 바로 비교할 수 없습니다.
+- **NPU 행이 카드 두 장에 나눠 진 부하를 A100은 한 장으로 집니다.** 카드당 goodput은 1.51로, 카드 2장 행 모두의 두 배입니다.
+  이 도착률에서 카드 1장 NPU 배치는 돌리지 않았으므로, RNGD 한 장으로도 버티는지는 열려 있습니다. replica 2에서는 0.76으로
+  furiosa-llm ×2와 같습니다. 그 칸은 카드가 아니라 보낸 부하에 묶여 있습니다.
+- **에너지는 RNGD 행이 앞섭니다.** A100 한 장은 268 W를 썼고, furiosa-llm RNGD 두 장(251 W)과 비슷합니다. tok/J는 0.67로
+  furiosa-llm ×2(0.72)와 `solo` ×2(0.82)보다 낮고, PD 1P+1D(1.06)의 0.63배입니다. 카드 3장의 PD 1P+2D(0.67)와는 같습니다.
+  replica를 하나 더 두면 goodput은 그대로이고 전력만 늘어 458 W, 0.39 tok/J입니다. A100은 여유 있게 감당하는 부하에서도
+  바쁘게 돌았습니다(DCGM 이용률 69–86 %).
+- **샘플링한 전력은 흔들리고 에너지는 흔들리지 않습니다.** 15초 수집값을 1초마다 읽으면 ×1 실행이 252–280 W로 나왔습니다.
+  같은 구간의 GPU 에너지 카운터는 274–277 W(0.65–0.66 tok/J)였으니, 표의 퍼짐은 GPU가 아니라 샘플링 탓입니다. ×2에서는
+  샘플링 값이 1–13 % 낮았습니다(카운터 478–491 W, 0.37–0.38 tok/J). NPU 행도 같은 방식(15초 수집)으로 쟀으므로 표는 같은
+  기준으로 비교합니다. NPU 카드 전력은 카운터로 검산하지 않았습니다.
+
+**한계.** A100은 카드 수 말고는 모든 면에서 다른 예산입니다: 다른 세대·다른 벤더의 300 W PCIe GPU입니다. vLLM은 S=512에
+묶이지 않습니다(보낸 요청은 같은 잘린 요청). 호스트 전력과 ×1 실행의 놀고 있는 두 번째 A100은 세지 않았습니다. CUDA 드라이버
+버전은 기록하지 않았습니다.
 
 ### 벤더 단독 기준선: furiosa-llm (W7)
 
@@ -681,8 +734,8 @@ NIXL-over-UCX KV 경로를 만들거나 재지는 않았습니다. rngd-pd의 `n
 - **라우팅.** rngd-pd 게이트웨이 하나 뒤의 여러 prefill·decode 파드와 `solo` replica는 Kubernetes Service(연결 단위 분산)로
   닿습니다. 부하를 보는 라우팅은 없었습니다.
 - **실행하지 않음:** ATOM prefill, 실제 서빙에서 `p2p`·`nixl` 전송(`nixl`은 서빙 밖에서 바이트·토큰 일치를 확인,
-  [rngd-pd#8](https://github.com/ai-computing/rngd-pd/pull/8)), B > 8 RNGD decode, GPU(같은 예산의 A100 행은
-  A100이 비기를 기다림, [반복 실행](#반복-실행-2026-10-2021-43) 참고).
+  [rngd-pd#8](https://github.com/ai-computing/rngd-pd/pull/8)), B > 8 RNGD decode, A100 행 밖의 GPU
+  ([같은 예산의 A100](#같은-예산의-a100-2026-10-21-45)), 대화 ×1에서 카드 1장 NPU 배치.
 - **벤더 행**은 클라이언트 API(스트리밍 completions)와 엔진 기본값(prefix caching 켜짐)이 다릅니다. 표의 각주 참고. rngd-pd 행 뒤에 같은
   카드에서 같은 날 오후에 돌렸습니다.
 - **W2 실행**도 한 번씩입니다. 멀티 풀 부하는 두 풀 모두 클라이언트 호스트 하나에서 보냈습니다. 노드 간 경로는 세 번째 노드의
@@ -716,9 +769,11 @@ NIXL-over-UCX KV 경로를 만들거나 재지는 않았습니다. rngd-pd의 `n
 | `airm-exp-xnode-probe`, `-xfer`, `-cleanup` (Pod), `airm-exp-xnode-xfer` (ConfigMap) | 읽기 전용 호스트 확인, 링크 측정, 두 번째 RNGD 노드의 `/var/tmp`로 워커 런타임 복사와 그 삭제 | 삭제, 두 노드의 임시 디렉터리 제거 |
 | `llm-serving/airm-e2e` (반복 실행, 2026-10-20 09:16 – 10-21 02:06 UTC) | 게이트웨이 env `PD_PREFETCH=0`. prefill/decode/게이트웨이를 실행마다 1/1/1 또는 1/2/1로 scale하고 다시 0으로. 호스트가 잡은 카드에 올라간 파드는 실행 전에 삭제(10-21). 제어 호스트에 닿지 못한 동안(10-20 10:54 – 10-21 00:00 UTC) 1P+2D 파드가 떠 있었고 리드가 0으로 scale | 실행 전에 저장한 객체로 Deployment를 replace(모두 0 replicas, `PD_PREFETCH=1`). `airm-placement`는 건드리지 않음(generation 3, 바이트 그대로) |
 | `airm-exp-solo`, `airm-exp-solo-gw`, `airm-exp-flm` (Deployment, Service, 반복 실행) | W7 manifest로 실행마다 다시 생성 | 삭제, `/var/tmp` 아래 furiosa-llm 모델 캐시 제거(`airm-exp-cleanup` Pod, 삭제) |
-| `vllm-a100-llama31-8b` | 상태 기록(0 replicas). A100을 다른 프로젝트가 쓰고 있어 scale하지 않음 | 그대로 |
+| `vllm-a100-llama31-8b` (반복 실행) | 상태 기록(0 replicas). A100을 다른 프로젝트가 쓰고 있어 scale하지 않음 | 그대로 |
+| `vllm-a100-llama31-8b` (A100 행, 2026-10-21 04:22–05:30 UTC) | spec 저장. 두 번째 NPU 노드 node selector와 임시 taint toleration을 patch. 실행마다 1 또는 2로 scale하고 다시 0으로 | 둘 다 다시 제거, 0 replicas: spec·label이 저장한 것과 같음. revision annotation(6 → 8)과 resourceVersion만 바뀜 |
+| 두 번째 NPU 노드 (2026-10-21 04:22–05:30 UTC, A100 행) | taint `airm.ai-computing.io/experiment=true:NoSchedule` 후 uncordon. vLLM 파드만 toleration을 가짐. RNGD 카드는 쓰지 않음 | 다시 cordon, taint 제거: spec·label·annotation이 기록한 것과 같음(`unschedulable` taint의 `timeAdded`만 새 값). 노드의 파드는 전과 같음 |
 
-다른 Deployment나 EPP는 건드리지 않았고, 2026-10-20 실행(마지막 행들)을 빼면 어떤 노드도 cordon·uncordon하거나 이름으로 지정하지 않았습니다. cordon된 RNGD
+다른 Deployment나 EPP는 건드리지 않았고, 2026-10-20 실행과 2026-10-21 A100 행을 빼면 어떤 노드도 cordon·uncordon하거나 이름으로 지정하지 않았습니다. cordon된 RNGD
 노드는 그대로였고 그 위에는 아무것도 스케줄하지 않았습니다. 원시 결과는(`results/`는 이 저장소에서 추적하지 않음) 노드의 실험 로그와 함께
 있습니다.
 
@@ -741,8 +796,9 @@ rm-bench e2e --scenario <대화 시나리오> --api completions-stream --gateway
 
 # W7 반복: 실행마다 새 파드, 워밍업은 pd-smoke와 유휴 측정 둘 다(측정 없이 차가운 rngd-pd 파드는 풀리지 않는 backlog로
 # 실행을 시작할 수 있음). 배치를 섞어 돌리고 실행들의 평균 ± 표준편차를 보고
-# A100 행(아직 실행 안 함): vllm-a100-llama31-8b를 replica 1과 2로, --api completions-stream,
-#   --power-query 'sum(DCGM_FI_DEV_POWER_USAGE{gpu=~"<사용 중인 GPU>"})'
+# A100 행: vllm-a100-llama31-8b를 replica 1과 2로, 새 파드, pd-smoke + 유휴 측정, --api completions-stream,
+#   --cards 1|2 --power-query 'sum(DCGM_FI_DEV_POWER_USAGE{gpu=~"<사용 중인 GPU>"})'
+#   검산: 실행 구간의 increase(DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION[300s]) (mJ)
 
 # W5 재조정기: --apply 루프, 그리고 rngd-pd 게이트웨이로 부하 구성을 번갈아
 rm-controller --spec packages/rm-controller/examples/rebalance-gateway.yaml --rebalance --apply --interval 60
