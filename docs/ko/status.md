@@ -62,6 +62,10 @@ L1 → L5 연결 검사(탐지 → 프로파일 → 배치 → 이름으로 고�
 [end-to-end 실행](e2e.md)을 참고하세요.
 모든 구성요소 트리의 민감정보 검사는 clean입니다.
 
+## 하드웨어 대기
+
+**노드 간 KV의 RDMA**([#46](https://github.com/ai-computing/ai-rm/issues/46)): NPU 노드에 RDMA 장치가 없고(Intel X550/X710, 10G 포트 링크 없음, 1 GbE 포트 하나만 사용 중), soft-RoCE를 추가할 root 권한도 없다. 코드 경로는 준비됐다. rngd-pd `nixl-ucx`([rngd-pd#13](https://github.com/ai-computing/rngd-pd/pull/13))가 UCX 위 NIXL READ로 KV를 옮기며, UCX-TCP로 두 노드 사이에서 확인했다(바이트 일치, 링크가 한계). 이후 RDMA는 `UCX_TLS=rc,ud,sm,self`만 바꾸면 된다. 선택지마다 관리자가 할 일은 Issue에 있다. 완료 조건은 verbs로 실행해 바이트·토큰 단위로 일치하고, 측정한 GB/s를 [기준선](baselines.md)과 `profiles.yaml`에 남기는 것이다.
+
 ## 기존 구조 변경
 
 이전 `rm_monitor`의 역할은 `hetero-llm-d/monitoring/`의 모니터링·Grafana, `rm-bench`의 trace·부하, `lmd-top`의 운영 콘솔로 나뉘었습니다. `rm_monitor`는 archive 상태이며 `rm-accel`는 `components/l1-accel/`에 있습니다.

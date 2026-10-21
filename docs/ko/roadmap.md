@@ -43,4 +43,10 @@ KV의 레이아웃·정밀도·소유권을 명시한 계약입니다. 동시에
 | W6 | 역할 내 타입 혼합 `optimal`, 실측 보정 프로파일, 시뮬레이터의 DistServe·HexGen-2식 기준선, 배치 문서 규범화 (rm-core v0.1.2, §5.4) | 엔진 #50 |
 | W7 | [같은 예산 기준선](baselines.md): 2장에서는 복제가 카드당 goodput 최고, PD가 tok/J 최고(1.17), 3장에서는 보정된 `optimal` 1P+2D가 SLO 100 %, RNGD→ATOM은 ATOM decode graph(토큰당 108 ms)가 한계 | furiosa-llm 벤더 기준선 완료 (카드당 goodput·tok/J는 `solo`와 같고 지연은 더 낮음, furiosa-llm은 PD 미지원). 대화 ×1을 배치마다 3–5번 반복([반복 실행](baselines.md#반복-실행-2026-10-2021-43): 순서는 유지, PD 1P+1D tok/J는 모든 실행 1.06이지만 달성률은 25.5–98.0 %). 같은 예산의 A100 행은 아직(A100 사용 중) |
 
+## 하드웨어 대기
+
+| 항목 | 막힌 이유 | 소프트웨어 쪽 준비 | 풀리는 조건 |
+|---|---|---|---|
+| RDMA를 통한 노드 간 KV ([#46](https://github.com/ai-computing/ai-rm/issues/46)) | NPU 노드에 RDMA 장치가 없다. NIC는 RDMA가 없는 Intel X550/X710 10GBASE-T이고, 10G 포트에 링크가 없어 모든 트래픽이 1 GbE 포트 하나로 간다. 방향마다 0.117 GB/s, 67 MB 요청 하나에 약 0.8초. | rngd-pd `nixl-ucx` 전송([rngd-pd#13](https://github.com/ai-computing/rngd-pd/pull/13)): 등록한 host 버퍼 사이를 UCX 위 NIXL READ로 옮긴다. RDMA는 `UCX_TLS`만 바꾸면 된다. UCX-TCP로 노드 간 실행: 바이트 일치, `tcp`처럼 링크가 한계(요청 하나 0.085 GB/s). | (a) 두 NPU 노드에 RoCE v2 / InfiniBand NIC와 스위치 설정(25 GbE 약 2.9 GB/s). (b) 기존 10G 포트 연결: 약 1.1 GB/s, RDMA 없음, 시뮬레이터의 손익분기 0.15–0.25 GB/s를 넘기는 가장 싼 단계. (c) 관리자가 soft-RoCE `rdma link add` 실행, verbs 경로 기능 확인용. |
+
 진행 상황은 허브의 Plane 프로젝트(모듈 W1–W7)에서 관리하고 [현재 상태](status.md)에 요약합니다.
