@@ -1,6 +1,6 @@
 <div align="center">
 
-<a href="docs/ko/project-overview.md"><img src="docs/assets/hero.svg" width="100%" alt="AI-RM: Kubernetes와 llm-d 위에서 GPU·NPU·CPU·GB10 통합메모리를 하나로 관리하는 통합 자원관리, Optimus Prime 엔진 통합"></a>
+<a href="docs/ko/project-overview.md"><img src="docs/assets/ai-rm-overview.webp" width="100%" alt="AI-RM 개요 애니메이션: GPU·NPU·CPU·GB10 통합메모리를 다섯 계층(rm-accel, 메모리·전송, 통합 엔진, Kubernetes·llm-d 클러스터, 관측)과 rm-core 계약으로 연결"></a>
 
 <h3>이종 AI 인프라를 위한 통합 자원관리</h3>
 

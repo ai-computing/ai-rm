@@ -1,6 +1,6 @@
 <div align="center">
 
-<a href="docs/project-overview.md"><img src="docs/assets/hero.svg" width="100%" alt="AI-RM: unified resource management across GPU, NPU, CPU and GB10 unified memory on Kubernetes and llm-d, with Optimus Prime engine integration"></a>
+<a href="docs/project-overview.md"><img src="docs/assets/ai-rm-overview.webp" width="100%" alt="AI-RM overview animation: GPU, NPU, CPU and GB10 unified memory joined through five layers (rm-accel, memory and transport, unified engine, Kubernetes and llm-d cluster, observation) connected by rm-core contracts"></a>
 
 <h3>Unified resource management for heterogeneous AI infrastructure</h3>
 
