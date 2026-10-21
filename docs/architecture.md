@@ -13,7 +13,7 @@ AI-RM's logical architecture separates resource description, data movement, work
 | Layer | Responsibility | Components | Cluster integration point |
 |---|---|---|---|
 | L1 · Accelerator abstraction | Discover devices; describe memory, precision, peak provenance, power and interconnects | rm-accel | Device information, AcceleratorProfile and node labels; engine selection |
-| L2 · Memory and transport | Represent tiers and move workload data | Planned Optimus Prime KV/offload modules; current hetero-npu-p2p/npu-offload sources; private duet workload | Explicit transport and offload boundaries; unified-memory search remains an external workload |
+| L2 · Memory and transport | Represent tiers and move workload data | Planned Optimus Prime KV/offload modules; current hetero-npu-p2p/npu-offload sources; onggi model and compiled-artifact store; private duet workload | Explicit transport and offload boundaries; unified-memory search remains an external workload |
 | L3 · Unified engine and workloads | Execute inference under one runtime owner; connect training workloads | Optimus Prime target; rngd-pd migration source; npu-train workload | Planned engine serving adapter; current component pods/Jobs remain until cutover |
 | L4 · Cluster and planning | Routing, reviewed planning proposals, storage and monitoring | hetero-llm-d; FASOP adapter planned inside Optimus Prime | Gateway, InferencePool, EPP; no automatic FASOP live reconfiguration |
 | L4 · Placement | Choose accelerators for each serving pool and publish the decision | rm-controller (`airm-placement`) | AcceleratorProfiles, node state |
@@ -36,6 +36,7 @@ L1 provides the capability model used by integration logic; it is not a network 
 
 - **hetero-npu-p2p:** KV transfer between compatible NPUs on one host, with completion fencing.
 - **npu-offload:** partition MoE expert execution across NPU HBM and host CPU/DRAM. Its v0.1 integration uses workload and memory-tier contracts rather than implementing `KVTransport`.
+- **onggi:** stores model weights and compiled NPU artifacts once (content-defined chunks) and hands them to engines as files; P0 measures the deduplication. It moves artifacts, not KV.
 - **duet:** CPU graph traversal and GPU distance calculation share GB10 unified memory for vector search. This component is private and optional.
 
 ## Repository and contract boundaries

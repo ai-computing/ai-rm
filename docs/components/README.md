@@ -18,6 +18,7 @@
 | L1 | rm-accel | Retain device discovery; engine-facing backend adapters target Optimus Prime | [Korean card](rm-accel.md) |
 | L2 | hetero-npu-p2p | Source for the engine's KV-transport module | [Korean card](hetero-npu-p2p.md) |
 | L2 | npu-offload | Source for expert-offload; workload/memory-tier contract, not KVTransport | [Korean card](npu-offload.md) |
+| L2 | onggi | Model-weight and compiled-artifact store (content-addressed, P0: `dedup-report`); not an engine module | [Korean card](onggi.md) |
 | L2 / workload | duet | Optional private search workload; no public-code migration | [Korean card](duet.md) |
 | L3 | rngd-pd | Source for engine PD/NPU-backend modules | [Korean card](rngd-pd.md) |
 | L3 / workload | npu-train | Training workload and future engine adapter as needed | [Korean card](npu-train.md) |

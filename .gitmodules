@@ -33,3 +33,7 @@
 	path = components/l2-memory/duet
 	url = https://github.com/ai-computing/duet.git
 	branch = v2
+[submodule "onggi"]
+	path = components/l2-memory/onggi
+	url = https://github.com/ai-computing/onggi.git
+	branch = main
