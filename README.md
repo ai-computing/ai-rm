@@ -36,6 +36,12 @@ unified-memory research** to **Kubernetes + llm-d** through shared contracts, pi
 reproducible measurements. Inference-engine technology is being consolidated into **Optimus Prime**, with
 **FASOP** as its planning element.
 
+[**Onggi**](https://github.com/ai-computing/onggi) is the artifact storage and delivery layer: it deduplicates model
+weights and precompiled RNGD/ATOM variants, restores missing chunks through node caches and peers, and exposes
+read-only CSI volumes. The serving runtime owns device-memory delta loading and prepared graph selection;
+compatible precompiled variants are still required when batch or sequence length changes. Automatic compile-farm
+and placement-driven prefetch integration remain planned. See the [Onggi component card](docs/components/onggi.md).
+
 ## ✨ What it brings together
 
 <table>
@@ -152,7 +158,7 @@ See [deployment](deploy/README.md).
 | 🚂 | **Engine & planning** | [Optimus Prime · `opt_prime`](https://github.com/ai-computing/aicomp/tree/main/opt_prime) · [FASOP · `fasop`](https://github.com/ai-computing/aicomp/tree/main/fasop) |
 | 🟣 | **Resource discovery** | [rm-accel](https://github.com/ai-computing/rm-accel) |
 | 🔵 | **Engine migration sources** | [rngd-pd](https://github.com/ai-computing/rngd-pd) · [hetero-npu-p2p](https://github.com/ai-computing/hetero-npu-p2p) · [npu-offload](https://github.com/ai-computing/npu-offload) |
-| 🏺 | **Model & artifact store** | [onggi](https://github.com/ai-computing/onggi) *(P0)* |
+| 🏺 | **Model & artifact store** | [onggi](https://github.com/ai-computing/onggi) *(P2: store, cache, peers, delta apply, CSI)* |
 | 🟡 | **Cluster integration** | [hetero-llm-d](https://github.com/ai-computing/hetero-llm-d) · [rm-controller](packages/rm-controller) · [rm-core contracts](https://github.com/ai-computing/rm-core) |
 | 🟠 | **Operations & measurement** | [lmd-top](https://github.com/ai-computing/lmd-top) · [rm-bench](packages/rm-bench) |
 | 🟢 | **Training & search workloads** | [npu-train](https://github.com/ai-computing/npu-train) · **duet** *(private, optional)* |

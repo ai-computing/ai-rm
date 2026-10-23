@@ -35,6 +35,11 @@
 **Kubernetes + llm-d** 환경에 연결합니다. 추론 엔진 기술은 **Optimus Prime**으로 모으고, **FASOP**을 그 안의
 계획 요소로 둡니다.
 
+[**Onggi(옹기)**](https://github.com/ai-computing/onggi)는 모델 가중치와 사전 컴파일한 RNGD·ATOM 변형의 중복을
+제거하고, 노드 캐시·peer에서 필요한 청크를 복원해 읽기 전용 CSI 볼륨으로 전달하는 저장 계층입니다. 장치 메모리의
+델타 로딩과 준비된 그래프 선택은 서빙 런타임이 맡으며, 배치·시퀀스 길이가 바뀌면 호환되는 사전 컴파일 결과물이
+필요합니다. 자동 컴파일 팜·배치 신호에 따른 프리페치 연동은 후속 작업입니다. [Onggi 작업 카드](docs/components/onggi.md)를 참고하세요.
+
 ## ✨ 무엇을 연결하나
 
 <table>
@@ -151,7 +156,7 @@ make deploy CLUSTER=local DRY_RUN=1                 # 적용 전 검토
 | 🚂 | **엔진·계획** | [Optimus Prime · `opt_prime`](https://github.com/ai-computing/aicomp/tree/main/opt_prime) · [FASOP · `fasop`](https://github.com/ai-computing/aicomp/tree/main/fasop) |
 | 🟣 | **자원 탐지** | [rm-accel](https://github.com/ai-computing/rm-accel) |
 | 🔵 | **엔진 이전 소스** | [rngd-pd](https://github.com/ai-computing/rngd-pd) · [hetero-npu-p2p](https://github.com/ai-computing/hetero-npu-p2p) · [npu-offload](https://github.com/ai-computing/npu-offload) |
-| 🏺 | **모델·결과물 저장** | [onggi](https://github.com/ai-computing/onggi) *(P0)* |
+| 🏺 | **모델·결과물 저장** | [onggi](https://github.com/ai-computing/onggi) *(P2: 저장소·캐시·peer·델타 적용·CSI)* |
 | 🟡 | **클러스터 통합** | [hetero-llm-d](https://github.com/ai-computing/hetero-llm-d) · [rm-controller](packages/rm-controller) · [rm-core 계약](https://github.com/ai-computing/rm-core) |
 | 🟠 | **운영·측정** | [lmd-top](https://github.com/ai-computing/lmd-top) · [rm-bench](packages/rm-bench) |
 | 🟢 | **학습·검색 워크로드** | [npu-train](https://github.com/ai-computing/npu-train) · **duet** *(비공개·선택 사항)* |

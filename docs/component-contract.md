@@ -36,7 +36,7 @@ adapters:
 metrics: [kv_transfer_ms, kv_transfer_gbps]
 ```
 
-This is a contract example, not evidence that the named component already contains every field or passes every check. `deploy.chart` may describe an available Helm chart; the current umbrella CLI only executes `deploy.manifests` through kubectl.
+This is a contract example, not evidence that the named component already contains every field or passes every check. `deploy.chart` identifies a Helm chart. When any selected component declares it, the umbrella deploy command stops before applying any manifests and prints a `helm upgrade --install` command. Supply the serving namespace and site values shown as placeholders; `--dry-run` adds Helm's client dry run. Components without a chart continue to use `deploy.manifests` through kubectl.
 
 ## Required component README information
 

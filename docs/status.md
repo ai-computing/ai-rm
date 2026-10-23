@@ -42,6 +42,26 @@ Use explicit submodule paths for a public-only checkout. `git clone --recursive`
 | Interface integration | rm-core protocol and component work cards | Confirm adapter implementation/conformance per component |
 | Publication checks | Tracked-file sensitive-data scanner and CI | Not a complete history audit or hardware validation |
 
+## Safety update · 2026-10-23
+
+The hub now pins Onggi `d0b16db` ([onggi#67](https://github.com/ai-computing/onggi/pull/67), pending upstream merge),
+upgrading its earlier P0 snapshot to P2 storage, cache, peers, delta restoration and CSI. It bounds concurrent
+materializations and rolls back newly created leases when a volume record cannot be saved. Go 1.24.13 vet,
+the full race suite with local VersityGW S3, and a byte-identical CLI base/delta restore passed.
+
+In-tree rm-bench keeps missing/invalid token timings unknown, prevents them from establishing latency SLO success,
+and bounds connection attempts and response I/O by one request deadline (OS DNS resolution remains external).
+Generic deploy refuses chart-backed components before mutation and prints an explicit Helm command. Controller
+apply mode now grants the matching namespace-scoped Deployment permissions; operational flags must be spelled out.
+
+Separately reviewed fixes are proposed in [hetero-llm-d#12](https://github.com/ai-computing/hetero-llm-d/pull/12)
+(seed preservation and partial KEDA retries) and [hetero-npu-p2p#10](https://github.com/ai-computing/hetero-npu-p2p/pull/10)
+(uncertain DMA quarantine, device identities and CUDA destination overlap). Their existing hub pins are unchanged;
+the DMA native library/manifest must be rebuilt for ABI 3 before adopting that update.
+
+This run did not deploy a live cluster or validate actual NPU-memory updates. Automatic Onggi compile/prefetch
+controllers, prepared-serving metadata generation, and runtime/UI contract extensions remain follow-up integration work.
+
 ## Protocol v0.1 integration · verified 2026-10-19
 
 The v0.1 adapters were merged in every component and the submodules point at those merge commits. Verification
