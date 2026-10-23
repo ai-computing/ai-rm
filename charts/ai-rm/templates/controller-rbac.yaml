@@ -56,7 +56,7 @@ rules:
   {{- if include "ai-rm.controllerApply" . }}
   - apiGroups: ["apps"]
     resources: ["deployments"]
-    verbs: ["list", "patch"]
+    verbs: ["get", "list", "patch"] # kubectl patch also reads the current object
   {{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1

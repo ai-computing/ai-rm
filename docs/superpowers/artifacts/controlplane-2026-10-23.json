@@ -1,0 +1,48 @@
+{
+  "namespace": "airm-verify-20261023-7d4b90",
+  "namespace_uid": "f97c1772-90eb-4f29-9f69-4d2557363a2f",
+  "checks": [
+    {
+      "permission": "list",
+      "namespace": "airm-verify-20261023-7d4b90",
+      "allowed": true
+    },
+    {
+      "permission": "patch",
+      "namespace": "airm-verify-20261023-7d4b90",
+      "allowed": true
+    },
+    {
+      "permission": "list",
+      "namespace": "llm-serving",
+      "allowed": false
+    },
+    {
+      "permission": "patch",
+      "namespace": "llm-serving",
+      "allowed": false
+    },
+    {
+      "permission": "delete",
+      "namespace": "airm-verify-20261023-7d4b90",
+      "allowed": false
+    },
+    {
+      "actual_serviceaccount_list_patch": "passed"
+    },
+    {
+      "deployment_then_keda_403_retry": "passed",
+      "final_maxReplicaCount": 2,
+      "final_generation": 7
+    },
+    {
+      "newer_generation_preserved": "passed",
+      "running_test_workloads": 0
+    },
+    {
+      "apply_permission_removed": "passed"
+    }
+  ],
+  "passed": true,
+  "cleanup": "namespace_deleted"
+}

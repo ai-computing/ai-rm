@@ -51,7 +51,8 @@ def test_apply_argument_and_deployment_permissions_are_coupled(chart, controller
         role, rule = writers[0]
         assert role["kind"] == "Role"
         assert role["metadata"]["namespace"] == (namespace or "control")
-        assert rule == {"apiGroups": ["apps"], "resources": ["deployments"], "verbs": ["list", "patch"]}
+        # kubectl patch reads the object before patching; the client SDK needs list/patch.
+        assert rule == {"apiGroups": ["apps"], "resources": ["deployments"], "verbs": ["get", "list", "patch"]}
         binding = next(o for o in objects if o["kind"] == "RoleBinding"
                        and o["metadata"]["namespace"] == (namespace or "control"))
         assert binding["roleRef"]["name"] == role["metadata"]["name"]
