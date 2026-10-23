@@ -149,9 +149,21 @@ def cmd_setup(args, phase="install"):
 
 def cmd_deploy(args):
     cluster_dir = os.path.join(ROOT, "deploy", "clusters", args.cluster)
+    selected = components(args.layer, args.components)
+    charts = [c for c in selected if (c["spec"].get("deploy") or {}).get("chart")]
+    if charts:
+        for c in charts:
+            chart = os.path.join(c["path"], c["spec"]["deploy"]["chart"])
+            cmd = ["helm", "upgrade", "--install", c["name"], chart,
+                   "--namespace", "<serving-namespace>", "-f", "<site-values.yaml>"]
+            if args.dry_run:
+                cmd.append("--dry-run=client")
+            print(f"[{c['name']}] deploy.chart requires Helm; legacy manifests were not applied.")
+            print("  run with your serving namespace and site values: " + shlex.join(cmd))
+        return 1
     env = os.environ.copy()
     env.update(load_env_file(os.path.join(cluster_dir, "cluster.local.env")))
-    for c in components(args.layer, args.components):
+    for c in selected:
         dep = c["spec"].get("deploy") or {}
         manifests = dep.get("manifests")
         if not manifests:
