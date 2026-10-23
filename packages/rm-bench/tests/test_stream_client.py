@@ -25,6 +25,8 @@ class SSE(BaseHTTPRequestHandler):
     keepalive = False         # SSE comment lines between events
     field = "content"         # delta field carrying text
     json_body = False         # ignore stream=true and answer with one JSON body
+    server_timing = None
+    usage_count = None
 
     def log_message(self, *args):
         pass
@@ -53,7 +55,8 @@ class SSE(BaseHTTPRequestHandler):
             time.sleep(FIRST_S)
             body = json.dumps({"choices": [{"index": 0, "message": {"role": "assistant", "content": "x " * n},
                                             "finish_reason": "length"}],
-                               "usage": {"prompt_tokens": 3, "completion_tokens": n}}).encode()
+                               "usage": {"prompt_tokens": 3, "completion_tokens": n},
+                               "pd": self.server_timing}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -84,7 +87,8 @@ class SSE(BaseHTTPRequestHandler):
             self._event({"choices": [choice]})
         time.sleep(0.15)        # tail after the last token (not decode time)
         if self.send_usage:
-            self._event({"choices": [], "usage": {"prompt_tokens": 3, "completion_tokens": n}})
+            count = n if self.usage_count is None else self.usage_count
+            self._event({"choices": [], "usage": {"prompt_tokens": 3, "completion_tokens": count}})
         if self.send_done:
             self._event("[DONE]")
         if self.chunked:
@@ -166,7 +170,32 @@ def test_json_body_fallback(sse):
     h.json_body = True
     rec = _send(url, 5)
     assert rec.ok and rec.out_tokens == 5 and rec.itl_ms == ()
-    assert rec.ttft_ms == rec.e2e_ms   # first token not visible: upper bound
+    assert rec.ttft_ms is None and rec.tpot_ms is None
+
+
+@pytest.mark.parametrize("send", [client.stream_chat, client.complete])
+def test_json_body_with_inconsistent_server_timing_keeps_latency_unknown(sse, send):
+    url, handler = sse
+    handler.json_body = True
+    handler.server_timing = {"ttft_ms": 101, "wall_ms": 100}
+    record = send(url, "m", 4, 5, timeout_s=10)
+    assert record.ok and record.ttft_ms is None and record.tpot_ms is None
+
+
+@pytest.mark.parametrize("tokens", [True, -1, 0])
+def test_invalid_stream_usage_count_uses_chunk_estimate(sse, tokens):
+    url, handler = sse
+    handler.usage_count = tokens
+    record = _send(url, 5)
+    assert record.ok and type(record.out_tokens) is int and record.out_tokens == 5
+    assert record.tpot_ms > 0
+
+
+def test_single_token_usage_still_takes_precedence_over_chunk_count(sse):
+    url, handler = sse
+    handler.usage_count = 1
+    record = _send(url, 5)
+    assert record.ok and record.out_tokens == 1 and record.tpot_ms is None
 
 
 def test_http_error_fails():

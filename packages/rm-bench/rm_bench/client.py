@@ -4,9 +4,17 @@ from __future__ import annotations
 
 import json
 import os
+import socket
+import sys
+import threading
 import time
+from contextlib import contextmanager
 
 import requests
+from urllib3.connection import HTTPConnection, HTTPSConnection
+from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
+from urllib3.exceptions import ConnectTimeoutError, LocationParseError, NewConnectionError
+from urllib3.util.connection import allowed_gai_family
 
 from .results import RequestRecord
 
@@ -49,6 +57,103 @@ def discover_model(gateway: str, timeout_s: float = 10.0) -> str:
 
 def make_prompt(num_tokens: int) -> str:
     return " ".join(["word"] * max(1, int(num_tokens)))
+
+
+@contextmanager
+def _post(url: str, payload: dict, timeout_s: float):
+    """Own the response and interrupt socket I/O at the wall deadline; DNS is OS-bounded."""
+    deadline = time.perf_counter() + timeout_s
+    sockets = []
+    lock = threading.Lock()
+    expired = threading.Event()
+
+    def interrupt():
+        with lock:
+            expired.set()
+            for sock in sockets:
+                try:
+                    sock.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+
+    class WatchedConnection:
+        def _new_conn(self):
+            # Follow urllib3's create_connection, sharing one budget across DNS addresses.
+            host = self._dns_host.strip("[]")
+            try:
+                host.encode("idna")
+            except UnicodeError:
+                raise LocationParseError(f"'{host}', label empty or too long") from None
+            try:
+                addresses = socket.getaddrinfo(host, self.port, allowed_gai_family(), socket.SOCK_STREAM)
+                error = None
+                for family, kind, protocol, _, address in addresses:
+                    remaining = deadline - time.perf_counter()
+                    if remaining <= 0:
+                        raise socket.timeout("request deadline exceeded")
+                    sock = None
+                    try:
+                        sock = socket.socket(family, kind, protocol)
+                        for option in self.socket_options or ():
+                            sock.setsockopt(*option)
+                        sock.settimeout(min(self.timeout, remaining) if self.timeout is not None else remaining)
+                        if self.source_address:
+                            sock.bind(self.source_address)
+                        sock.connect(address)
+                        with lock:
+                            if expired.is_set():
+                                raise socket.timeout("request deadline exceeded")
+                            # The duplicate survives TLS wrapping and interrupts blocked reads.
+                            sockets.append(sock.dup())
+                        sys.audit("http.client.connect", self, self.host, self.port)
+                        return sock
+                    except OSError as exc:
+                        if sock is not None:
+                            sock.close()
+                        error = exc
+                raise error or OSError("getaddrinfo returns an empty list")
+            except socket.timeout as exc:
+                raise ConnectTimeoutError(self, "request deadline exceeded") from exc
+            except OSError as exc:
+                raise NewConnectionError(self, f"Failed to establish a new connection: {exc}") from exc
+
+    class HTTPPool(HTTPConnectionPool):
+        class ConnectionCls(WatchedConnection, HTTPConnection):
+            pass
+
+    class HTTPSPool(HTTPSConnectionPool):
+        class ConnectionCls(WatchedConnection, HTTPSConnection):
+            pass
+
+    pools = {"http": HTTPPool, "https": HTTPSPool}
+
+    class Adapter(requests.adapters.HTTPAdapter):
+        def init_poolmanager(self, *args, **kwargs):
+            super().init_poolmanager(*args, **kwargs)
+            self.poolmanager.pool_classes_by_scheme = pools
+
+        def proxy_manager_for(self, *args, **kwargs):
+            manager = super().proxy_manager_for(*args, **kwargs)
+            manager.pool_classes_by_scheme = pools
+            return manager
+
+    timer = threading.Timer(max(0.0, deadline - time.perf_counter()), interrupt)
+    timer.daemon = True
+    timer.start()
+    try:
+        with requests.Session() as session:
+            adapter = Adapter()
+            session.mount("http://", adapter)
+            session.mount("https://", adapter)
+            with session.post(url, headers=headers(), json=payload, stream=True, timeout=timeout_s) as resp:
+                yield resp
+                if expired.is_set():
+                    raise requests.Timeout("request deadline exceeded")
+    finally:
+        timer.cancel()
+        timer.join()
+        for sock in sockets:
+            sock.close()
 
 
 def _sse_lines(resp):
@@ -105,7 +210,7 @@ def _record(ttft_ms: float | None, last_ms: float | None, e2e_ms: float,
 def _from_json_body(obj, e2e_ms: float) -> RequestRecord:
     """A server that answered a stream request with one JSON body (chat or completions shape).
     The first token is not visible: use server timing `pd.ttft_ms`/`pd.wall_ms` if present, else
-    TTFT = e2e (an upper bound), as `complete` does."""
+    token timing stays unknown, as `complete` does."""
     choices = obj.get("choices") if isinstance(obj, dict) else None
     first = choices[0] if choices and isinstance(choices[0], dict) else {}
     msg = first.get("message") if isinstance(first.get("message"), dict) else {}
@@ -114,15 +219,17 @@ def _from_json_body(obj, e2e_ms: float) -> RequestRecord:
         return RequestRecord(ok=False, e2e_ms=e2e_ms)
     usage = obj.get("usage") if isinstance(obj.get("usage"), dict) else {}
     out_tokens = usage.get("completion_tokens")
-    if not isinstance(out_tokens, int):
+    if type(out_tokens) is not int or out_tokens < 0 or (out_tokens == 0 and text):
         out_tokens = max(1, len(text.split()))
     pd = obj.get("pd") if isinstance(obj.get("pd"), dict) else {}
     server_ttft, server_wall = pd.get("ttft_ms"), pd.get("wall_ms")
-    if isinstance(server_ttft, (int, float)) and isinstance(server_wall, (int, float)):
+    if (all(type(v) in (int, float) and 0 <= v <= sys.float_info.max
+            for v in (server_ttft, server_wall)) and server_ttft <= server_wall):
         ttft_ms = min(e2e_ms, max(0.0, e2e_ms - server_wall) + server_ttft)
     else:
-        ttft_ms = e2e_ms
-    tpot_ms = max(0.0, (e2e_ms - ttft_ms) / (out_tokens - 1)) if out_tokens > 1 else None
+        ttft_ms = None
+    tpot_ms = (max(0.0, (e2e_ms - ttft_ms) / (out_tokens - 1))
+               if out_tokens > 1 and ttft_ms is not None else None)
     return RequestRecord(ok=True, e2e_ms=e2e_ms, ttft_ms=ttft_ms, tpot_ms=tpot_ms, out_tokens=out_tokens)
 
 
@@ -168,7 +275,7 @@ def _stream(url: str, payload: dict, timeout_s: float, scheduled_at: float | Non
     done = finished = timed_out = False
     done_ms: float | None = None
     try:
-        with requests.post(url, headers=headers(), json=payload, stream=True, timeout=timeout_s) as resp:
+        with _post(url, payload, timeout_s) as resp:
             if resp.status_code >= 400:
                 return RequestRecord(ok=False, e2e_ms=(time.perf_counter() - t0) * 1000.0)
             if resp.headers.get("Content-Type", "").split(";")[0].strip() == "application/json":
@@ -195,7 +302,8 @@ def _stream(url: str, payload: dict, timeout_s: float, scheduled_at: float | Non
                 if not isinstance(obj, dict):
                     continue
                 usage = obj.get("usage")
-                if isinstance(usage, dict) and isinstance(usage.get("completion_tokens"), int):
+                if (isinstance(usage, dict) and type(usage.get("completion_tokens")) is int
+                        and usage["completion_tokens"] >= 0):
                     usage_tokens = usage["completion_tokens"]
                 for choice in obj.get("choices") or []:
                     if _chunk_text(choice):
@@ -208,7 +316,7 @@ def _stream(url: str, payload: dict, timeout_s: float, scheduled_at: float | Non
     e2e_ms = done_ms if done_ms is not None else (time.perf_counter() - t0) * 1000.0
     if not token_times or timed_out or not (done or finished):
         return RequestRecord(ok=False, e2e_ms=e2e_ms)
-    out_tokens = usage_tokens if usage_tokens is not None else len(token_times)
+    out_tokens = usage_tokens if usage_tokens is not None and usage_tokens > 0 else len(token_times)
     return _record(token_times[0], token_times[-1], e2e_ms, out_tokens, token_times)
 
 
@@ -219,7 +327,7 @@ def complete(url: str, model: str, prompt_tokens: int, max_tokens: int, timeout_
     Without a stream the client cannot see the first token. When the response carries the
     server's own timing (`pd.ttft_ms` and `pd.wall_ms`, as rngd-pd's gateway reports), TTFT is the
     server's TTFT plus the time the client spent outside the server (queueing, network):
-    (e2e - wall_ms) + ttft_ms. Otherwise TTFT is e2e, an upper bound. Output tokens come from
+    (e2e - wall_ms) + ttft_ms. Otherwise TTFT and TPOT are unknown. Output tokens come from
     `usage.completion_tokens`; TPOT = (e2e - ttft) / (out_tokens - 1).
     """
     payload = {"model": model, "prompt": prompt or make_prompt(prompt_tokens),
@@ -227,9 +335,9 @@ def complete(url: str, model: str, prompt_tokens: int, max_tokens: int, timeout_
     t0 = time.perf_counter() if scheduled_at is None else scheduled_at
     obj = None
     try:
-        resp = requests.post(url, headers=headers(), json=payload, timeout=timeout_s)
-        if resp.status_code < 400:
-            obj = resp.json()
+        with _post(url, payload, timeout_s) as resp:
+            if resp.status_code < 400:
+                obj = resp.json()
     except Exception:  # noqa: BLE001 -- any transport/protocol error fails the request, not the run
         obj = None
     return _from_json_body(obj, (time.perf_counter() - t0) * 1000.0)

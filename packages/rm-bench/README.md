@@ -89,7 +89,9 @@ rm-bench e2e --scenario pd-smoke [--gateway URL] [--model M] [--out results/<run
 
 - **Open loop:** requests leave at the scenario's arrival times, and TTFT/E2E count from the **scheduled** arrival, so time
   spent waiting for the client's `concurrency` limit is part of the latency a user would see. After `duration_s` no new
-  request is sent; requests still queued count as failed (unserved). `timeout_s` bounds one whole request.
+  request is sent; requests still queued count as failed (unserved). `timeout_s` interrupts socket I/O for a whole request,
+  including partial headers and bodies; DNS resolution remains subject to OS limits. Deadline regressions use local HTTP;
+  TLS and proxy paths have not been exercised by those tests.
 - **Streaming chat** (`--api chat`, default) times the SSE chunks: TTFT is the first chunk with generated text (`content`, or a
   reasoning model's `reasoning_content`), ITL the gaps between text chunks (p50/p90/p99 in the run record), TPOT
   `(last token − TTFT) / (output tokens − 1)` so the `usage` chunk and `[DONE]` after the last token are not decode time.
@@ -98,7 +100,9 @@ rm-bench e2e --scenario pd-smoke [--gateway URL] [--model M] [--out results/<run
   like `--api completions`. Close-delimited streams are read as bytes arrive, not per buffer.
 - **`--api completions`** (or scenario `api: completions`) is for servers with only non-streaming `/v1/completions`. Without a
   stream the first token is not visible: when the response carries server timing (`pd.ttft_ms`, `pd.wall_ms`, as rngd-pd's
-  gateway sends), TTFT = (e2e − wall_ms) + ttft_ms; otherwise TTFT = e2e (an upper bound). A `--gateway` URL ending in
+  gateway sends), TTFT = (e2e − wall_ms) + ttft_ms. Both server values must be finite, nonnegative numbers with TTFT ≤ wall
+  time; otherwise TTFT and TPOT stay unknown and latency SLOs cannot pass.
+  TPOT does not apply to requests with zero or one output token. A `--gateway` URL ending in
   `/completions` is used as given (for routes that rewrite their own prefix to `/v1`).
 - **`--api completions-stream`** sends the same prompt text as `--api completions` (no chat template) with `stream: true`
   and times the SSE chunks like streaming chat, so TTFT is the client's first token. For servers that stream completions
