@@ -47,7 +47,10 @@ spec:
             - --spec=/etc/rm-controller/spec.yaml
             - --interval={{ $c.intervalSeconds }}
             - --kube=client
-            {{- with $c.extraArgs }}
+            {{- if include "ai-rm.controllerApply" . }}
+            - --apply
+            {{- end }}
+            {{- with without $c.extraArgs "--apply" }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
           securityContext:

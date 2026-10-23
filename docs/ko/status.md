@@ -40,6 +40,25 @@
 
 Umbrella chart, 시뮬레이션 클러스터 명령, 서빙 파드가 따르는 부하 인지 배치, 호환성 registry는 통합 방향이며 아직 제공되지 않습니다. 배치 controller는 1차 구현이 있습니다(클러스터 dry-run 확인). PASS·FAIL·하드웨어 SKIP을 구분하고 구성요소 조합과 실행 조건을 남기세요.
 
+## 안전성 개선 · 2026-10-23
+
+이 브랜치는 Onggi를 P0 스냅샷에서 P2 저장소·캐시·peer·파일 델타 복원·CSI를 포함한 `d0b16db`로 올립니다
+([onggi#67](https://github.com/ai-computing/onggi/pull/67), upstream merge 대기). 동시 복원 수를 제한하고 볼륨 기록
+저장 실패 시 새 lease를 되돌립니다. Go 1.24.13 vet·로컬 VersityGW S3를 포함한 전체 race 테스트·CLI base/델타 복원의
+바이트 일치를 확인했습니다.
+
+in-tree rm-bench는 없거나 잘못된 토큰 타이밍을 미측정으로 유지하고 SLO 성공 근거로 쓰지 않습니다. 연결 주소별 시도와
+응답 I/O는 요청 전체 제한 시간을 공유하며 OS DNS 해석은 별도입니다. 일반 배포 명령은 chart가 있으면 변경 전에 중단하고
+명시적인 Helm 명령을 안내합니다. Controller apply 모드에는 해당 namespace의 Deployment 권한을 함께 부여하며 옵션은
+축약하지 않고 써야 합니다.
+
+[hetero-llm-d#12](https://github.com/ai-computing/hetero-llm-d/pull/12)(배치 초기값 보존·KEDA 부분 실패 재시도)와
+[hetero-npu-p2p#10](https://github.com/ai-computing/hetero-npu-p2p/pull/10)(불확실한 DMA 격리·장치 식별·CUDA 목적지 중첩
+검사)은 별도 PR입니다. 두 구성요소의 기존 hub pin은 유지하며 DMA 변경 채택 시 ABI 3 native 라이브러리·manifest 재빌드가 필요합니다.
+
+실제 클러스터 배포나 NPU 메모리 갱신은 이번에 검증하지 않았습니다. Onggi 자동 컴파일·프리페치 컨트롤러, 준비된 서빙
+설정 자동 생성, 런타임·UI 계약 확장은 후속 통합 작업입니다.
+
 ## 프로토콜 v0.1 통합 · 2026-10-19 검증
 
 모든 구성요소에 v0.1 adapter를 머지했고 서브모듈은 그 머지 커밋을 가리킵니다. 검증은 RNGD + ATOM 노드에서 Python

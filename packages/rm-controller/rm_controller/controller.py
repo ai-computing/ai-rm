@@ -357,7 +357,7 @@ def run_once(spec: dict, io, *, namespace: str, dry_run: bool, apply: bool = Fal
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="rm-controller", description=__doc__.split("\n")[0])
+    ap = argparse.ArgumentParser(prog="rm-controller", description=__doc__.split("\n")[0], allow_abbrev=False)
     ap.add_argument("--spec", required=True, help="pools to place (YAML)")
     ap.add_argument("--namespace", default=None, help="namespace of airm-placement (default: spec, else llm-serving)")
     ap.add_argument("--once", action="store_true", help="place once and exit")

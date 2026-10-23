@@ -26,6 +26,9 @@ controller:
     tag: "0.1.0"                 # packages/rm-controller version; :master follows ai-rm master
     pullPolicy: IfNotPresent
   intervalSeconds: 60            # seconds between placements
+  # Also reconcile annotated serving Deployments in placementNamespace (restarts/moves pods).
+  # Grants namespace-scoped deployments get/list/patch; legacy extraArgs: [--apply] also enables it.
+  apply: false
   # Pools to place, in order (rm-controller spec, packages/rm-controller/README.md). The spec's
   # namespace is placementNamespace. accelerator is vendor.model as in airm.ai-computing.io/<vendor>.<model>.
   pools:

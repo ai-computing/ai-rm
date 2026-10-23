@@ -53,7 +53,7 @@ def _meets(r: RequestRecord, slo: Mapping[str, float]) -> bool:
     for key, target in slo.items():
         if key.startswith("ttft_") and (r.ttft_ms is None or r.ttft_ms > target):
             return False
-        if key.startswith("tpot_") and r.tpot_ms is not None and r.tpot_ms > target:
+        if key.startswith("tpot_") and r.out_tokens > 1 and (r.tpot_ms is None or r.tpot_ms > target):
             return False
         if key.startswith("e2e_") and r.e2e_ms > target:
             return False
@@ -74,9 +74,12 @@ def judge(records: list[RequestRecord], wall_s: float, slo: Mapping[str, float],
             checks[key] = {"target": target, "measured": measured, "ok": measured >= target}
             continue
         what, pct, _ = key.split("_")          # e.g. ttft_p90_ms
-        measured = percentile(series[what], int(pct[1:]) / 100.0)
+        applicable = [r for r in ok if what != "tpot" or r.out_tokens > 1]
+        missing = any(getattr(r, what + "_ms") is None for r in applicable)
+        measured = None if missing else percentile(series[what], int(pct[1:]) / 100.0)
+        not_applicable = what == "tpot" and bool(ok) and not applicable
         checks[key] = {"target": target, "measured": measured,
-                       "ok": measured is not None and measured <= target}
+                       "ok": not_applicable or (measured is not None and measured <= target)}
     err_pct = 100.0 * (len(records) - len(ok)) / max(1, len(records))
     checks["errors_pct"] = {"target": max_error_pct, "measured": err_pct,
                             "ok": bool(records) and err_pct <= max_error_pct}

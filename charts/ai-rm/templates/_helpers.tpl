@@ -18,6 +18,18 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- default .Release.Namespace .Values.placementNamespace -}}
 {{- end -}}
 
+{{/* Keep the CLI's apply mode and its namespace-scoped RBAC in sync, including old values files. */}}
+{{- define "ai-rm.controllerApply" -}}
+{{- if or .Values.controller.apply (has "--apply" .Values.controller.extraArgs) -}}
+{{- range .Values.controller.extraArgs -}}
+{{- if hasPrefix "--namespace" . -}}
+{{- fail "set placementNamespace instead of controller.extraArgs --namespace so apply RBAC matches the controller namespace" -}}
+{{- end -}}
+{{- end -}}
+true
+{{- end -}}
+{{- end -}}
+
 {{/* rm-controller spec (YAML): the pools, and the namespace of airm-placement. */}}
 {{- define "ai-rm.controllerSpec" -}}
 {{- if not .Values.controller.pools }}

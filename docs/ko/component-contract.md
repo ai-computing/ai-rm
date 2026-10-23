@@ -38,6 +38,11 @@ metrics: [kv_transfer_ms, kv_transfer_gbps]   # 내보내는 rm-core 지표
 # deploy.chart: deploy/helm/<component>  (Helm chart가 있으면)
 ```
 
+선택한 구성요소에 `deploy.chart`가 있으면 umbrella deploy는 매니페스트를 적용하기 전에
+멈추고 `helm upgrade --install` 명령을 출력한다. 출력된 namespace와 site values 자리표시자를
+실제 설정으로 바꿔 실행한다. `--dry-run`은 Helm client dry run 옵션을 붙인다.
+차트가 없는 구성요소는 `deploy.manifests`를 kubectl로 적용한다.
+
 ## 2. README의 `## ai-rm` 절
 
 계층과 역할, k8s + llm-d에 붙는 방식(아직이면 무엇이 빠졌는지), 설치·테스트 명령,
